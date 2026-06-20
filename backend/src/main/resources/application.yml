@@ -37,6 +37,9 @@ jwt:
   access-token-expiration-ms: 900000             # 15 minutos
   refresh-token-days: 30
 
+cpf:
+  encryption-key: ${CPF_ENCRYPTION_KEY}          # obrigatório em produção (min 32 chars, AES-256)
+
 # Actuator — observabilidade base (TS08)
 management:
   endpoints:

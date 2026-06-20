@@ -24,3 +24,6 @@ jwt:
   secret: "test-secret-key-must-be-at-least-32-chars!!"
   access-token-expiration-ms: 900000
   refresh-token-days: 30
+
+cpf:
+  encryption-key: "01234567890123456789012345678901"
