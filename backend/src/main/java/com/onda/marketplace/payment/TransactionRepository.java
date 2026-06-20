@@ -13,6 +13,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     Optional<Transaction> findByGatewayTransactionId(String gatewayTransactionId);
     Optional<Transaction> findByServiceRequestId(UUID serviceRequestId);
 
+    // Reconciliação financeira (US27)
+    java.util.List<Transaction> findByStatusPagamento(TransactionStatus statusPagamento);
+
     // Receita de comissão do dashboard (US23): só conta o que efetivamente saiu do escrow
     @Query("SELECT COALESCE(SUM(t.valorComissao), 0) FROM Transaction t WHERE t.statusPagamento = :status")
     BigDecimal somaComissaoPorStatus(@Param("status") TransactionStatus status);

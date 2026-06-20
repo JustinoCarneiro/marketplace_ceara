@@ -10,7 +10,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.onda.marketplace.payment.OutboxStatus;
+import com.onda.marketplace.payment.TransactionStatus;
+
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,6 +38,7 @@ class AdminControllerTest {
     @MockBean MediationService    mediationService;
     @MockBean ModerationService   moderationService;
     @MockBean AdminReportService  adminReportService;
+    @MockBean AdminQueryService   adminQueryService;
 
     @Test
     void resolverDisputa_retorna200_eDelegaAoServico() throws Exception {
@@ -94,5 +99,65 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("text/csv"))
                 .andExpect(content().string(containsString("valorTotal")));
+    }
+
+    // --- M11: endpoints de query e reprocessamento ---
+
+    @Test
+    void disputes_retorna200_comLista() throws Exception {
+        UUID srId = UUID.randomUUID();
+        when(adminQueryService.findDisputas()).thenReturn(
+                List.of(new DisputaAdminDto(srId, "ENCANADOR", BigDecimal.valueOf(300), Instant.now())));
+
+        mvc.perform(get("/api/v1/admin/disputes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].categoria").value("ENCANADOR"))
+                .andExpect(jsonPath("$[0].valorRetido").value(300));
+    }
+
+    @Test
+    void disputeDetail_retorna200() throws Exception {
+        UUID srId = UUID.randomUUID();
+        when(adminQueryService.findDetalheDisputa(srId)).thenReturn(
+                new DisputaDetalheDto(srId, "ELETRICISTA", "EM_DISPUTA",
+                        BigDecimal.valueOf(500), TransactionStatus.RETIDO, null, Instant.now()));
+
+        mvc.perform(get("/api/v1/admin/disputes/{id}", srId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoria").value("ELETRICISTA"));
+    }
+
+    @Test
+    void transactions_retorna200_comListaFiltrada() throws Exception {
+        UUID txId = UUID.randomUUID();
+        when(adminQueryService.findTransacoes(TransactionStatus.RETIDO)).thenReturn(
+                List.of(new TransacaoAdminDto(txId, UUID.randomUUID(),
+                        BigDecimal.valueOf(200), TransactionStatus.RETIDO)));
+
+        mvc.perform(get("/api/v1/admin/transactions").param("status", "RETIDO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].statusPagamento").value("RETIDO"));
+    }
+
+    @Test
+    void outbox_retorna200_comListaFiltrada() throws Exception {
+        when(adminQueryService.findOutbox(OutboxStatus.FALHA)).thenReturn(
+                List.of(new OutboxAdminDto(UUID.randomUUID(), "transaction",
+                        "PAYMENT_RELEASED", 3, OutboxStatus.FALHA)));
+
+        mvc.perform(get("/api/v1/admin/outbox").param("status", "FALHA"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tipoEvento").value("PAYMENT_RELEASED"))
+                .andExpect(jsonPath("$[0].tentativas").value(3));
+    }
+
+    @Test
+    void reprocessarOutbox_retorna202() throws Exception {
+        UUID outboxId = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/outbox/{id}/reprocess", outboxId).with(csrf()))
+                .andExpect(status().isAccepted());
+
+        verify(adminQueryService).reprocessarOutbox(outboxId);
     }
 }

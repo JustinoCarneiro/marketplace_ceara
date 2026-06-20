@@ -14,6 +14,9 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatus(ServiceRequestStatus status);
 
+    // Fila de disputas (US24)
+    java.util.List<ServiceRequest> findByStatus(ServiceRequestStatus status);
+
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 }

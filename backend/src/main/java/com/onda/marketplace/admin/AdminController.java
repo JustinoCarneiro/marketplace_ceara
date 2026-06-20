@@ -1,5 +1,7 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.payment.OutboxStatus;
+import com.onda.marketplace.payment.TransactionStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,13 +25,16 @@ public class AdminController {
     private final MediationService   mediationService;
     private final ModerationService  moderationService;
     private final AdminReportService adminReportService;
+    private final AdminQueryService  adminQueryService;
 
     public AdminController(MediationService mediationService,
                            ModerationService moderationService,
-                           AdminReportService adminReportService) {
+                           AdminReportService adminReportService,
+                           AdminQueryService adminQueryService) {
         this.mediationService   = mediationService;
         this.moderationService  = moderationService;
         this.adminReportService = adminReportService;
+        this.adminQueryService  = adminQueryService;
     }
 
     @PostMapping("/disputes/{serviceRequestId}/resolve")
@@ -69,5 +74,35 @@ public class AdminController {
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .header("Content-Disposition", "attachment; filename=\"" + recurso + ".csv\"")
                 .body(csv);
+    }
+
+    // --- M11: fila de disputas, transações, outbox ---
+
+    @GetMapping("/disputes")
+    public ResponseEntity<List<DisputaAdminDto>> disputes() {
+        return ResponseEntity.ok(adminQueryService.findDisputas());
+    }
+
+    @GetMapping("/disputes/{serviceRequestId}")
+    public ResponseEntity<DisputaDetalheDto> disputeDetail(@PathVariable UUID serviceRequestId) {
+        return ResponseEntity.ok(adminQueryService.findDetalheDisputa(serviceRequestId));
+    }
+
+    @GetMapping("/transactions")
+    public ResponseEntity<List<TransacaoAdminDto>> transactions(
+            @RequestParam(defaultValue = "RETIDO") TransactionStatus status) {
+        return ResponseEntity.ok(adminQueryService.findTransacoes(status));
+    }
+
+    @GetMapping("/outbox")
+    public ResponseEntity<List<OutboxAdminDto>> outbox(
+            @RequestParam(defaultValue = "FALHA") OutboxStatus status) {
+        return ResponseEntity.ok(adminQueryService.findOutbox(status));
+    }
+
+    @PostMapping("/outbox/{outboxId}/reprocess")
+    public ResponseEntity<Void> reprocessarOutbox(@PathVariable UUID outboxId) {
+        adminQueryService.reprocessarOutbox(outboxId);
+        return ResponseEntity.accepted().build();
     }
 }

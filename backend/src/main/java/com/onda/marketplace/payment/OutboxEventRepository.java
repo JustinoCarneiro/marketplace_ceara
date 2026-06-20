@@ -7,4 +7,7 @@ import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
     List<OutboxEvent> findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus status);
+
+    // Visão admin da fila outbox (monitoramento/reprocessamento)
+    List<OutboxEvent> findByStatus(OutboxStatus status);
 }
