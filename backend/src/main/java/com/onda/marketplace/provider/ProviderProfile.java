@@ -70,6 +70,8 @@ public class ProviderProfile {
     public Point getLocalizacao()          { return localizacao; }
     public void  setLocalizacao(Point p)   { this.localizacao = p; }
 
+    public void setNotaMedia(BigDecimal v) { this.notaMedia = v; }
+
     public void aprovar()   { this.statusVerificacao = ProviderStatus.VERIFICADO; }
     public void reprovar()  { this.statusVerificacao = ProviderStatus.REPROVADO; }
 }
