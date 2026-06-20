@@ -2,6 +2,7 @@ package com.onda.marketplace.provider;
 
 import com.onda.marketplace.auth.User;
 import jakarta.persistence.*;
+import org.locationtech.jts.geom.Point;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +27,9 @@ public class ProviderProfile {
 
     @Column(name = "cpf_cifrado")
     private String cpfCifrado;
+
+    @Column(columnDefinition = "geography(Point,4326)")
+    private Point localizacao;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status_verificacao", nullable = false)
@@ -62,6 +66,9 @@ public class ProviderProfile {
     public BigDecimal getSaldoRetido()     { return saldoRetido; }
     public BigDecimal getNotaMedia()       { return notaMedia; }
     public Instant getCreatedAt()          { return createdAt; }
+
+    public Point getLocalizacao()          { return localizacao; }
+    public void  setLocalizacao(Point p)   { this.localizacao = p; }
 
     public void aprovar()   { this.statusVerificacao = ProviderStatus.VERIFICADO; }
     public void reprovar()  { this.statusVerificacao = ProviderStatus.REPROVADO; }
