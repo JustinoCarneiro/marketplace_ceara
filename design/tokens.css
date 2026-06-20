@@ -1,0 +1,171 @@
+/* ============================================================================
+   Marketplace de Serviços Residenciais (Ceará) — Design Tokens
+   Direção aprovada (Fase 2a): "A · Maré Clara equilibrada"
+   Base: identidade Onda · modo Maré Clara, adaptada para app marketplace mobile.
+   Produto da própria Onda — uso intencional da marca.
+   Família tipográfica: Manrope (400–800), fallback system-ui.
+   Contraste mínimo AA garantido. Escala de espaçamento 8px.
+
+   DISCIPLINA DE ESCALA (acordada na normalização da Fase 2b — não reintroduzir
+   valores avulsos vindos de protótipo):
+   · Raios: somente 12 / 24 / 28 / 100 (--r-field/card/sheet/pill). 14→12, 16/18→12,
+     20/22→24. A moldura de dispositivo (46px) é cromo de protótipo, não token.
+   · Tipografia: somente a escala --fs-* abaixo. 38/40→32, 27/28→26, 23/25→26,
+     19→18, 17→16. NADA abaixo de 12px (micros 9.5–11.5 foram elevados a 12 por A11Y).
+   · Espaçamento: múltiplos de 4/8 (--space-*). Ímpares (7/9/13) arredondam p/ 8/12.
+   · Cromo de apresentação fica no bloco --proto-* ao final — NUNCA usar no app real.
+   ========================================================================== */
+
+:root {
+  /* ---- Superfícies / fundo (areia) ------------------------------------- */
+  --bg:            #F3ECDC;   /* fundo principal (areia)              */
+  --bg-alt:        #EAE0CB;   /* seção alternada                      */
+  --surface:       #FCF8EE;   /* cards / superfícies elevadas (marfim)*/
+  --surface-2:     #F6EEDC;   /* superfície secundária                */
+
+  /* ---- Texto (ink) ----------------------------------------------------- */
+  --text:          #0E2A33;   /* texto principal        (AA sobre bg) */
+  --text-soft:     #4C636A;   /* texto secundário                     */
+  --text-faint:    #8A989B;   /* legendas / terciário                 */
+  --text-on-accent:#FFFFFF;   /* texto sobre turquesa/oceano          */
+
+  /* ---- Ação / marca ---------------------------------------------------- */
+  --primary:       #14A8A0;   /* TURQUESA — única ação principal/CTA  */
+  --primary-hover: #1AC6B6;   /* turquesa brilhante (pressed/hover)   */
+  --institutional: #0E3F52;   /* OCEANO — selos de confiança, faixas  */
+  --institutional-2:#15596E;  /* oceano médio                         */
+
+  /* ---- Acentos quentes (doses pequenas, nunca competem com primary) ---- */
+  --warm-sun:      #F2B015;   /* sol — destaque quente, ratings       */
+  --warm-terra:    #DA6A32;   /* terra — alertas suaves               */
+  --warm-coral:    #E07C61;   /* coral                                */
+  --accent-sky:    #B7DCE3;   /* céu — fundos de chip/info            */
+
+  /* ---- Bordas / divisores ---------------------------------------------- */
+  --line:          #DCD2BC;   /* borda padrão                         */
+  --line-soft:     #E6DDC9;   /* borda sutil                          */
+
+  /* ---- Estados semânticos (feedback) ----------------------------------- */
+  --success:       #1B8C84;   /* mar verde-azulado                    */
+  --warning:       #F2B015;   /* sol                                  */
+  --danger:        #C0392B;   /* erro / disputa (AA sobre claro)      */
+  --info:          #15596E;   /* oceano médio                         */
+
+  /* ---- Status da máquina de estados do pedido (service_requests) ------- */
+  --status-pendente:     #8A989B;  /* cinza neutro     */
+  --status-proposto:     #F2B015;  /* sol — aguardando */
+  --status-aceito:       #15596E;  /* oceano — pago    */
+  --status-andamento:    #14A8A0;  /* turquesa — ativo */
+  --status-concluido:    #1B8C84;  /* sucesso          */
+  --status-disputa:      #DA6A32;  /* terra — atenção  */
+  --status-cancelado:    #C0392B;  /* danger           */
+
+  /* ---- Status financeiro (transactions / escrow) ----------------------- */
+  --escrow-pendente:     #8A989B;
+  --escrow-retido:       #15596E;  /* dinheiro seguro na plataforma  */
+  --escrow-liberado:     #1B8C84;
+  --escrow-reembolsado:  #DA6A32;
+
+  /* ---- Cores-assinatura por categoria de serviço ----------------------- */
+  --cat-eletrica:    #F2B015;
+  --cat-hidraulica:  #15596E;
+  --cat-limpeza:     #1B8C84;
+  --cat-pintura:     #DA6A32;
+  --cat-reforma:     #244C86;
+  --cat-jardinagem:  #3C7A4E;
+  --cat-geral:       #14A8A0;
+
+  /* ---- Tints + texto AA sobre tint ------------------------------------- */
+  /* Pares <cor>-tint (fundo de chip/banner) + <cor>-ink (texto AA sobre o tint).
+     Derivados do protótipo (Fase 2b) e consolidados aqui como fonte da verdade.
+     Use sempre o par: o -ink garante contraste AA sobre o respectivo -tint. */
+  --sky-tint:        #E2EEF2;   /* fundo chip/info (oceano)              */
+  --success-tint:    #DDF0EC;   /* fundo chip sucesso                    */
+  --sun-tint:        #FDF3D6;   /* fundo chip sol                        */
+  --terra-tint:      #F7E3D6;   /* fundo chip/banner terra              */
+  --terra-tint-line: #E6BFA6;   /* borda sobre tint terra               */
+  --danger-tint:     #FBE6E2;   /* fundo alerta SOS / erro              */
+
+  --primary-ink:     #0E7D77;   /* turquesa AA p/ texto (ex.: botão ghost) */
+  --success-ink:     #15756E;   /* texto/ícone sobre tint sucesso        */
+  --sun-ink:         #B5810A;   /* texto sobre tint sol                  */
+  --terra-ink:       #C2572A;   /* texto sobre tint terra                */
+  --terra-ink-deep:  #9A4A22;   /* texto em banner terra                 */
+  --danger-ink:      #9A2820;   /* texto sobre tint danger               */
+
+  --primary-ring:    #B7E5E1;   /* anel da timeline (estado atual)       */
+  --sand-stroke:     #B7A788;   /* traço de ilustração (vazio/offline)   */
+  --sand-stroke-deep:#8A7E66;   /* traço de ilustração — variante densa  */
+
+  /* ---- Tipografia ------------------------------------------------------ */
+  --font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+  --fw-black:   800;
+
+  /* Escala mobile-first (px). Display fluido fica a cargo das telas grandes */
+  --fs-display:  32px;  /* hero de tela            (800, -0.03em)   */
+  --fs-h1:       26px;  /* título de tela          (800, -0.025em)  */
+  --fs-h2:       21px;  /* seção                   (700)            */
+  --fs-h3:       18px;  /* título de card          (700)            */
+  --fs-body:     16px;  /* corpo                   (400, lh 1.6)    */
+  --fs-body-sm:  14px;  /* corpo secundário                        */
+  --fs-caption:  13px;  /* legendas                                */
+  --fs-eyebrow:  12px;  /* rótulos MAIÚSCULAS, tracking 0.2em      */
+
+  --lh-tight:   1.05;
+  --lh-heading: 1.15;
+  --lh-body:    1.6;
+
+  --tracking-display: -0.03em;
+  --tracking-eyebrow:  0.2em;
+
+  /* ---- Espaçamento (escala 8px) ---------------------------------------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---- Raios (squircles generosos) ------------------------------------- */
+  --r-field:  12px;   /* inputs, badges          */
+  --r-card:   24px;   /* cards (mobile, < 30 do web) */
+  --r-sheet:  28px;   /* bottom sheets / modais  */
+  --r-pill:  100px;   /* botões, chips, tags     */
+
+  /* ---- Elevação (sombra oceano translúcida, nunca preto puro) ---------- */
+  --shadow-soft:  0 12px 28px -20px rgba(14, 42, 51, 0.45);
+  --shadow-float: 0 22px 44px -26px rgba(14, 42, 51, 0.55);
+
+  /* ---- Alvos de toque & motion ----------------------------------------- */
+  --touch-min: 44px;                          /* área mínima de toque AA   */
+  --ease:      cubic-bezier(0.2, 0.7, 0.2, 1);/* "deslizante como água"    */
+  --dur-fast:  180ms;
+  --dur-base:  320ms;
+}
+
+/* Sem dark mode no MVP do app; tokens Maré Noite ficam para v2.
+   Acessibilidade: respeitar prefers-reduced-motion ao animar (RN: Reduce Motion). */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; }
+}
+
+/* ============================================================================
+   CROMO DE PROTÓTIPO — NÃO É TOKEN DE PRODUTO
+   Existe apenas para a moldura de dispositivo e o player de fluxo do protótipo
+   estático (Claude Design, Fase 2b). NÃO portar para o theme do app (RN) nem
+   para o painel admin (React). Mantido aqui só para rastreabilidade visual.
+   ========================================================================== */
+:root {
+  --proto-device-bezel:  #11333D;   /* moldura do celular              */
+  --proto-device-radius: 46px;      /* raio da moldura (fora da escala)*/
+  --proto-admin-radius:  14px;      /* janela desktop do painel        */
+  --proto-player-bg:     #2A2622;   /* fundo do player de fluxo        */
+  --proto-player-foot:   #8FA7AE;   /* texto do rodapé do player       */
+}

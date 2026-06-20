@@ -137,6 +137,62 @@ Como **Usuário em atendimento**, quero um Botão SOS, para pedir ajuda em situa
 
 ---
 
+## Épico 9 — Administração e Mediação (painel web)
+
+> Superfície **web** (React), separada do app mobile. Todo acesso exige `ROLE_ADMIN`. É onde a plataforma é gerenciada e onde a "mediação" prometida no Épico 5 (US18) de fato acontece.
+
+### US22 — Acesso administrativo
+Como **Admin**, quero entrar num painel restrito, para gerenciar a plataforma com segurança.
+- **Dado que** informo credenciais de admin, **quando** autentico, **então** recebo sessão com `ROLE_ADMIN` e acesso ao painel web.
+- **Dado** um usuário sem `ROLE_ADMIN`, **quando** tenta acessar qualquer rota administrativa, **então** recebe 403.
+- **Dado** qualquer ação administrativa, **então** ela é registrada em log de auditoria (quem, o quê, quando).
+
+### US23 — Dashboard de métricas
+Como **Admin**, quero ver as métricas-chave do negócio, para acompanhar a saúde da plataforma.
+- **Dado** o painel inicial, **então** vejo: volume transacionado (GMV), receita de comissão, ticket médio, nº de pedidos por status, taxa de conclusão, disputas abertas e tempo médio de resolução, prestadores verificados/ativos, clientes ativos e SOS acionados no período.
+- **Dado** um filtro de período/bairro, **quando** aplico, **então** as métricas recalculam.
+- **Dado** uma métrica financeira, **então** ela bate com o estado das `transactions` (consistência com o Escrow).
+
+### US24 — Mediação de disputas
+Como **Admin (mediador)**, quero analisar e resolver disputas, para destravar o valor retido de forma justa.
+- **Dado** a fila de disputas, **quando** abro uma `EM_DISPUTA`, **então** vejo o histórico do pedido, as partes, as mídias e o valor retido.
+- **Dado** minha decisão, **quando** resolvo a favor do prestador, **então** a `transaction` vai para `LIBERADO` (split) e o pedido para `CONCLUIDO`.
+- **Dado** minha decisão, **quando** resolvo a favor do cliente, **então** a `transaction` vai para `REEMBOLSADO` e o pedido para `CANCELADO`.
+- **Dado** que a resolução move dinheiro, **então** ela passa pelo mesmo motor Saga/Outbox/idempotência (nunca `@Transactional` sobre o gateway).
+
+### US25 — Moderação de prestadores
+Como **Admin**, quero revisar prestadores, para garantir a qualidade e a segurança da base.
+- **Dado** um background check `INCONCLUSIVO`, **quando** reviso manualmente, **então** posso definir `VERIFICADO` ou `REPROVADO` com justificativa.
+- **Dado** um prestador problemático, **quando** o suspendo, **então** ele deixa de aparecer nas buscas e não recebe novos pedidos.
+
+### US26 — Gestão de usuários
+Como **Admin**, quero buscar e gerenciar usuários, para dar suporte e conter abusos.
+- **Dado** uma busca por e-mail/nome, **quando** localizo um usuário, **então** vejo seu perfil, histórico e status.
+- **Dado** um usuário em abuso, **quando** o suspendo/reativo, **então** o acesso dele é bloqueado/liberado e a ação fica auditável.
+
+### US27 — Reconciliação financeira (Escrow)
+Como **Admin**, quero acompanhar o estado das transações e dos eventos, para garantir que nenhum valor fique preso ou inconsistente.
+- **Dado** a visão de transações, **então** filtro por `PENDENTE/RETIDO/LIBERADO/REEMBOLSADO` e vejo divergências.
+- **Dado** um `outbox_event` em `FALHA`, **quando** aciono o reprocessamento, **então** ele é reenfileirado de forma idempotente (sem cobrança/repasse duplicado).
+
+### US28 — Gestão de categorias de serviço
+Como **Admin**, quero manter o catálogo de categorias, para refletir os serviços ofertados por bairro.
+- **Dado** o catálogo, **quando** crio/edito/desativo uma categoria, **então** a mudança reflete nas buscas e na abertura de pedidos.
+
+### US29 — Exportação de relatórios
+Como **Admin**, quero exportar relatórios, para análise externa e prestação de contas.
+- **Dado** o dashboard ou uma listagem (transações, disputas, pedidos), **quando** aciono exportar, **então** recebo o arquivo em **CSV** (e **PDF** para o resumo de métricas) respeitando os filtros aplicados.
+- **Dado** dados sensíveis (LGPD), **então** o relatório não expõe CPF nem dados além do necessário.
+
+### US30 — Alertas operacionais ao Admin
+Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em segurança e disputas.
+- **Dado** um **SOS acionado** (US21), **quando** o evento é registrado, **então** o admin recebe alerta **imediato** (push/e-mail) — caminho de segurança, prioridade máxima.
+- **Dado** uma **disputa aberta** (US18), **então** o admin é notificado para iniciar a mediação.
+- **Dado** um **background check `INCONCLUSIVO`** (US02), **então** o admin é notificado para moderar manualmente.
+- **Dado** os alertas, **então** há uma **central de notificações** no painel (não lidas/lidas), e o alerta de SOS nunca depende só do painel (push/e-mail garantido).
+
+---
+
 ## Histórias Técnicas (Requisitos Não Funcionais)
 
 - **TS01 (Concorrência):** Virtual Threads (Java 21) para suportar picos sem custo extra de servidor.
@@ -147,6 +203,7 @@ Como **Usuário em atendimento**, quero um Botão SOS, para pedir ajuda em situa
 - **TS06 (Erros):** `@ControllerAdvice` padronizando 400/404/422 em JSON.
 - **TS07 (Mídia):** upload para object storage; banco persiste apenas URL.
 - **TS08 (Observabilidade):** logs estruturados + métricas dos fluxos de pagamento e disputa (entra no detalhe na Fase 3).
+- **TS09 (Admin/Auditoria):** painel web restrito a `ROLE_ADMIN` (403 para os demais); toda ação administrativa registrada em log de auditoria imutável (quem/o quê/quando). Métricas derivadas por consulta/agregação, sem duplicar a fonte da verdade financeira.
 
 ---
 
@@ -159,6 +216,8 @@ Como **Usuário em atendimento**, quero um Botão SOS, para pedir ajuda em situa
 - `reviews` (id, service_id, avaliador_id, avaliado_id, nota, comentario, url_imagem)
 - `outbox_events` (id, agregado, tipo_evento, payload, status, criado_em) — motor do Escrow
 - `sos_events` (id, service_id, user_id, lat, lng, criado_em)
+- `admin_audit_log` (id, admin_id, acao, entidade, entidade_id, detalhe, criado_em) — auditoria de ações administrativas (TS09)
+- `service_categories` (id, nome, slug, ativa) — catálogo gerido pelo admin (US28)
 
 ---
 

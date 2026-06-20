@@ -29,6 +29,7 @@ App mobile marketplace · Cliente + Prestador + (Admin/Mediação) · Serviços 
 6. **Execução do Serviço** — máquina de estados do chamado.
 7. **Avaliação Bidirecional e Reputação** — Cliente↔Prestador, 1–5 estrelas + comentário/imagem.
 8. **Segurança do Usuário (Botão SOS)** — acionamento de emergência durante atendimento.
+9. **Administração e Mediação (painel web)** — dashboard de métricas, mediação de disputas, moderação de prestadores, gestão de usuários/categorias, reconciliação financeira, **exportação de relatórios (CSV/PDF)** e **alertas operacionais** (SOS, disputa, verificação inconclusiva). Acesso `ROLE_ADMIN`. **Superfície web** (React), separada do app mobile.
 
 > Receita do MVP: **somente comissão** (10–25%) sobre serviço concluído. Assinaturas, boost e taxa de urgência → v2.
 

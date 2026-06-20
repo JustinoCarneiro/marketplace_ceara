@@ -1,26 +1,54 @@
-name: CI / Smoke Tests
+name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
-  smoke-test:
+  backend:
+    name: Backend — Java 21 + Testes
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
 
-      - name: Subir containers em background
-        run: docker-compose up -d
+      - name: Rodar testes (sem banco — slices @WebMvcTest + H2)
+        run: mvn -f backend/pom.xml test --no-transfer-progress
 
-      - name: Rodar testes (Placeholder)
-        run: echo "Aqui entram os comandos de teste da Fase 5 (Homologação)"
-
-      - name: Derrubar containers
+      - name: Publicar relatório de testes
         if: always()
-        run: docker-compose down
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+
+  mobile-typecheck:
+    name: Mobile — TypeScript check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+        working-directory: mobile
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: mobile
