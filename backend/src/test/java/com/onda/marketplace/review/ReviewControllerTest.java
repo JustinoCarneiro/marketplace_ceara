@@ -21,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ReviewController.class)
 @Import(TestSecurityConfig.class)
+@SuppressWarnings("null")
 class ReviewControllerTest {
 
     @Autowired MockMvc mvc;

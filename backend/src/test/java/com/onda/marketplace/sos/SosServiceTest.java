@@ -1,5 +1,6 @@
 package com.onda.marketplace.sos;
 
+import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -19,10 +20,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class SosServiceTest {
 
-    @Mock SosAlertRepository   alertRepository;
+    @Mock SosAlertRepository    alertRepository;
     @Mock OutboxEventRepository outboxRepository;
+    @Mock NotificationService   notificationService;
 
     SosService service;
 
@@ -31,13 +34,14 @@ class SosServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SosService(alertRepository, outboxRepository);
+        service = new SosService(alertRepository, outboxRepository, notificationService);
     }
 
     @Test
-    void acionarSos_cria_alerta_e_outboxSosTriggered() {
+    void acionarSos_cria_alerta_e_outboxSosTriggered_e_notificaAdmin() {
         when(alertRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(notificationService.criarAlerta(any(), any())).thenReturn(null);
 
         SosAlertDto dto = service.acionarSos(USER_ID,
                 new AcionarSosRequest(null, null, null));
@@ -49,6 +53,9 @@ class SosServiceTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("SOS_TRIGGERED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
+
+        // M12: verifica que o alerta foi criado para o admin
+        verify(notificationService).criarAlerta(eq("SOS"), any());
     }
 
     @Test

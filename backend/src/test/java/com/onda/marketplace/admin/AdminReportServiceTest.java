@@ -102,4 +102,26 @@ class AdminReportServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "UNKNOWN_REPORT");
     }
+
+    @Test
+    void exportarMetricasPdf_retornaByteArrayNaoVazio_semCpf() {
+        // arrange — mesmos mocks do teste de metrics()
+        when(srRepository.count()).thenReturn(10L);
+        when(srRepository.countByStatus(ServiceRequestStatus.CONCLUIDO)).thenReturn(8L);
+        when(srRepository.countByStatus(ServiceRequestStatus.EM_DISPUTA)).thenReturn(1L);
+        when(providerProfileRepository.countByStatusVerificacao(ProviderStatus.VERIFICADO)).thenReturn(5L);
+        when(providerProfileRepository.countByStatusVerificacao(ProviderStatus.EM_VERIFICACAO)).thenReturn(0L);
+        when(transactionRepository.somaComissaoPorStatus(TransactionStatus.LIBERADO))
+                .thenReturn(java.math.BigDecimal.valueOf(500));
+
+        byte[] pdf = service.exportarMetricasPdf();
+
+        // PDF deve começar com assinatura PDF
+        assertThat(pdf).isNotEmpty();
+        assertThat(new String(pdf, 0, Math.min(4, pdf.length))).startsWith("%PDF");
+
+        // TS04/LGPD: relatório nunca expõe CPF
+        String conteudoLegivel = new String(pdf);
+        assertThat(conteudoLegivel.toLowerCase()).doesNotContain("cpf");
+    }
 }

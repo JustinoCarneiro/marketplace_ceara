@@ -1,8 +1,8 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.provider.ProviderProfile;
 import com.onda.marketplace.provider.ProviderProfileRepository;
-import com.onda.marketplace.provider.ProviderStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,9 +18,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ModerationServiceTest {
 
     @Mock ProviderProfileRepository providerProfileRepository;
+    @Mock NotificationService       notificationService;
 
     ModerationService service;
 
@@ -28,7 +30,7 @@ class ModerationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ModerationService(providerProfileRepository);
+        service = new ModerationService(providerProfileRepository, notificationService);
     }
 
     @Test
@@ -44,14 +46,16 @@ class ModerationServiceTest {
     }
 
     @Test
-    void moderar_reprovar_chamaReprovar() {
+    void moderar_reprovar_chamaReprovar_e_criaAlertaVerificacao() {
         var profile = mock(ProviderProfile.class);
         when(providerProfileRepository.findByUserId(USER_ID)).thenReturn(Optional.of(profile));
         when(providerProfileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(notificationService.criarAlerta(any(), any())).thenReturn(null);
 
         service.moderar(USER_ID, ModerationAction.REPROVAR);
 
         verify(profile).reprovar();
+        verify(notificationService).criarAlerta("VERIFICACAO", profile.getId());
     }
 
     @Test

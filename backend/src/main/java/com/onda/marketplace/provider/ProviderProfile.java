@@ -61,6 +61,7 @@ public class ProviderProfile {
     public UUID getId()                    { return id; }
     public User getUser()                  { return user; }
     public String getCategoria()           { return categoria; }
+    public String getBio()                 { return bio; }
     public String getCpfCifrado()          { return cpfCifrado; }
     public ProviderStatus getStatusVerificacao() { return statusVerificacao; }
     public BigDecimal getSaldoRetido()     { return saldoRetido; }

@@ -1,6 +1,7 @@
 package com.onda.marketplace.admin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.shared.TestSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AdminController.class)
 @Import(TestSecurityConfig.class)
+@SuppressWarnings("null")
 class AdminControllerTest {
 
     @Autowired MockMvc mvc;
@@ -39,6 +41,7 @@ class AdminControllerTest {
     @MockBean ModerationService   moderationService;
     @MockBean AdminReportService  adminReportService;
     @MockBean AdminQueryService   adminQueryService;
+    @MockBean NotificationService notificationService;
 
     @Test
     void resolverDisputa_retorna200_eDelegaAoServico() throws Exception {

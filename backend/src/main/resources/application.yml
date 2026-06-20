@@ -58,3 +58,18 @@ logging:
     root: INFO
     com.onda.marketplace: DEBUG
     org.flywaydb: INFO
+
+# M12: E-mail (alertas SOS/Disputa/Verificação)
+spring:
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
+# M12: destinatário dos alertas operacionais
+notification:
+  admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 
 @Component
+@SuppressWarnings("null")
 public class OutboxProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxProcessor.class);

@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class PaymentService {
 
     private final TransactionRepository    transactionRepository;

@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ProviderController.class)
 @Import(TestSecurityConfig.class)
+@SuppressWarnings("null")
 class ProviderRegistrationControllerTest {
 
     @Autowired MockMvc mvc;

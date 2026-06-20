@@ -21,6 +21,7 @@ import java.util.UUID;
  * Todos os métodos são somente-leitura, exceto {@link #reprocessarOutbox}.
  */
 @Service
+@SuppressWarnings("null")
 public class AdminQueryService {
 
     private final ServiceRequestRepository    srRepository;

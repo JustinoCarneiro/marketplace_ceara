@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class ServiceRequestService {
 
     private static final GeometryFactory GEO = new GeometryFactory(new PrecisionModel(), 4326);

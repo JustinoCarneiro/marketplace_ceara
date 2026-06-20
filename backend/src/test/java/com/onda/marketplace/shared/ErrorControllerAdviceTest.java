@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = StubController.class)
 @Import({ErrorControllerAdvice.class, TestSecurityConfig.class})
+@SuppressWarnings("null")
 class ErrorControllerAdviceTest {
 
     @Autowired

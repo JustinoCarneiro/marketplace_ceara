@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class ReviewService {
 
     private final ReviewRepository          reviewRepository;

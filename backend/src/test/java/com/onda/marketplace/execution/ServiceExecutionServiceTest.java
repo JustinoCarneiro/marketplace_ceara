@@ -1,5 +1,6 @@
 package com.onda.marketplace.execution;
 
+import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -28,16 +29,17 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ServiceExecutionServiceTest {
 
     @Mock ServiceRequestRepository srRepository;
     @Mock ProposalRepository       proposalRepository;
     @Mock TransactionRepository    transactionRepository;
     @Mock OutboxEventRepository    outboxRepository;
+    @Mock NotificationService      notificationService;
 
     ServiceExecutionService service;
 
@@ -48,7 +50,8 @@ class ServiceExecutionServiceTest {
     @BeforeEach
     void setUp() {
         service = new ServiceExecutionService(
-                srRepository, proposalRepository, transactionRepository, outboxRepository);
+                srRepository, proposalRepository, transactionRepository,
+                outboxRepository, notificationService);
     }
 
     // ----- start -----
@@ -122,15 +125,17 @@ class ServiceExecutionServiceTest {
     // ----- openDispute -----
 
     @Test
-    void openDispute_emAndamento_moveParaEmDisputa() {
+    void openDispute_emAndamento_moveParaEmDisputa_e_criaAlertaDisputa() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(notificationService.criarAlerta(any(), any())).thenReturn(null);
 
         service.openDispute(SR_ID);
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.EM_DISPUTA);
         verify(srRepository).save(sr);
+        verify(notificationService).criarAlerta("DISPUTA", SR_ID);
     }
 
     @Test

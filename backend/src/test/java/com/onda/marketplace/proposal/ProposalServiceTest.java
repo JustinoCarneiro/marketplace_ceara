@@ -22,16 +22,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ProposalServiceTest {
 
     @Mock ProposalRepository       proposalRepository;
     @Mock ServiceRequestRepository requestRepository;
 
     ProposalService service;
-
-    private final User prestador = User.builder()
-            .nome("Carlos").email("carlos@test.com")
-            .senhaHash("$2a$h").role(UserRole.ROLE_PROVIDER).build();
 
     private final User cliente = User.builder()
             .nome("Ana").email("ana@test.com")

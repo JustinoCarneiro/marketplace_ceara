@@ -11,7 +11,7 @@
 | 1 · Spec Viva | `onda-spec-viva` | `CLAUDE.md` + `docs/spec.md` ✅ |
 | 2 · Layout | `onda-direcao-visual` (sem identidade) + `onda-layout` | Protótipo aprovado ⏳ |
 | 3 · Blueprint | `onda-blueprint` | **Este ROADMAP + contratos** ✅ |
-| 4 · XP Coding | `onda-xp-tdd` | Módulos testados e commitados |
+| 4 · XP Coding | `onda-xp-tdd` | Módulos testados e commitados ✅ M00–M12 (todos concluídos) |
 | 5 · Homologação | `onda-homologacao` | Deploy em produção |
 
 > **Decisão de prazo (Gate G2):** `design/tokens.css` **não existe** → projeto **sem identidade visual**. A Fase 2 roda **2a (direção visual) + 2b (layout) = 4 dias úteis**.
@@ -135,7 +135,7 @@ Pesos: **Pequeno (1–2d)** · **Médio (3–4d)** · **Grande (5–7d)**.
 | M09 | **Botão SOS** — acionamento de emergência com geo + auditoria | Pequeno | 2 | Baixo |
 | M10 | **Painel Admin — Métricas & Gestão** (web/React) — auth admin, dashboard de métricas, gestão de usuários, moderação de prestadores, catálogo de categorias, log de auditoria | Grande | 5 | Alto |
 | M11 | **Mediação & Operações Financeiras** (web/React) — fila de disputas + resolução, visão/reconciliação de escrow, reprocessamento de outbox | Médio | 4 | **Crítico** (move dinheiro) |
-| M12 | **Alertas & Relatórios Admin** — central de notificações + alertas push/e-mail (SOS, disputa, verificação inconclusiva) e exportação CSV/PDF | Médio | 3 | Médio (SOS é sensível a tempo) |
+| M12 | **Alertas & Relatórios Admin** — central de notificações + alertas push/e-mail (SOS, disputa, verificação inconclusiva) e exportação CSV/PDF | Médio | 3 | Médio (SOS é sensível a tempo) ✅ |
 | | **Σ Total de engenharia (Fases 3+4)** | | **48** | |
 
 ---

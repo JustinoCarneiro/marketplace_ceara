@@ -3,9 +3,7 @@ package com.onda.marketplace.provider;
 import com.onda.marketplace.auth.AuthResponse;
 import com.onda.marketplace.auth.JwtService;
 import com.onda.marketplace.auth.RefreshTokenRepository;
-import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
-import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,13 +12,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class ProviderServiceTest {
 
     @Mock UserRepository           userRepository;

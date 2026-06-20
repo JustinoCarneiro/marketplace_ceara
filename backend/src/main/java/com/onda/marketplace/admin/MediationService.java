@@ -23,6 +23,7 @@ import java.util.UUID;
  * {@code @Transactional} (princípio Escrow/Saga do CLAUDE.md).
  */
 @Service
+@SuppressWarnings("null")
 public class MediationService {
 
     private final ServiceRequestRepository    srRepository;
@@ -34,10 +35,10 @@ public class MediationService {
                             TransactionRepository transactionRepository,
                             OutboxEventRepository outboxRepository,
                             DisputeResolutionRepository resolutionRepository) {
-        this.srRepository         = srRepository;
+        this.srRepository          = srRepository;
         this.transactionRepository = transactionRepository;
-        this.outboxRepository     = outboxRepository;
-        this.resolutionRepository = resolutionRepository;
+        this.outboxRepository      = outboxRepository;
+        this.resolutionRepository  = resolutionRepository;
     }
 
     @Transactional

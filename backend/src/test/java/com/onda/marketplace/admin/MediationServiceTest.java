@@ -1,5 +1,4 @@
 package com.onda.marketplace.admin;
-
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -27,12 +26,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class MediationServiceTest {
 
-    @Mock ServiceRequestRepository  srRepository;
-    @Mock TransactionRepository     transactionRepository;
-    @Mock OutboxEventRepository     outboxRepository;
-    @Mock DisputeResolutionRepository resolutionRepository;
+    @Mock ServiceRequestRepository    srRepository;
+    @Mock TransactionRepository        transactionRepository;
+    @Mock OutboxEventRepository        outboxRepository;
+    @Mock DisputeResolutionRepository  resolutionRepository;
 
     MediationService service;
 
@@ -42,7 +42,8 @@ class MediationServiceTest {
     @BeforeEach
     void setUp() {
         service = new MediationService(
-                srRepository, transactionRepository, outboxRepository, resolutionRepository);
+                srRepository, transactionRepository, outboxRepository,
+                resolutionRepository);
     }
 
     @Test

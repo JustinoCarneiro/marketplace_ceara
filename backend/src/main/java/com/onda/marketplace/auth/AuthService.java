@@ -15,6 +15,7 @@ import java.util.Base64;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class AuthService {
 
     private final UserRepository        userRepository;

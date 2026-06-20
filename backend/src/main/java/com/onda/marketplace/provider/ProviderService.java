@@ -22,6 +22,7 @@ import java.util.Base64;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class ProviderService {
 
     private final UserRepository           userRepository;

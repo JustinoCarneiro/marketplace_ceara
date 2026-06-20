@@ -24,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ProposalController.class)
 @Import(TestSecurityConfig.class)
+@SuppressWarnings("null")
 class ProposalControllerTest {
 
     @Autowired MockMvc mvc;

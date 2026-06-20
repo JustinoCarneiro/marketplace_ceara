@@ -1,5 +1,7 @@
 package com.onda.marketplace.admin;
 
+import com.lowagie.text.*;
+import com.lowagie.text.pdf.PdfWriter;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
@@ -14,6 +16,7 @@ import com.onda.marketplace.sos.SosAlertStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -106,5 +109,51 @@ public class AdminReportService {
             sb.append(String.valueOf(campos[i]));
         }
         return sb.toString();
+    }
+
+    /**
+     * Gera PDF em memória com resumo de métricas do painel (US29).
+     * NUNCA expõe CPF — somente agregados (TS04/LGPD).
+     *
+     * @return array de bytes do PDF
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportarMetricasPdf() {
+        MetricsDto m = metrics();
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = new Document(PageSize.A4);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            // Título
+            Font tituloFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16);
+            doc.add(new Paragraph("Marketplace Ceará — Relatório de Métricas", tituloFont));
+            doc.add(new Paragraph("Gerado em: " + java.time.Instant.now()));
+            doc.add(Chunk.NEWLINE);
+
+            // Métricas
+            Font labelFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
+            Font valorFont = FontFactory.getFont(FontFactory.HELVETICA, 11);
+
+            adicionarLinha(doc, labelFont, valorFont, "Total de pedidos",           String.valueOf(m.totalPedidos()));
+            adicionarLinha(doc, labelFont, valorFont, "Pedidos concluídos",         String.valueOf(m.pedidosConcluidos()));
+            adicionarLinha(doc, labelFont, valorFont, "Pedidos em disputa",          String.valueOf(m.pedidosEmDisputa()));
+            adicionarLinha(doc, labelFont, valorFont, "Prestadores verificados",     String.valueOf(m.prestadoresVerificados()));
+            adicionarLinha(doc, labelFont, valorFont, "Prestadores em verificação", String.valueOf(m.prestadoresEmVerificacao()));
+            adicionarLinha(doc, labelFont, valorFont, "Receita de comissão (R$)",   m.receitaComissao().toPlainString());
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new BusinessException("PDF_GENERATION_FAILED", "Falha ao gerar PDF de métricas.");
+        }
+    }
+
+    private void adicionarLinha(Document doc, Font label, Font valor,
+                                 String chave, String conteudo) throws DocumentException {
+        Paragraph p = new Paragraph();
+        p.add(new Chunk(chave + ": ", label));
+        p.add(new Chunk(conteudo, valor));
+        doc.add(p);
     }
 }

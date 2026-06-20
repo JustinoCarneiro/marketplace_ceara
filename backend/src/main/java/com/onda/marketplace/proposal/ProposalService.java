@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class ProposalService {
 
     private final ProposalRepository       proposalRepository;

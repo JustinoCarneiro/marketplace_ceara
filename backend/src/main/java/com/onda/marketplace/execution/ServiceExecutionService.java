@@ -1,5 +1,6 @@
 package com.onda.marketplace.execution;
 
+import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.Transaction;
@@ -18,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class ServiceExecutionService {
 
     private static final Set<ServiceRequestStatus> CANCELAVEIS =
@@ -27,15 +29,18 @@ public class ServiceExecutionService {
     private final ProposalRepository       proposalRepository;
     private final TransactionRepository    transactionRepository;
     private final OutboxEventRepository    outboxRepository;
+    private final NotificationService      notificationService;
 
     public ServiceExecutionService(ServiceRequestRepository srRepository,
                                    ProposalRepository proposalRepository,
                                    TransactionRepository transactionRepository,
-                                   OutboxEventRepository outboxRepository) {
+                                   OutboxEventRepository outboxRepository,
+                                   NotificationService notificationService) {
         this.srRepository          = srRepository;
         this.proposalRepository    = proposalRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
+        this.notificationService   = notificationService;
     }
 
     /** ACEITO → EM_ANDAMENTO. Verifica que o prestador autenticado é o dono da proposta aceita. */
@@ -90,6 +95,9 @@ public class ServiceExecutionService {
 
         sr.setStatus(ServiceRequestStatus.EM_DISPUTA);
         srRepository.save(sr);
+
+        // M12: alerta ao admin — disputa aberta exige mediação
+        notificationService.criarAlerta("DISPUTA", srId);
     }
 
     /** ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED). */
