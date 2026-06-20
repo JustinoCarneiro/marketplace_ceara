@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+.thumbnail
+target/
+dist/
+build/
+*.class
+*.jar
+*.war
+.env
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp

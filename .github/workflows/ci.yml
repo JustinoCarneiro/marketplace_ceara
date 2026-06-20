@@ -1,0 +1,26 @@
+name: CI / Smoke Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Subir containers em background
+        run: docker-compose up -d
+
+      - name: Rodar testes (Placeholder)
+        run: echo "Aqui entram os comandos de teste da Fase 5 (Homologação)"
+
+      - name: Derrubar containers
+        if: always()
+        run: docker-compose down
