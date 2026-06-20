@@ -27,3 +27,7 @@ jwt:
 
 cpf:
   encryption-key: "01234567890123456789012345678901"
+
+marketplace:
+  webhook:
+    secret: "test-webhook-secret-for-tests-only"
