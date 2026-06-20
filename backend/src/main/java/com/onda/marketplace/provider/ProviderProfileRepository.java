@@ -13,6 +13,9 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
 
     Optional<ProviderProfile> findByUserId(UUID userId);
 
+    // Métricas/alertas do painel admin (US23/US30)
+    long countByStatusVerificacao(ProviderStatus statusVerificacao);
+
     // PostGIS ST_DWithin sobre índice GiST — SLA p95 < 300ms (TS03)
     @Query(nativeQuery = true, value = """
             SELECT pp.id,

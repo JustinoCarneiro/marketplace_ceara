@@ -11,6 +11,9 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     Optional<ServiceRequest> findByIdempotencyKey(String idempotencyKey);
     Optional<ServiceRequest> findByIdAndCliente_Id(UUID id, UUID clienteId);
 
+    // Métricas/alertas do painel admin (US23/US30)
+    long countByStatus(ServiceRequestStatus status);
+
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 }

@@ -7,4 +7,7 @@ import java.util.UUID;
 
 public interface SosAlertRepository extends JpaRepository<SosAlert, UUID> {
     List<SosAlert> findByStatusOrderByCriadoEmDesc(SosAlertStatus status);
+
+    // Alerta operacional do painel admin (US30)
+    long countByStatus(SosAlertStatus status);
 }

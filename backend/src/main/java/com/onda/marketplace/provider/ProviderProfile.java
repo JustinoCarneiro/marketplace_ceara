@@ -74,4 +74,5 @@ public class ProviderProfile {
 
     public void aprovar()   { this.statusVerificacao = ProviderStatus.VERIFICADO; }
     public void reprovar()  { this.statusVerificacao = ProviderStatus.REPROVADO; }
+    public void suspender() { this.statusVerificacao = ProviderStatus.SUSPENSO; }
 }
