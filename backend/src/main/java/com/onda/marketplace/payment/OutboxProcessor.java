@@ -7,11 +7,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Component
 public class OutboxProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxProcessor.class);
+
+    private static final Set<String> PAYMENT_EVENTS =
+            Set.of("PAYMENT_INITIATED", "PAYMENT_RELEASED", "PAYMENT_REFUNDED");
 
     private final OutboxEventRepository outboxRepository;
     private final TransactionRepository transactionRepository;
@@ -36,22 +40,23 @@ public class OutboxProcessor {
                 .findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus.PENDENTE);
 
         for (OutboxEvent event : pendentes) {
-            processar(event);
+            if (PAYMENT_EVENTS.contains(event.getTipoEvento())) {
+                processarPagamento(event);
+            } else {
+                processarOutro(event);
+            }
         }
     }
 
-    private void processar(OutboxEvent event) {
+    private void processarPagamento(OutboxEvent event) {
         transactionRepository.findById(event.getAgregadoId()).ifPresent(tx -> {
             try {
                 despacharParaGateway(event.getTipoEvento(), tx);
-                if ("PAYMENT_INITIATED".equals(event.getTipoEvento())) {
-                    // gatewayId retornado por cobrar() já foi salvo inline; não precisa re-salvar
-                }
-                salvarResultado(tx, event, true);
+                salvarResultadoPagamento(tx, event, true);
             } catch (Exception ex) {
-                log.warn("Falha ao processar evento {} para tx={}: {}", event.getTipoEvento(),
+                log.warn("Falha ao processar {} para tx={}: {}", event.getTipoEvento(),
                         tx.getId(), ex.getMessage());
-                salvarResultado(tx, event, false);
+                salvarResultadoPagamento(tx, event, false);
             }
         });
     }
@@ -62,27 +67,36 @@ public class OutboxProcessor {
                 String gwId = gatewayService.cobrar(tx);
                 tx.setGatewayTransactionId(gwId);
             }
-            case "PAYMENT_RELEASED"  -> {
-                gatewayService.liberar(tx);
-                tx.liberar();
-            }
-            case "PAYMENT_REFUNDED"  -> {
-                gatewayService.reembolsar(tx);
-                tx.reembolsar();
-            }
-            default -> log.warn("Tipo de evento desconhecido no Outbox: {}", tipo);
+            case "PAYMENT_RELEASED"  -> { gatewayService.liberar(tx);    tx.liberar(); }
+            case "PAYMENT_REFUNDED"  -> { gatewayService.reembolsar(tx); tx.reembolsar(); }
+            default -> log.warn("Tipo de evento de pagamento desconhecido: {}", tipo);
         }
     }
 
-    // Transação separada: persiste apenas o resultado — gateway já foi chamado fora
     @Transactional
-    protected void salvarResultado(Transaction tx, OutboxEvent event, boolean sucesso) {
+    protected void salvarResultadoPagamento(Transaction tx, OutboxEvent event, boolean sucesso) {
         if (sucesso) {
             transactionRepository.save(tx);
             event.marcarProcessado();
         } else {
             event.marcarFalha();
         }
+        outboxRepository.save(event);
+    }
+
+    // Eventos não-financeiros (SOS, etc.): loga e marca processado sem chamar gateway externo
+    private void processarOutro(OutboxEvent event) {
+        if ("SOS_TRIGGERED".equals(event.getTipoEvento())) {
+            log.warn("ALERTA SOS ATIVO — notificar admin: {}", event.getPayload());
+        } else {
+            log.info("Evento outbox não reconhecido: tipo={}", event.getTipoEvento());
+        }
+        marcarProcessado(event);
+    }
+
+    @Transactional
+    protected void marcarProcessado(OutboxEvent event) {
+        event.marcarProcessado();
         outboxRepository.save(event);
     }
 }
