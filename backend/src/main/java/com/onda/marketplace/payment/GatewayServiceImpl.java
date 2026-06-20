@@ -20,4 +20,16 @@ class GatewayServiceImpl implements GatewayService {
                 transaction.getMetodo(), gwId);
         return gwId;
     }
+
+    @Override
+    public void liberar(Transaction transaction) {
+        log.info("Gateway stub: liberando R${} para prestador — tx={}", transaction.getValorTotal(),
+                transaction.getGatewayTransactionId());
+    }
+
+    @Override
+    public void reembolsar(Transaction transaction) {
+        log.info("Gateway stub: reembolsando R${} para cliente — tx={}", transaction.getValorTotal(),
+                transaction.getGatewayTransactionId());
+    }
 }

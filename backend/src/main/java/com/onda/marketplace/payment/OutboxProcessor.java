@@ -13,22 +13,22 @@ public class OutboxProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxProcessor.class);
 
-    private final OutboxEventRepository    outboxRepository;
-    private final TransactionRepository    transactionRepository;
-    private final GatewayService           gatewayService;
+    private final OutboxEventRepository outboxRepository;
+    private final TransactionRepository transactionRepository;
+    private final GatewayService        gatewayService;
 
     public OutboxProcessor(OutboxEventRepository outboxRepository,
                            TransactionRepository transactionRepository,
                            GatewayService gatewayService) {
-        this.outboxRepository     = outboxRepository;
+        this.outboxRepository      = outboxRepository;
         this.transactionRepository = transactionRepository;
         this.gatewayService        = gatewayService;
     }
 
     /**
-     * Processa eventos pendentes. Não tem @Transactional — chamada ao gateway NUNCA
-     * pode participar de uma transação de banco (princípio Escrow/Saga do CLAUDE.md).
-     * Cada evento é atualizado em transação própria e separada da chamada ao gateway.
+     * Processa eventos pendentes. Sem @Transactional — gateway NUNCA dentro de transação
+     * de banco (princípio Escrow/Saga do CLAUDE.md). Cada evento é persistido em transação
+     * própria, separada da chamada ao gateway.
      */
     @Scheduled(fixedDelayString = "${marketplace.outbox.delay-ms:5000}")
     public void processOutbox() {
@@ -43,20 +43,40 @@ public class OutboxProcessor {
     private void processar(OutboxEvent event) {
         transactionRepository.findById(event.getAgregadoId()).ifPresent(tx -> {
             try {
-                // Gateway chamado FORA de qualquer @Transactional
-                String gwId = gatewayService.cobrar(tx);
-                tx.setGatewayTransactionId(gwId);
-                salvarTransacaoEEvento(tx, event, true);
+                despacharParaGateway(event.getTipoEvento(), tx);
+                if ("PAYMENT_INITIATED".equals(event.getTipoEvento())) {
+                    // gatewayId retornado por cobrar() já foi salvo inline; não precisa re-salvar
+                }
+                salvarResultado(tx, event, true);
             } catch (Exception ex) {
-                log.warn("Falha ao cobrar gateway para tx={}: {}", tx.getId(), ex.getMessage());
-                salvarTransacaoEEvento(tx, event, false);
+                log.warn("Falha ao processar evento {} para tx={}: {}", event.getTipoEvento(),
+                        tx.getId(), ex.getMessage());
+                salvarResultado(tx, event, false);
             }
         });
     }
 
-    // Transação separada apenas para persistir o resultado — sem o gateway dentro
+    private void despacharParaGateway(String tipo, Transaction tx) {
+        switch (tipo) {
+            case "PAYMENT_INITIATED" -> {
+                String gwId = gatewayService.cobrar(tx);
+                tx.setGatewayTransactionId(gwId);
+            }
+            case "PAYMENT_RELEASED"  -> {
+                gatewayService.liberar(tx);
+                tx.liberar();
+            }
+            case "PAYMENT_REFUNDED"  -> {
+                gatewayService.reembolsar(tx);
+                tx.reembolsar();
+            }
+            default -> log.warn("Tipo de evento desconhecido no Outbox: {}", tipo);
+        }
+    }
+
+    // Transação separada: persiste apenas o resultado — gateway já foi chamado fora
     @Transactional
-    protected void salvarTransacaoEEvento(Transaction tx, OutboxEvent event, boolean sucesso) {
+    protected void salvarResultado(Transaction tx, OutboxEvent event, boolean sucesso) {
         if (sucesso) {
             transactionRepository.save(tx);
             event.marcarProcessado();
