@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ── Ambiente de homologação local ────────────────────────────────────────────
 # Uso: make homolog-up   (ou: docker compose -f docker-compose.homolog.yml --env-file .env.homolog up -d)
 #
