@@ -1,6 +1,8 @@
 import { getToken, clearToken } from '../store/auth';
 
-const BASE = 'http://localhost:8080/api/v1';
+const BASE =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+  'http://localhost:8080/api/v1';
 
 export async function apiFetch<T = unknown>(
   path: string,

@@ -53,6 +53,9 @@ cpf:
 notification:
   admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
 
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+
 marketplace:
   webhook:
     secret: ${MARKETPLACE_WEBHOOK_SECRET}          # obrigatório em produção — segredo compartilhado com gateway

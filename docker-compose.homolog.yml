@@ -1,0 +1,94 @@
+version: '3.8'
+
+# ── Ambiente de homologação local ────────────────────────────────────────────
+# Uso: make homolog-up   (ou: docker compose -f docker-compose.homolog.yml --env-file .env.homolog up -d)
+#
+# Portas expostas:
+#   8080 → backend  (API REST)
+#   3000 → admin    (painel web)
+#   5432 → postgres (acesso direto p/ tools como DBeaver)
+#   5050 → pgadmin  (GUI do banco)
+
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: onda_homolog_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-onda_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onda_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-onda_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_homolog_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onda_user} -d ${POSTGRES_DB:-onda_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: onda_homolog_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@onda.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: onda_backend:homolog
+    container_name: onda_homolog_backend
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-onda_db}
+      POSTGRES_USER: ${POSTGRES_USER:-onda_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onda_pass}
+      JWT_SECRET: ${JWT_SECRET}
+      CPF_ENCRYPTION_KEY: ${CPF_ENCRYPTION_KEY}
+      MARKETPLACE_WEBHOOK_SECRET: ${MARKETPLACE_WEBHOOK_SECRET}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-admin123}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      ADMIN_ALERT_EMAIL: ${ADMIN_ALERT_EMAIL:-admin@onda.local}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 90s
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8080/api/v1
+    image: onda_admin:homolog
+    container_name: onda_homolog_admin
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_homolog_data:
