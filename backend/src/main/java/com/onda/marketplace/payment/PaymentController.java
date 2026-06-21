@@ -8,6 +8,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.MessageDigest;
 import java.util.UUID;
 
 @RestController
@@ -46,11 +47,18 @@ public class PaymentController {
             @RequestBody WebhookPayload payload,
             @RequestHeader(value = "X-Webhook-Secret", required = false) String secret) {
 
-        if (!webhookSecret.equals(secret)) {
+        if (!constantTimeEquals(webhookSecret, secret)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         paymentService.confirmPayment(payload.gatewayTransactionId(), payload.status());
         return ResponseEntity.ok().build();
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (b == null) return false;
+        return MessageDigest.isEqual(
+                a.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                b.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 }

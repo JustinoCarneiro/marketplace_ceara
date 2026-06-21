@@ -27,10 +27,19 @@ spring:
     baseline-on-migrate: false
 
   security:
-    # Desabilitado no M00; configurado com JWT no M01
     user:
       name: ${ADMIN_USER:admin}
       password: ${ADMIN_PASS:changeme}
+
+  # M12: E-mail (alertas SOS/Disputa/Verificação)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 jwt:
   secret: ${JWT_SECRET}                          # obrigatório em produção (min 32 chars)
@@ -39,6 +48,17 @@ jwt:
 
 cpf:
   encryption-key: ${CPF_ENCRYPTION_KEY}          # obrigatório em produção (min 32 chars, AES-256)
+
+# M12: destinatário dos alertas operacionais
+notification:
+  admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
+
+marketplace:
+  webhook:
+    secret: ${MARKETPLACE_WEBHOOK_SECRET}          # obrigatório em produção — segredo compartilhado com gateway
+  comissao: ${MARKETPLACE_COMISSAO:0.15}           # percentual padrão (15%)
+  outbox:
+    delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
 
 # Actuator — observabilidade base (TS08)
 management:
@@ -49,6 +69,9 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    mail:
+      enabled: false   # SMTP opcional — desabilitado se sem credenciais
 
 # Logs estruturados (TS08)
 logging:
@@ -58,18 +81,3 @@ logging:
     root: INFO
     com.onda.marketplace: DEBUG
     org.flywaydb: INFO
-
-# M12: E-mail (alertas SOS/Disputa/Verificação)
-spring:
-  mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.starttls.enable: true
-
-# M12: destinatário dos alertas operacionais
-notification:
-  admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
