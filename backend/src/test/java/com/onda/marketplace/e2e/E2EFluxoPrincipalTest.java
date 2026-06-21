@@ -35,6 +35,8 @@ import static org.hamcrest.Matchers.*;
 class E2EFluxoPrincipalTest {
 
     // PostGIS image — mesma usada no docker-compose
+    // @Testcontainers gerencia o ciclo de vida; IDE não enxerga isso via @Container
+    @SuppressWarnings("resource")
     @Container
     static PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgis/postgis:15-3.4")
