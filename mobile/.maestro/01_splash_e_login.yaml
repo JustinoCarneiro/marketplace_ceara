@@ -1,0 +1,27 @@
+appId: com.onda.marketplace
+name: "01 · Splash e Login do Cliente"
+---
+# Abre o app e navega até a tela Home como cliente
+- launchApp:
+    clearState: true
+
+# Splash — escolher perfil Cliente
+- assertVisible: "Onda"
+- assertVisible: "Sou Cliente"
+- tapOn: "Sou Cliente"
+
+# Tela de Login
+- assertVisible: "Entrar"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+
+- tapOn: "Entrar"
+
+# Home deve aparecer após login
+- assertVisible: "O que precisa hoje?"
+- assertVisible: "Serviços próximos de você"

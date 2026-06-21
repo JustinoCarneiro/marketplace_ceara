@@ -1,0 +1,50 @@
+appId: com.onda.marketplace
+name: "05 · Aceitar Proposta e Pagar via PIX"
+---
+# Pré-condição: pedido já criado e proposta enviada pelo prestador
+# Este flow assume que o estado já foi preparado via seed/E2E do backend
+
+- launchApp
+
+# Login cliente
+- tapOn: "Sou Cliente"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Navegar para Meus Pedidos
+- tapOn: "Meus Pedidos"
+- assertVisible: "Meus pedidos"
+
+# Abrir pedido com proposta disponível
+- tapOn: "PROPOSTO"
+
+# Tela de comparação de propostas
+- assertVisible: "Propostas recebidas"
+- assertVisible: "Aceitar esta proposta"
+
+# Aceitar a primeira proposta
+- tapOn: "Aceitar esta proposta"
+
+# Escolha do método de pagamento
+- assertVisible: "Como quer pagar?"
+- assertVisible: "Pagamento retido com segurança"
+
+# Selecionar PIX
+- tapOn: "PIX"
+- tapOn: "Confirmar pagamento"
+
+# Tela PIX
+- assertVisible: "Pague via PIX"
+- assertVisible: "Copia e cola"
+
+# Simular que pagou
+- tapOn: "Já paguei"
+
+# Tela de escrow confirmado
+- assertVisible: "Pagamento retido"
+- assertVisible: "RETIDO"

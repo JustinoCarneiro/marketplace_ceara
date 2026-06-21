@@ -1,0 +1,72 @@
+appId: com.onda.marketplace
+name: "06 · Execução do Serviço e Avaliação"
+---
+# Pré-condição: pedido no status ACEITO (pagamento confirmado)
+
+- launchApp
+
+# Login prestador
+- tapOn: "Sou Prestador"
+- tapOn:
+    id: "email"
+- inputText: "joao@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Meus pedidos do prestador — abrir pedido ACEITO
+- tapOn: "Meus Pedidos"
+- tapOn: "ACEITO"
+
+# Detalhe do chamado
+- assertVisible: "ACEITO"
+- assertVisible: "Iniciar serviço"
+- tapOn: "Iniciar serviço"
+
+- assertVisible: "EM_ANDAMENTO"
+
+# Concluir o serviço
+- tapOn: "Concluir serviço"
+- assertVisible: "EM_ANDAMENTO"
+
+# Agora o cliente deve confirmar — trocar para login do cliente
+- tapOn: "Perfil"
+- tapOn: "Sair"
+
+# Login cliente
+- tapOn: "Sou Cliente"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Confirmar conclusão
+- tapOn: "Meus Pedidos"
+- tapOn: "EM_ANDAMENTO"
+- assertVisible: "Confirmar conclusão"
+- tapOn: "Confirmar conclusão"
+- assertVisible: "CONCLUIDO"
+
+# Avaliar o prestador
+- assertVisible: "Avaliar serviço"
+- tapOn: "Avaliar serviço"
+
+- assertVisible: "Como foi o serviço?"
+
+# Selecionar 5 estrelas (toca na 5ª estrela)
+- tapOn:
+    index: 4          # 0-indexed: 4 = quinta estrela
+    text: "★"
+
+- tapOn:
+    id: "comentario"
+- inputText: "Excelente! Rápido e profissional."
+
+- tapOn: "Enviar avaliação"
+
+# Confirmação
+- assertVisible: "Obrigado pela avaliação"

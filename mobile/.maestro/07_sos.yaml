@@ -1,0 +1,40 @@
+appId: com.onda.marketplace
+name: "07 · Botão SOS (Segurança)"
+---
+# Pré-condição: pedido EM_ANDAMENTO
+
+- launchApp
+
+# Login cliente
+- tapOn: "Sou Cliente"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Abrir pedido em andamento
+- tapOn: "Meus Pedidos"
+- tapOn: "EM_ANDAMENTO"
+
+# Header deve ter botão SOS
+- assertVisible: "SOS"
+- tapOn: "SOS"
+
+# Tela SOS — grande botão vermelho
+- assertVisible: "Acionar emergência"
+
+# Acionar SOS
+- tapOn: "Acionar emergência"
+
+# Confirmação — tela SOS ativo
+- assertVisible: "Alerta enviado"
+- assertVisible: "Estou em segurança"
+
+# Desativar o alerta
+- tapOn: "Estou em segurança"
+
+# Volta para o detalhe do pedido
+- assertVisible: "EM_ANDAMENTO"

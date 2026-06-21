@@ -1,0 +1,44 @@
+appId: com.onda.marketplace
+name: "04 · Criar Pedido de Serviço (com IA)"
+---
+- launchApp
+
+# Login cliente
+- tapOn: "Sou Cliente"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Abrir novo pedido pelo banner
+- assertVisible: "Descreva o problema"
+- tapOn: "Descreva o problema"
+
+# Ou via botão da Home
+# - tapOn: "Novo pedido"
+
+# Tela de criação do pedido
+- assertVisible: "Qual o serviço?"
+
+# Selecionar categoria Elétrica
+- tapOn: "Elétrica"
+
+# Descrever o problema
+- tapOn:
+    id: "descricao"
+- inputText: "Tomada do quarto parou de funcionar depois da chuva"
+
+# Enviar pedido
+- tapOn: "Enviar pedido"
+
+# IA sugere descrição (se disponível) ou vai direto para confirmação
+- assertTrue:
+    visible: "Sugestão da IA"
+    optional: true
+
+# Tela de pedido criado
+- assertVisible: "Pedido enviado!"
+- assertVisible: "PENDENTE"

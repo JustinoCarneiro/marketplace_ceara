@@ -1,0 +1,34 @@
+appId: com.onda.marketplace
+name: "03 · Busca de Prestadores e Filtros"
+---
+- launchApp
+
+# Login
+- tapOn: "Sou Cliente"
+- tapOn:
+    id: "email"
+- inputText: "maria@teste.com"
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+- tapOn: "Entrar"
+
+# Home → buscar por categoria
+- assertVisible: "O que precisa hoje?"
+- tapOn: "Elétrica"
+
+# Tela de resultados
+- assertVisible: "Prestadores próximos"
+
+# Abrir filtros
+- tapOn: "Filtros"
+- assertVisible: "Distância máxima"
+
+# Selecionar nota mínima 4 estrelas
+- tapOn: "4"
+
+# Aplicar
+- tapOn: "Aplicar filtros"
+
+# Volta para resultados filtrados
+- assertVisible: "Prestadores próximos"

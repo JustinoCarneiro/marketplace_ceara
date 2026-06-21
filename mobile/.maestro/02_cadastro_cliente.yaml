@@ -1,0 +1,30 @@
+appId: com.onda.marketplace
+name: "02 · Cadastro de novo Cliente"
+---
+- launchApp:
+    clearState: true
+
+- assertVisible: "Sou Cliente"
+- tapOn: "Sou Cliente"
+
+# Na tela de login, ir para cadastro
+- tapOn: "Criar conta"
+
+# Formulário de cadastro
+- assertVisible: "Criar conta"
+- tapOn:
+    id: "nome"
+- inputText: "Ana Teste"
+
+- tapOn:
+    id: "email"
+- inputText: "ana.maestro@onda.test"
+
+- tapOn:
+    id: "senha"
+- inputText: "Senha@123"
+
+- tapOn: "Criar conta"
+
+# Após cadastro deve logar e mostrar Home
+- assertVisible: "O que precisa hoje?"

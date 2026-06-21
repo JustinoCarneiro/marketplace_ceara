@@ -1,0 +1,13 @@
+# Configuração compartilhada dos flows Maestro
+# Referenciada via "runFlow" nos flows individuais.
+#
+# Pré-requisitos para rodar:
+#   1. Backend rodando em localhost:8080 (docker compose up -d && mvn spring-boot:run)
+#   2. Emulador Android iniciado (Android Studio → Device Manager → Play)
+#   3. App instalado: npx expo run:android
+#   4. Maestro instalado: curl -Ls "https://get.maestro.mobile.dev" | bash
+#
+# Executar um flow: maestro test mobile/.maestro/01_login.yaml
+# Executar todos:   maestro test mobile/.maestro/
+
+appId: com.onda.marketplace

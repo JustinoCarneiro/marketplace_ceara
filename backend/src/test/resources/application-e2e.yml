@@ -1,0 +1,34 @@
+# Profile ativo nos testes @SpringBootTest com Testcontainers.
+# O datasource é substituído em runtime pelo container — as props abaixo
+# são overrides para que o contexto Spring suba sem variáveis de produção.
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate       # Flyway cuida do schema
+  flyway:
+    enabled: true
+
+jwt:
+  secret: test-secret-key-for-e2e-tests-min-32-chars
+  access-token-expiration-ms: 900000
+  refresh-token-days: 30
+
+cpf:
+  encryption-key: test-cpf-aes256-key-32-chars-here!
+
+marketplace:
+  webhook:
+    secret: test-webhook-secret
+  comissao: 0.15
+  outbox:
+    delay-ms: 500
+
+notification:
+  admin-email: admin@test.local
+
+# Desabilita mail real nos testes E2E
+spring.mail.host: ""
+spring.mail.username: ""
+spring.mail.password: ""
+management.health.mail.enabled: false

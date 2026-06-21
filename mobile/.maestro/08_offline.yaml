@@ -1,0 +1,25 @@
+appId: com.onda.marketplace
+name: "08 · Estado Offline"
+---
+# Valida que o app mostra a tela de sem conexão
+# ao ser lançado sem rede e permite retry
+
+- launchApp:
+    clearState: false
+
+# Desligar rede via adb antes de rodar:
+#   adb shell svc wifi disable && adb shell svc data disable
+#
+# O Maestro não controla a rede diretamente —
+# rode o comando adb acima no terminal antes deste flow.
+
+- assertVisible: "Sem conexão"
+- assertVisible: "Tentar de novo"
+
+# Religar rede no terminal:
+#   adb shell svc wifi enable
+# Depois:
+- tapOn: "Tentar de novo"
+
+# App deve voltar ao estado normal
+- assertVisible: "Onda"
