@@ -1,0 +1,102 @@
+/* Design tokens — Maré Clara (Onda Admin) */
+:root {
+  --bg:            #F3ECDC;
+  --bg-alt:        #EAE0CB;
+  --surface:       #FCF8EE;
+  --surface-2:     #F6EEDC;
+
+  --text:          #0E2A33;
+  --text-soft:     #4C636A;
+  --text-faint:    #8A989B;
+  --text-on-accent:#FFFFFF;
+
+  --primary:       #14A8A0;
+  --primary-hover: #1AC6B6;
+  --institutional: #0E3F52;
+  --institutional-2:#15596E;
+
+  --warm-sun:      #F2B015;
+  --warm-terra:    #DA6A32;
+  --warm-coral:    #E07C61;
+  --accent-sky:    #B7DCE3;
+
+  --line:          #DCD2BC;
+  --line-soft:     #E6DDC9;
+
+  --success:       #1B8C84;
+  --warning:       #F2B015;
+  --danger:        #C0392B;
+  --info:          #15596E;
+
+  --status-pendente:  #8A989B;
+  --status-proposto:  #F2B015;
+  --status-aceito:    #15596E;
+  --status-andamento: #14A8A0;
+  --status-concluido: #1B8C84;
+  --status-disputa:   #DA6A32;
+  --status-cancelado: #C0392B;
+
+  --escrow-pendente:   #8A989B;
+  --escrow-retido:     #15596E;
+  --escrow-liberado:   #1B8C84;
+  --escrow-reembolsado:#DA6A32;
+
+  --sky-tint:       #E2EEF2;
+  --success-tint:   #DDF0EC;
+  --sun-tint:       #FDF3D6;
+  --terra-tint:     #F7E3D6;
+  --danger-tint:    #FBE6E2;
+
+  --primary-ink:    #0E7D77;
+  --success-ink:    #15756E;
+  --sun-ink:        #B5810A;
+  --terra-ink:      #C2572A;
+  --danger-ink:     #9A2820;
+
+  --font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+  --fw-black:   800;
+
+  --fs-display: 32px;
+  --fs-h1:      26px;
+  --fs-h2:      21px;
+  --fs-h3:      18px;
+  --fs-body:    16px;
+  --fs-body-sm: 14px;
+  --fs-caption: 13px;
+  --fs-eyebrow: 12px;
+
+  --lh-body: 1.6;
+
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --r-field:  12px;
+  --r-card:   24px;
+  --r-sheet:  28px;
+  --r-pill:  100px;
+
+  --shadow-soft:  0 12px 28px -20px rgba(14,42,51,0.45);
+  --shadow-float: 0 22px 44px -26px rgba(14,42,51,0.55);
+
+  --ease:     cubic-bezier(0.2,0.7,0.2,1);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+
+  /* Admin-specific */
+  --sidebar-width: 240px;
+  --sidebar-bg:    #0E3F52;
+  --sidebar-text:  #B7DCE3;
+  --sidebar-active:#FCF8EE;
+  --topbar-h:      60px;
+}
