@@ -11,6 +11,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
 
@@ -39,7 +40,9 @@ class E2EFluxoPrincipalTest {
     @SuppressWarnings("resource")
     @Container
     static PostgreSQLContainer<?> postgres =
-            new PostgreSQLContainer<>("postgis/postgis:15-3.4")
+            new PostgreSQLContainer<>(
+                    DockerImageName.parse("postgis/postgis:15-3.4")
+                                   .asCompatibleSubstituteFor("postgres"))
                     .withDatabaseName("onda_e2e")
                     .withUsername("onda_user")
                     .withPassword("onda_pass");
