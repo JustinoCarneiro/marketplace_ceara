@@ -70,11 +70,12 @@ export default function FinancePage() {
     }
   }
 
-  function fmt(n: number) {
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  function fmt(n: number | null | undefined) {
+    return (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
-  function fmtDate(s: string) {
+  function fmtDate(s: string | null | undefined) {
+    if (!s) return '—';
     return new Date(s).toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: '2-digit',
       hour: '2-digit', minute: '2-digit',

@@ -69,8 +69,12 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [dateFrom, dateTo]);
 
-  function fmt(n: number) {
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  function fmt(n: number | null | undefined) {
+    return (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  function num(n: number | null | undefined) {
+    return (n ?? 0);
   }
 
   return (
@@ -117,7 +121,7 @@ export default function DashboardPage() {
               <StatCard icon="🎯" label="Ticket médio" value={fmt(metrics.ticketMedio)} />
               <StatCard
                 icon="✅" label="Taxa conclusão"
-                value={`${(metrics.taxaConclusao * 100).toFixed(1)}%`}
+                value={`${(num(metrics.taxaConclusao) * 100).toFixed(1)}%`}
               />
             </div>
           </div>
@@ -132,15 +136,15 @@ export default function DashboardPage() {
             }}>
               <StatCard
                 icon="⚖️" label="Disputas abertas"
-                value={String(metrics.disputasAbertas)}
-                sub={metrics.disputasAbertas > 0 ? 'Requerem atenção' : 'Tudo certo'}
-                highlight={metrics.disputasAbertas > 0}
+                value={String(num(metrics.disputasAbertas))}
+                sub={num(metrics.disputasAbertas) > 0 ? 'Requerem atenção' : 'Tudo certo'}
+                highlight={num(metrics.disputasAbertas) > 0}
               />
               <StatCard
                 icon="⏱️" label="Tempo médio resolução"
-                value={`${metrics.tempoMedioResolucaoHoras.toFixed(1)}h`}
+                value={`${num(metrics.tempoMedioResolucaoHoras).toFixed(1)}h`}
               />
-              <StatCard icon="🆘" label="SOS acionados" value={String(metrics.sosAcionados)} />
+              <StatCard icon="🆘" label="SOS acionados" value={String(num(metrics.sosAcionados))} />
             </div>
           </div>
 
@@ -152,11 +156,11 @@ export default function DashboardPage() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
               gap: 16,
             }}>
-              <StatCard icon="👤" label="Clientes ativos" value={String(metrics.clientesAtivos)} />
-              <StatCard icon="👷" label="Prestadores ativos" value={String(metrics.prestadoresAtivos)} />
+              <StatCard icon="👤" label="Clientes ativos" value={String(num(metrics.clientesAtivos))} />
+              <StatCard icon="👷" label="Prestadores ativos" value={String(num(metrics.prestadoresAtivos))} />
               <StatCard
                 icon="🛡️" label="Prestadores verificados"
-                value={String(metrics.prestadoresVerificados)}
+                value={String(num(metrics.prestadoresVerificados))}
               />
             </div>
           </div>
