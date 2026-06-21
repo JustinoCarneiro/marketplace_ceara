@@ -178,8 +178,8 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(metrics.pedidosPorStatus).map(([status, count]) => {
-                    const total = Object.values(metrics.pedidosPorStatus).reduce((a, b) => a + b, 0);
+                  {Object.entries(metrics.pedidosPorStatus ?? {}).map(([status, count]) => {
+                    const total = Object.values(metrics.pedidosPorStatus ?? {}).reduce((a, b) => a + b, 0);
                     const pct = total > 0 ? (count / total) * 100 : 0;
                     return (
                       <tr key={status}>
