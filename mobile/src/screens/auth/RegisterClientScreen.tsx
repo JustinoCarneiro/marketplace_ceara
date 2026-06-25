@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -26,7 +27,7 @@ export default function RegisterClientScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('http://10.0.2.2:8080/api/v1/auth/register/client', {
+      const res = await fetch('${API_BASE}/auth/register/client', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, email, cpf, senha }),
@@ -34,7 +35,7 @@ export default function RegisterClientScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');
       // Auto-login após cadastro
-      const loginRes = await fetch('http://10.0.2.2:8080/api/v1/auth/login', {
+      const loginRes = await fetch('${API_BASE}/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha }),

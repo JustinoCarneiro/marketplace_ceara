@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,7 +28,7 @@ export default function PaymentChoiceScreen() {
     setLoading(true);
     try {
       const idempotencyKey = `pay-${proposalId}-${Date.now()}`;
-      const res = await fetch(`http://10.0.2.2:8080/api/v1/proposals/${proposalId}/accept`, {
+      const res = await fetch(`${API_BASE}/proposals/${proposalId}/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

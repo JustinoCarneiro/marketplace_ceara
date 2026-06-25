@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -31,7 +32,7 @@ export default function SendProposalScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('http://10.0.2.2:8080/api/v1/proposals', {
+      const res = await fetch('${API_BASE}/proposals', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

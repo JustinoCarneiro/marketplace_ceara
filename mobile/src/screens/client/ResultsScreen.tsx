@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -39,7 +40,7 @@ export default function ResultsScreen() {
           raioKm: '10',
           ...(route.params?.categoria ? { categoria: route.params.categoria } : {}),
         });
-        const res = await fetch(`http://10.0.2.2:8080/api/v1/providers/nearby?${params}`, {
+        const res = await fetch(`${API_BASE}/providers/nearby?${params}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();

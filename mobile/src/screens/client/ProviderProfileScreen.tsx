@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -36,7 +37,7 @@ export default function ProviderProfileScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `http://10.0.2.2:8080/api/v1/providers/${route.params.providerId}`,
+          `${API_BASE}/providers/${route.params.providerId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await res.json();

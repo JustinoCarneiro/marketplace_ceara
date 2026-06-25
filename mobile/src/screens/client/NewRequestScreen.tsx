@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -32,7 +33,7 @@ export default function NewRequestScreen() {
     setLoading(true);
     try {
       const idempotencyKey = `req-${Date.now()}`;
-      const res = await fetch('http://10.0.2.2:8080/api/v1/service-requests', {
+      const res = await fetch('${API_BASE}/service-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

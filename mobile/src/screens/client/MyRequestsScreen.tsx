@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -27,7 +28,7 @@ export default function MyRequestsScreen() {
 
   async function load() {
     try {
-      const res = await fetch('http://10.0.2.2:8080/api/v1/service-requests/my', {
+      const res = await fetch('${API_BASE}/service-requests/my', {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

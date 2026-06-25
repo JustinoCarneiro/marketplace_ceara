@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -30,7 +31,7 @@ export default function RateScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`http://10.0.2.2:8080/api/v1/service-requests/${requestId}/review`, {
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ avaliadoId, nota, comentario }),

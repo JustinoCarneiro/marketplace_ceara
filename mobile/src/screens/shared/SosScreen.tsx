@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +15,7 @@ export default function SosScreen() {
   async function triggerSos() {
     setLoading(true);
     try {
-      const res = await fetch('http://10.0.2.2:8080/api/v1/sos', {
+      const res = await fetch('${API_BASE}/sos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

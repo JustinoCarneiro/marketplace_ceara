@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
@@ -31,7 +32,7 @@ export default function AiAssistantScreen() {
     (async () => {
       try {
         const res = await fetch(
-          `http://10.0.2.2:8080/api/v1/service-requests/${route.params.requestId}/ai-suggestion`,
+          `${API_BASE}/service-requests/${route.params.requestId}/ai-suggestion`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.ok) {

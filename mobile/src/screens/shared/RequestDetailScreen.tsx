@@ -1,3 +1,4 @@
+import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -42,7 +43,7 @@ export default function RequestDetailScreen() {
   async function load() {
     if (!requestId) { setLoading(false); return; }
     try {
-      const res = await fetch(`http://10.0.2.2:8080/api/v1/service-requests/${requestId}`, {
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRequest(res.ok ? await res.json() : null);
@@ -58,7 +59,7 @@ export default function RequestDetailScreen() {
   async function startService() {
     setActionLoading(true);
     try {
-      await fetch(`http://10.0.2.2:8080/api/v1/service-requests/${requestId}/start`, {
+      await fetch(`${API_BASE}/service-requests/${requestId}/start`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -70,7 +71,7 @@ export default function RequestDetailScreen() {
   async function confirmCompletion() {
     setActionLoading(true);
     try {
-      await fetch(`http://10.0.2.2:8080/api/v1/service-requests/${requestId}/confirm-completion`, {
+      await fetch(`${API_BASE}/service-requests/${requestId}/confirm-completion`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
