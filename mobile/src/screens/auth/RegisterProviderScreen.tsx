@@ -39,14 +39,14 @@ export default function RegisterProviderScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('${API_BASE}/auth/register/provider', {
+      const res = await fetch(`${API_BASE}/auth/register/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, email, cpf, senha, categoria }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');
-      const loginRes = await fetch('${API_BASE}/auth/login', {
+      const loginRes = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha }),

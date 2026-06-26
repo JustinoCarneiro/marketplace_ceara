@@ -29,11 +29,20 @@ import SosActiveScreen from '../screens/shared/SosActiveScreen';
 const Tab = createBottomTabNavigator<ClientTabParams>();
 const Stack = createNativeStackNavigator<ClientStackParams>();
 
+const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
+  Home:       { active: '⌂',  inactive: '⌂' },
+  Search:     { active: '⊙',  inactive: '⊙' },
+  MyRequests: { active: '❑',  inactive: '❑' },
+  Profile:    { active: '◉',  inactive: '◉' },
+};
+
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = { Home: '🏠', MyRequests: '📋', Profile: '👤' };
+  const label: Record<string, string> = {
+    Home: '🏠', Search: '🔍', MyRequests: '📋', Profile: '👤',
+  };
   return (
     <View style={styles.tabIcon}>
-      <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>{icons[name]}</Text>
+      <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.4 }}>{label[name]}</Text>
     </View>
   );
 }
@@ -50,9 +59,10 @@ function ClientTabs() {
         tabBarLabelStyle: styles.tabLabel,
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Início' }} />
+      <Tab.Screen name="Home"       component={HomeScreen}       options={{ tabBarLabel: 'Início' }} />
+      <Tab.Screen name="Search"     component={ResultsScreen}    options={{ tabBarLabel: 'Buscar' }} />
       <Tab.Screen name="MyRequests" component={MyRequestsScreen} options={{ tabBarLabel: 'Pedidos' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Perfil' }} />
+      <Tab.Screen name="Profile"    component={ProfileScreen}    options={{ tabBarLabel: 'Perfil' }} />
     </Tab.Navigator>
   );
 }

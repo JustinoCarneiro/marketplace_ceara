@@ -33,7 +33,7 @@ export default function NewRequestScreen() {
     setLoading(true);
     try {
       const idempotencyKey = `req-${Date.now()}`;
-      const res = await fetch('${API_BASE}/service-requests', {
+      const res = await fetch(`${API_BASE}/service-requests`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

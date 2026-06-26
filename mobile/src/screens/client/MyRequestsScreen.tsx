@@ -28,7 +28,7 @@ export default function MyRequestsScreen() {
 
   async function load() {
     try {
-      const res = await fetch('${API_BASE}/service-requests/my', {
+      const res = await fetch(`${API_BASE}/service-requests/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

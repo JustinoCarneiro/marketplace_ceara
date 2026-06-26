@@ -13,6 +13,7 @@ export type AuthStackParams = {
 // ─── Client Tabs ─────────────────────────────────────────────────────────────
 export type ClientTabParams = {
   Home: undefined;
+  Search: { categoria?: string } | undefined;
   MyRequests: undefined;
   Profile: undefined;
 };

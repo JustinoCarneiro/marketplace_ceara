@@ -29,7 +29,7 @@ export default function AvailableRequestsScreen() {
 
   async function load() {
     try {
-      const res = await fetch('${API_BASE}/service-requests?status=PENDENTE', {
+      const res = await fetch(`${API_BASE}/service-requests?status=PENDENTE`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

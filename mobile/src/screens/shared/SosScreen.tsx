@@ -15,7 +15,7 @@ export default function SosScreen() {
   async function triggerSos() {
     setLoading(true);
     try {
-      const res = await fetch('${API_BASE}/sos', {
+      const res = await fetch(`${API_BASE}/sos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({

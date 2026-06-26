@@ -42,6 +42,12 @@ dev-backend:            ## Inicia o backend com Maven (usa .env para vars)
 dev-admin:              ## Inicia o painel admin com Vite dev server
 	cd admin && npm run dev
 
+dev-mobile:             ## Sobe tudo + tunnel + rebuild APK se URL mudou
+	@bash scripts/dev-mobile.sh
+
+update-mobile:          ## Publica atualização JS/telas sem rebuildar o APK (~30s)
+	cd mobile && ~/.npm-global/bin/eas update --branch preview --message "$(msg)"
+
 # ── Ajuda ─────────────────────────────────────────────────────────────────────
 help:                   ## Lista todos os targets disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \

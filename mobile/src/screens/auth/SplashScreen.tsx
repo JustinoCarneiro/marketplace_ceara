@@ -15,7 +15,7 @@ export default function SplashScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.logo}>
-            <Text style={styles.logoWave}>〜</Text>
+            <Text style={styles.logoWave}>∿</Text>
           </View>
           <View style={styles.headline}>
             <Text style={styles.appName}>Onda</Text>
