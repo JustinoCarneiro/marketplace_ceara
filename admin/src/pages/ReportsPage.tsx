@@ -1,201 +1,89 @@
 import { useState } from 'react';
-import { getToken } from '../store/auth';
-import PageHeader from '../components/PageHeader';
-
-const BASE = 'http://localhost:8080/api/v1';
-
-interface ReportConfig {
-  id: string;
-  icon: string;
-  title: string;
-  description: string;
-  endpoint: string;
-  formats: ('csv' | 'pdf')[];
-  hasDateRange: boolean;
-}
-
-const REPORTS: ReportConfig[] = [
-  {
-    id: 'metrics',
-    icon: '📊',
-    title: 'Métricas da plataforma',
-    description: 'GMV, receita, ticket médio, taxas e contagens por status.',
-    endpoint: '/admin/reports/metrics',
-    formats: ['pdf'],
-    hasDateRange: true,
-  },
-  {
-    id: 'transactions',
-    icon: '💳',
-    title: 'Transações financeiras',
-    description: 'Histórico completo de transações de escrow com status de pagamento.',
-    endpoint: '/admin/reports/transactions',
-    formats: ['csv'],
-    hasDateRange: true,
-  },
-  {
-    id: 'disputes',
-    icon: '⚖️',
-    title: 'Disputas',
-    description: 'Lista de disputas com motivos, decisões e valores envolvidos.',
-    endpoint: '/admin/reports/disputes',
-    formats: ['csv'],
-    hasDateRange: false,
-  },
-  {
-    id: 'requests',
-    icon: '📋',
-    title: 'Pedidos de serviço',
-    description: 'Pedidos por status, categoria e período.',
-    endpoint: '/admin/reports/requests',
-    formats: ['csv'],
-    hasDateRange: true,
-  },
-];
 
 export default function ReportsPage() {
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
+  const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [done, setDone] = useState(false);
 
-  async function download(report: ReportConfig, format: 'csv' | 'pdf') {
-    const key = `${report.id}-${format}`;
-    setDownloading(key);
-    setMsg(null);
-    try {
-      const params = new URLSearchParams();
-      if (report.hasDateRange) {
-        params.set('de', dateFrom);
-        params.set('ate', dateTo);
-      }
-
-      let url: string;
-      if (format === 'pdf') {
-        url = `${BASE}${report.endpoint}.pdf?${params}`;
-      } else {
-        url = `${BASE}${report.endpoint}.csv?${params}`;
-      }
-
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+  function generate() {
+    setGenerating(true); setProgress(0); setDone(false);
+    const iv = setInterval(() => {
+      setProgress(p => {
+        if (p >= 100) { clearInterval(iv); setGenerating(false); setDone(true); return 100; }
+        return p + Math.random() * 18;
       });
-
-      if (!res.ok) throw new Error(`Falha ao gerar relatório: ${res.status}`);
-
-      const blob = await res.blob();
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `onda-${report.id}-${dateFrom}-${dateTo}.${format}`;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      setMsg({ type: 'ok', text: `Relatório "${report.title}" baixado com sucesso.` });
-    } catch (e: unknown) {
-      setMsg({ type: 'err', text: e instanceof Error ? e.message : 'Erro ao baixar.' });
-    } finally {
-      setDownloading(null);
-    }
+    }, 300);
   }
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 900 }}>
-      <PageHeader
-        title="Exportar Relatórios"
-        subtitle="Extração de dados para análise externa e prestação de contas"
-      />
-
-      {/* Date range */}
-      <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-        <p className="eyebrow" style={{ marginBottom: 14 }}>Período padrão (para relatórios com intervalo de datas)</p>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="date" className="input-field" value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            style={{ width: 160 }}
-          />
-          <span style={{ color: 'var(--text-faint)' }}>até</span>
-          <input
-            type="date" className="input-field" value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            style={{ width: 160 }}
-          />
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Exportar relatório</span>
       </div>
-
-      {msg && (
-        <div className={`alert alert--${msg.type === 'ok' ? 'success' : 'danger'}`} style={{ marginBottom: 20 }}>
-          <span>{msg.type === 'ok' ? '✅' : '⚠️'}</span>
-          <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ marginLeft: 'auto', color: 'inherit', fontSize: 18 }}>×</button>
-        </div>
-      )}
-
-      {/* Report cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {REPORTS.map(report => (
-          <div key={report.id} className="card" style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: 14,
-                background: 'var(--sky-tint)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 24, flexShrink: 0,
-              }}>
-                {report.icon}
-              </div>
-
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-h3)' }}>{report.title}</div>
-                <div style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)', marginTop: 4 }}>
-                  {report.description}
+      <div style={{ flex: 1, background: '#F6EEDC', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+        <div style={{ width: 380, background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, boxShadow: '0 28px 56px -20px rgba(14,42,51,.5)', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {generating ? (
+            <>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#0E2A33', letterSpacing: '-0.01em' }}>Exportar relatório</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '14px 0' }}>
+                <span style={{ width: 44, height: 44, borderRadius: '50%', border: '3.5px solid #B7DCE3', borderTopColor: '#14A8A0', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A33' }}>Gerando relatório…</span>
+                  <span style={{ fontSize: 13, color: '#4C636A' }}>{format.toUpperCase()} · pedidos, transações e disputas</span>
                 </div>
-                {!report.hasDateRange && (
-                  <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', marginTop: 4, display: 'block' }}>
-                    Exporta todos os registros (sem filtro de período)
-                  </span>
-                )}
               </div>
-
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                {report.formats.map(fmt => (
-                  <button
-                    key={fmt}
-                    className="btn btn--outline btn--sm"
-                    onClick={() => download(report, fmt)}
-                    disabled={downloading === `${report.id}-${fmt}`}
-                    style={{
-                      minWidth: 90,
-                      gap: 6,
-                    }}
-                  >
-                    {downloading === `${report.id}-${fmt}` ? (
-                      'Gerando…'
-                    ) : (
-                      <>
-                        <span>{fmt === 'pdf' ? '📄' : '📊'}</span>
-                        {fmt.toUpperCase()}
-                      </>
-                    )}
-                  </button>
-                ))}
+              <div style={{ height: 6, borderRadius: 100, background: '#E6DDC9', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', background: '#14A8A0', borderRadius: 100, transition: 'width 0.3s ease' }} />
               </div>
+            </>
+          ) : done ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '20px 0' }}>
+              <div style={{ width: 60, height: 60, borderRadius: 20, background: '#DDF0EC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#15756E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#0E2A33' }}>Relatório pronto!</span>
+              <span style={{ fontSize: 13, color: '#4C636A' }}>O download começou automaticamente.</span>
+              <button onClick={() => setDone(false)} style={{ height: 44, padding: '0 24px', border: '1.5px solid #E6DDC9', borderRadius: 100, background: 'transparent', color: '#4C636A', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Gerar outro</button>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Info */}
-      <div className="alert alert--info" style={{ marginTop: 24 }}>
-        <span>ℹ️</span>
-        <div style={{ fontSize: 'var(--fs-body-sm)' }}>
-          <div><strong>CSV</strong> — Compatível com Excel, Google Sheets e ferramentas de BI.</div>
-          <div style={{ marginTop: 4 }}>
-            <strong>PDF</strong> — Relatório formatado para apresentação e prestação de contas.
-          </div>
+          ) : (
+            <>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#0E2A33', letterSpacing: '-0.01em' }}>Exportar relatório</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* CSV option */}
+                <div onClick={() => setFormat('csv')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: format === 'csv' ? '#F3ECDC' : '#fff', border: `2px solid ${format === 'csv' ? '#14A8A0' : '#E6DDC9'}`, borderRadius: 12, padding: 13, cursor: 'pointer' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: '#DDF0EC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15756E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="14 3 14 9 20 9"/></svg>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>CSV</div>
+                    <div style={{ fontSize: 12, color: '#4C636A' }}>Listagens (pedidos, transações, disputas)</div>
+                  </div>
+                  {format === 'csv' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#14A8A0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
+                </div>
+                {/* PDF option */}
+                <div onClick={() => setFormat('pdf')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: format === 'pdf' ? '#F3ECDC' : '#fff', border: `2px solid ${format === 'pdf' ? '#14A8A0' : '#E6DDC9'}`, borderRadius: 12, padding: 13, cursor: 'pointer' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: '#F7E3D6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C2572A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="14 3 14 9 20 9"/></svg>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>PDF</div>
+                    <div style={{ fontSize: 12, color: '#4C636A' }}>Resumo de métricas</div>
+                  </div>
+                  {format === 'pdf' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#14A8A0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#E2EEF2', borderRadius: 10, padding: '9px 12px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Respeita o período e bairro selecionados.</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A989B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+                <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A989B' }}>Os relatórios não incluem dados pessoais sensíveis (CPF).</span>
+              </div>
+              <button onClick={generate} style={{ width: '100%', height: 48, border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>Gerar relatório</button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -2,15 +2,15 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
+  TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import ScreenHeader from '../../components/ScreenHeader';
-import Button from '../../components/Button';
 
 type RouteProps = RouteProp<ClientStackParams, 'AiAssistant'>;
 
@@ -26,9 +26,10 @@ export default function AiAssistantScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [suggestion, setSuggestion] = useState<AiSuggestion | null>(null);
   const [loading, setLoading] = useState(true);
+  const [descricao, setDescricao] = useState('');
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
-    // Busca sugestão da IA — fallback manual se falhar
     (async () => {
       try {
         const res = await fetch(
@@ -36,143 +37,266 @@ export default function AiAssistantScreen() {
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (res.ok) {
-          const data = await res.json();
+          const data: AiSuggestion = await res.json();
           setSuggestion(data);
+          setDescricao(data.descricaoSugerida ?? '');
         } else {
-          setSuggestion(null); // fallback manual
+          setSuggestion(null);
         }
       } catch {
-        setSuggestion(null); // fallback manual
+        setSuggestion(null);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  function proceed() {
-    nav.navigate('RequestCreated', { requestId: route.params.requestId });
+  async function publish() {
+    setPublishing(true);
+    try {
+      await fetch(`${API_BASE}/service-requests/${route.params.requestId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ descricao }),
+      });
+    } catch { /* best effort */ } finally {
+      setPublishing(false);
+      nav.navigate('RequestCreated', { requestId: route.params.requestId });
+    }
   }
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScreenHeader title="Assistente IA" onBack={() => nav.goBack()} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator color={color.primary} size="large" />
-            <Text style={styles.loadingTitle}>Analisando seu pedido…</Text>
-            <Text style={styles.loadingBody}>Nossa IA está processando as informações para sugerir o melhor orçamento.</Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}>
+              <Feather name="chevron-left" size={22} color={color.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Revisar com a IA</Text>
           </View>
-        ) : suggestion?.descricaoSugerida ? (
-          <>
-            <View style={styles.aiCard}>
-              <View style={styles.aiHeader}>
-                <Text style={{ fontSize: 24 }}>✨</Text>
-                <Text style={styles.aiTitle}>Sugestão da IA</Text>
+
+          {loading ? (
+            <View style={styles.loadingBlock}>
+              <ActivityIndicator color={color.primary} size="large" />
+              <Text style={styles.loadingTitle}>Analisando seu pedido…</Text>
+              <Text style={styles.loadingBody}>Nossa IA está processando as informações para sugerir o melhor orçamento.</Text>
+            </View>
+          ) : (
+            <View style={styles.form}>
+              {/* AI badge */}
+              <View style={styles.aiBadge}>
+                <Feather name="sun" size={16} color="#fff" />
+                <Text style={styles.aiBadgeText}>Sugestão da IA — você confirma</Text>
               </View>
 
-              <View style={styles.suggestionBlock}>
-                <Text style={styles.suggestionLabel}>DESCRIÇÃO SUGERIDA</Text>
-                <Text style={styles.suggestionText}>{suggestion.descricaoSugerida}</Text>
-              </View>
-
-              {(suggestion.faixaMin && suggestion.faixaMax) ? (
-                <View style={styles.priceBlock}>
-                  <Text style={styles.suggestionLabel}>FAIXA DE ORÇAMENTO ESTIMADA</Text>
-                  <Text style={styles.priceRange}>
-                    R$ {suggestion.faixaMin.toFixed(0)} — R$ {suggestion.faixaMax.toFixed(0)}
-                  </Text>
-                  <Text style={styles.priceNote}>Estimativa baseada em serviços similares na sua região.</Text>
+              {/* Descrição sugerida */}
+              <View style={styles.field}>
+                <Text style={styles.label}>
+                  Descrição sugerida{' '}
+                  <Text style={styles.labelSoft}>· editável</Text>
+                </Text>
+                <View style={[styles.textAreaWrap, suggestion?.descricaoSugerida && styles.textAreaAi]}>
+                  <TextInput
+                    style={styles.textArea}
+                    value={descricao}
+                    onChangeText={setDescricao}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    placeholder="Descreva o problema…"
+                    placeholderTextColor={color.textFaint}
+                  />
                 </View>
-              ) : null}
-            </View>
+              </View>
 
-            <View style={styles.fallbackNote}>
-              <Text style={{ fontSize: 16 }}>ℹ️</Text>
-              <Text style={styles.fallbackText}>
-                A sugestão é apenas uma referência. O prestador enviará a proposta real com o valor definitivo.
-              </Text>
-            </View>
-          </>
-        ) : (
-          // Fallback manual — IA indisponível
-          <View style={styles.fallbackCard}>
-            <Text style={{ fontSize: 32 }}>📋</Text>
-            <Text style={styles.fallbackTitle}>Pedido registrado!</Text>
-            <Text style={styles.fallbackBody}>
-              A sugestão automática não está disponível agora, mas seu pedido foi criado com sucesso.
-              Os prestadores da sua região já podem visualizá-lo e enviar propostas.
-            </Text>
-          </View>
-        )}
+              {/* Orçamento estimado */}
+              {(suggestion?.faixaMin != null && suggestion?.faixaMax != null) && (
+                <View style={styles.field}>
+                  <Text style={styles.label}>
+                    Orçamento estimado{' '}
+                    <Text style={styles.labelSoft}>· editável</Text>
+                  </Text>
+                  <View style={styles.rangeCard}>
+                    <View style={styles.rangeRow}>
+                      <Text style={styles.rangeCaption}>Mínimo</Text>
+                      <Text style={styles.rangeCaption}>Máximo</Text>
+                    </View>
+                    <View style={styles.rangeRow}>
+                      <Text style={styles.rangeValue}>R$ {suggestion.faixaMin?.toFixed(0)}</Text>
+                      <Text style={styles.rangeValue}>R$ {suggestion.faixaMax?.toFixed(0)}</Text>
+                    </View>
+                    {/* Visual slider (non-interactive decoration) */}
+                    <View style={styles.sliderTrack}>
+                      <View style={styles.sliderFill} />
+                      <View style={[styles.sliderThumb, { left: '14%' }]} />
+                      <View style={[styles.sliderThumb, { left: '88%' }]} />
+                    </View>
+                  </View>
+                </View>
+              )}
 
-        <Button label="Ver meu pedido" onPress={proceed} />
-        <Button label="Voltar ao início" variant="ghost" onPress={() => nav.popToTop()} />
-      </ScrollView>
+              {/* Fallback / AI warning */}
+              <View style={styles.fallbackNotice}>
+                <Feather name="alert-triangle" size={17} color={color.terraInk} style={{ flexShrink: 0, marginTop: 1 }} />
+                <Text style={styles.fallbackText}>
+                  Se a IA estiver indisponível, é só{' '}
+                  <Text style={styles.fallbackBold}>continuar preenchendo manualmente</Text>
+                  {' '}— o pedido não trava.
+                </Text>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Footer CTA */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.cta, publishing && { opacity: 0.7 }]}
+            onPress={publish}
+            disabled={publishing || loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>{publishing ? 'Publicando...' : 'Confirmar e publicar pedido'}</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  content: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7], gap: space[4] },
+  scroll: { flexGrow: 1, paddingBottom: space[3] },
 
-  loadingCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[6],
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: space[3],
+    paddingHorizontal: space[5],
+    paddingTop: 8,
+    paddingBottom: 18,
+  },
+  headerTitle: { fontSize: font.size.h2, fontWeight: font.weight.black, color: color.text, letterSpacing: -0.02 * font.size.h2 },
+
+  loadingBlock: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: space[4],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+    padding: space[6],
   },
   loadingTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
   loadingBody: { fontSize: font.size.bodySm, color: color.textSoft, textAlign: 'center', lineHeight: font.size.bodySm * 1.6 },
 
-  aiCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[5],
-    gap: space[4],
-    borderWidth: 1,
-    borderColor: color.primary + '40',
-  },
-  aiHeader: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
-  aiTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
+  form: { paddingHorizontal: space[5], gap: 16 },
 
-  suggestionBlock: { gap: space[2] },
-  suggestionLabel: {
+  aiBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: color.institutional,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  aiBadgeText: { fontSize: 12.5, fontWeight: font.weight.bold, color: '#fff', letterSpacing: 0.04 * 12.5 },
+
+  field: { gap: 8 },
+  label: {
     fontSize: font.size.eyebrow,
     fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
+    color: color.institutional2,
+    letterSpacing: 0.1 * font.size.eyebrow,
     textTransform: 'uppercase',
   },
-  suggestionText: { fontSize: font.size.body, color: color.text, lineHeight: font.size.body * font.lineHeight.body },
+  labelSoft: { textTransform: 'none', letterSpacing: 0, fontWeight: '400', color: color.textFaint },
 
-  priceBlock: { gap: space[2] },
-  priceRange: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.primary },
-  priceNote: { fontSize: font.size.caption, color: color.textFaint },
-
-  fallbackNote: {
-    flexDirection: 'row',
-    gap: space[3],
-    backgroundColor: color.skyTint,
-    borderRadius: radius.field,
-    padding: space[4],
-  },
-  fallbackText: { flex: 1, fontSize: font.size.caption, color: color.textSoft, lineHeight: font.size.caption * 1.55 },
-
-  fallbackCard: {
+  textAreaWrap: {
     backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[6],
-    alignItems: 'center',
-    gap: space[4],
     borderWidth: 1,
     borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    padding: 14,
+    minHeight: 88,
   },
-  fallbackTitle: { fontSize: font.size.h2, fontWeight: font.weight.bold, color: color.text },
-  fallbackBody: { fontSize: font.size.body, color: color.textSoft, textAlign: 'center', lineHeight: font.size.body * font.lineHeight.body },
+  textAreaAi: { borderWidth: 1.5, borderColor: '#B7DCE3' },
+  textArea: { fontSize: 14.5, color: color.text, lineHeight: 14.5 * 1.6 },
+
+  rangeCard: {
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    padding: 18,
+    gap: 14,
+  },
+  rangeRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  rangeCaption: { fontSize: 13, color: color.textSoft },
+  rangeValue: { fontSize: 24, fontWeight: font.weight.black, color: color.text },
+
+  sliderTrack: {
+    height: 8,
+    borderRadius: 100,
+    backgroundColor: color.lineSoft,
+    position: 'relative',
+  },
+  sliderFill: {
+    position: 'absolute',
+    left: '14%',
+    right: '12%',
+    top: 0,
+    bottom: 0,
+    borderRadius: 100,
+    backgroundColor: color.primary,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: color.primary,
+    top: -5,
+    marginLeft: -9,
+  },
+
+  fallbackNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    backgroundColor: color.terraTint,
+    borderWidth: 1,
+    borderColor: color.terraTintLine,
+    borderRadius: radius.field,
+    padding: 12,
+  },
+  fallbackText: { flex: 1, fontSize: 12.5, lineHeight: 12.5 * 1.5, color: color.terraInkDeep },
+  fallbackBold: { fontWeight: font.weight.bold },
+
+  footer: {
+    paddingHorizontal: space[5],
+    paddingTop: 14,
+    paddingBottom: 20,
+    backgroundColor: color.surface,
+    borderTopWidth: 1,
+    borderTopColor: color.lineSoft,
+  },
+  cta: {
+    height: 56,
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    elevation: 6,
+  },
+  ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

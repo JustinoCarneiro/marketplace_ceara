@@ -1,177 +1,93 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
 interface Provider {
   id: string;
   nome: string;
-  email: string;
   categoria: string;
-  statusVerificacao: 'EM_VERIFICACAO' | 'VERIFICADO' | 'REPROVADO';
-  notaMedia: number | null;
+  statusVerificacao: string;
+  notaMedia?: number;
+  totalPedidos?: number;
 }
 
-const STATUS_LABEL = {
-  EM_VERIFICACAO: 'Em verificação',
-  VERIFICADO: 'Verificado',
-  REPROVADO: 'Reprovado',
-};
+const AVATAR_COLORS = ['#15596E', '#3C7A4E', '#DA6A32', '#C0392B', '#1B8C84', '#244C86'];
+function avatarBg(nome: string) { return AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COLORS.length]; }
+function initials(nome: string) { return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string; label: string }> = {
+    INCONCLUSIVO: { bg: '#F2B015', color: '#0E2A33', label: 'INCONCLUSIVO' },
+    VERIFICADO: { bg: '#0E3F52', color: '#fff', label: 'VERIFICADO' },
+    REPROVADO: { bg: '#FBE6E2', color: '#C0392B', label: 'REPROVADO' },
+    PENDENTE: { bg: '#FDF3D6', color: '#B5810A', label: 'PENDENTE' },
+  };
+  const s = map[status] || map.PENDENTE;
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: s.bg, color: s.color, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '5px 11px', borderRadius: 100, flexShrink: 0 }}>{s.label}</span>;
+}
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('EM_VERIFICACAO');
-  const [justificativas, setJustificativas] = useState<Record<string, string>>({});
-  const [acting, setActing] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ id: string; type: 'ok' | 'err'; text: string } | null>(null);
+  const [filter, setFilter] = useState<'INCONCLUSIVO' | ''>('INCONCLUSIVO');
 
   async function load() {
     setLoading(true);
     try {
-      const data = await api.get<Provider[]>(`/admin/providers?statusVerificacao=${statusFilter}`);
+      const data = await api.get<Provider[]>('/admin/providers');
       setProviders(Array.isArray(data) ? data : []);
-    } catch {
-      setProviders([]);
-    } finally {
-      setLoading(false);
-    }
+    } catch { setProviders([]); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, []);
 
-  async function decide(providerId: string, decisao: 'VERIFICADO' | 'REPROVADO') {
-    const justificativa = justificativas[providerId]?.trim();
-    if (!justificativa) {
-      setMsg({ id: providerId, type: 'err', text: 'Informe a justificativa antes de decidir.' });
-      return;
-    }
-    setActing(providerId);
-    try {
-      await api.post(`/admin/providers/${providerId}/verify`, { decisao, justificativa });
-      setMsg({ id: providerId, type: 'ok', text: `Prestador ${decisao === 'VERIFICADO' ? 'verificado' : 'reprovado'} com sucesso.` });
-      setTimeout(() => load(), 1500);
-    } catch (e: unknown) {
-      setMsg({ id: providerId, type: 'err', text: e instanceof Error ? e.message : 'Erro.' });
-    } finally {
-      setActing(null);
-    }
+  async function verify(id: string) {
+    try { await api.post(`/admin/providers/${id}/verify`, {}); load(); } catch {}
   }
+  async function reject(id: string) {
+    try { await api.post(`/admin/providers/${id}/reject`, {}); load(); } catch {}
+  }
+
+  const filtered = filter ? providers.filter(p => p.statusVerificacao === filter) : providers;
+  const pendingCount = providers.filter(p => ['INCONCLUSIVO', 'PENDENTE'].includes(p.statusVerificacao)).length;
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1200 }}>
-      <PageHeader
-        title="Moderação de Prestadores"
-        subtitle="Verificação de identidade e habilitação para operar na plataforma"
-        action={
-          <select
-            className="select-field"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            style={{ width: 180 }}
-          >
-            <option value="EM_VERIFICACAO">Em verificação</option>
-            <option value="VERIFICADO">Verificados</option>
-            <option value="REPROVADO">Reprovados</option>
-            <option value="">Todos</option>
-          </select>
-        }
-      />
-
-      {statusFilter === 'EM_VERIFICACAO' && providers.length > 0 && (
-        <div className="alert alert--info" style={{ marginBottom: 20 }}>
-          <span>🛡️</span>
-          <span>
-            <strong>{providers.length} prestador{providers.length !== 1 ? 'es' : ''}</strong> aguardam verificação de identidade.
-          </span>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Moderação de prestadores</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span onClick={() => setFilter('INCONCLUSIVO')} style={{ fontSize: 12.5, fontWeight: 700, color: filter === 'INCONCLUSIVO' ? '#0E2A33' : '#4C636A', background: filter === 'INCONCLUSIVO' ? '#FDF3D6' : '#F3ECDC', border: `1px solid ${filter === 'INCONCLUSIVO' ? '#F2B015' : '#E6DDC9'}`, padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Inconclusivos · {pendingCount}</span>
+          <span onClick={() => setFilter('')} style={{ fontSize: 12.5, fontWeight: 600, color: '#4C636A', background: '#F3ECDC', border: '1px solid #E6DDC9', padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Todos</span>
         </div>
-      )}
-
-      {loading ? (
-        <div className="loading-center"><div className="spinner" /></div>
-      ) : providers.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__icon">🛡️</div>
-          <div className="empty-state__title">Nenhum prestador</div>
-          <div className="empty-state__body">Nenhum prestador com o status selecionado.</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {providers.map(p => (
-            <div key={p.id} className="card" style={{ padding: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                {/* Avatar */}
-                <div style={{
-                  width: 52, height: 52, borderRadius: 14,
-                  background: 'var(--bg-alt)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 24, flexShrink: 0,
-                }}>👷</div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 'var(--fs-h3)' }}>{p.nome}</span>
-                    <span className={`badge badge--${p.statusVerificacao.toLowerCase().replace('_', '')}`}>
-                      {STATUS_LABEL[p.statusVerificacao]}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)', marginTop: 4 }}>
-                    {p.email}
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-                    <span className="tag">{p.categoria}</span>
-                    {p.notaMedia != null && (
-                      <span className="tag">⭐ {p.notaMedia.toFixed(1)}</span>
-                    )}
-                    <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>
-                      #{p.id.slice(0, 8)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                {p.statusVerificacao === 'EM_VERIFICACAO' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 280 }}>
-                    <textarea
-                      className="textarea-field"
-                      rows={2}
-                      placeholder="Justificativa (obrigatória para aprovar ou reprovar)…"
-                      value={justificativas[p.id] ?? ''}
-                      onChange={e => setJustificativas(prev => ({ ...prev, [p.id]: e.target.value }))}
-                    />
-
-                    {msg?.id === p.id && (
-                      <div className={`alert alert--${msg.type === 'ok' ? 'success' : 'danger'}`} style={{ borderRadius: 'var(--r-field)' }}>
-                        <span>{msg.type === 'ok' ? '✅' : '⚠️'}</span>
-                        <span>{msg.text}</span>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        className="btn btn--primary btn--sm"
-                        style={{ flex: 1 }}
-                        disabled={acting === p.id}
-                        onClick={() => decide(p.id, 'VERIFICADO')}
-                      >
-                        ✓ Verificar
-                      </button>
-                      <button
-                        className="btn btn--danger btn--sm"
-                        style={{ flex: 1 }}
-                        disabled={acting === p.id}
-                        onClick={() => decide(p.id, 'REPROVADO')}
-                      >
-                        ✗ Reprovar
-                      </button>
-                    </div>
-                  </div>
-                )}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><div className="spinner" /></div> :
+         filtered.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-soft)' }}>Nenhum prestador encontrado.</div> :
+         filtered.map(p => {
+          const isPending = ['INCONCLUSIVO', 'PENDENTE'].includes(p.statusVerificacao);
+          const cardBg = isPending ? '#FDF3D6' : 'var(--surface)';
+          const cardBorder = isPending ? '1.5px solid #F2B015' : '1px solid var(--line-soft)';
+          const opacity = p.statusVerificacao === 'REPROVADO' ? 0.7 : 1;
+          return (
+            <div key={p.id} style={{ background: cardBg, border: cardBorder, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, opacity }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: avatarBg(p.nome), color: '#fff', fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(p.nome)}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#0E2A33' }}>{p.nome}</div>
+                <div style={{ fontSize: 13, color: '#4C636A' }}>{p.categoria}</div>
               </div>
+              <StatusBadge status={p.statusVerificacao} />
+              {isPending ? (
+                <>
+                  <button onClick={() => verify(p.id)} style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Verificar</button>
+                  <button onClick={() => reject(p.id)} style={{ height: 42, padding: '0 18px', border: '1.5px solid #C0392B', borderRadius: 100, background: 'transparent', color: '#C0392B', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Reprovar</button>
+                </>
+              ) : (
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#8A989B', flexShrink: 0 }}>Ver perfil →</span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

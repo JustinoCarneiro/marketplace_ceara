@@ -1,177 +1,253 @@
 import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
-import { color, font, space, radius, shadow } from '../../theme';
+import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import ScreenHeader from '../../components/ScreenHeader';
-import Button from '../../components/Button';
 
 type RouteProps = RouteProp<ClientStackParams, 'PaymentChoice'>;
+type Method = 'pix' | 'card';
+
+const COMISSAO = 0.1;
 
 export default function PaymentChoiceScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
-  const [method, setMethod] = useState<'PIX' | 'CARTAO' | null>(null);
+  const { requestId, valor } = route.params;
+  const comissao = Math.round(valor * COMISSAO * 100) / 100;
+  const total = valor + comissao;
+
+  const [method, setMethod] = useState<Method>('pix');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  const { requestId, proposalId, valor } = route.params;
-
-  async function proceed() {
-    if (!method) { setError('Selecione um método de pagamento.'); return; }
-    setError('');
+  async function pay() {
     setLoading(true);
     try {
-      const idempotencyKey = `pay-${proposalId}-${Date.now()}`;
-      const res = await fetch(`${API_BASE}/proposals/${proposalId}/accept`, {
+      await fetch(`${API_BASE}/payments/initiate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Idempotency-Key': idempotencyKey,
-        },
-        body: JSON.stringify({ metodo: method }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId, method }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? 'Erro ao processar pagamento');
-      if (method === 'PIX') {
-        nav.navigate('PaymentPix', { requestId, valor });
+      if (method === 'pix') {
+        nav.replace('PaymentPix', { requestId, valor: total });
       } else {
-        nav.navigate('PaymentCard', { requestId, valor });
+        nav.replace('PaymentCard', { requestId, valor: total });
       }
-    } catch (e: any) {
-      setError(e.message ?? 'Erro ao processar pagamento.');
-    } finally {
+    } catch {
       setLoading(false);
     }
   }
 
-  const comissao = valor * 0.15;
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.handle} />
-      <ScreenHeader title="Pagamento" onBack={() => nav.goBack()} />
-      <View style={styles.content}>
+    <View style={styles.overlay}>
+      {/* Tap overlay to dismiss */}
+      <TouchableOpacity style={styles.dimArea} onPress={() => nav.goBack()} activeOpacity={1} />
 
-        {/* Resumo do valor */}
-        <View style={styles.summaryCard}>
+      {/* Sheet */}
+      <View style={styles.sheet}>
+        <View style={styles.handle} />
+
+        <Text style={styles.title}>Pagamento</Text>
+
+        {/* Summary */}
+        <View style={styles.summaryBox}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Valor do serviço</Text>
-            <Text style={styles.summaryValue}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
+            <Text style={styles.summaryLabel}>Serviço · José Wagner</Text>
+            <Text style={styles.summaryVal}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Comissão Onda (10%)</Text>
+            <Text style={styles.summaryVal}>R$ {comissao.toFixed(2).replace('.', ',')}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Comissão Onda (15%)</Text>
-            <Text style={styles.summaryValueSub}>R$ {comissao.toFixed(2).replace('.', ',')}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total a pagar</Text>
-            <Text style={styles.totalValue}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalVal}>R$ {total.toFixed(2).replace('.', ',')}</Text>
           </View>
         </View>
 
-        {/* Métodos */}
+        {/* Payment methods */}
         <View style={styles.methods}>
-          <Text style={styles.methodsLabel}>ESCOLHA O MÉTODO</Text>
           <TouchableOpacity
-            style={[styles.methodCard, method === 'PIX' && styles.methodCardActive]}
-            onPress={() => setMethod('PIX')}
-            activeOpacity={0.85}
+            style={[styles.method, method === 'pix' && styles.methodActive]}
+            onPress={() => setMethod('pix')}
+            activeOpacity={0.8}
           >
-            <Text style={{ fontSize: 28 }}>⚡</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.methodName}>PIX</Text>
-              <Text style={styles.methodSub}>Instantâneo · Sem taxa extra</Text>
+            <View style={[styles.methodIcon, method === 'pix' && styles.methodIconActive]}>
+              <Feather name="grid" size={22} color={method === 'pix' ? color.textOnAccent : color.institutional2} />
             </View>
-            <View style={[styles.radio, method === 'PIX' && styles.radioOn]} />
+            <View style={styles.methodInfo}>
+              <Text style={styles.methodName}>Pix</Text>
+              <Text style={styles.methodSub}>Aprovação na hora</Text>
+            </View>
+            {method === 'pix' ? (
+              <View style={styles.radioFilled}>
+                <Feather name="check" size={13} color={color.textOnAccent} />
+              </View>
+            ) : (
+              <View style={styles.radioEmpty} />
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.methodCard, method === 'CARTAO' && styles.methodCardActive]}
-            onPress={() => setMethod('CARTAO')}
-            activeOpacity={0.85}
+            style={[styles.method, styles.methodWhite, method === 'card' && styles.methodActive]}
+            onPress={() => setMethod('card')}
+            activeOpacity={0.8}
           >
-            <Text style={{ fontSize: 28 }}>💳</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.methodName}>Cartão de crédito</Text>
-              <Text style={styles.methodSub}>Débito em 1–2 dias úteis</Text>
+            <View style={[styles.methodIcon, styles.methodIconCard]}>
+              <Feather name="credit-card" size={22} color={color.institutional2} />
             </View>
-            <View style={[styles.radio, method === 'CARTAO' && styles.radioOn]} />
+            <View style={styles.methodInfo}>
+              <Text style={styles.methodName}>Cartão de crédito</Text>
+              <Text style={styles.methodSub}>Em até 12x</Text>
+            </View>
+            {method === 'card' ? (
+              <View style={styles.radioFilled}>
+                <Feather name="check" size={13} color={color.textOnAccent} />
+              </View>
+            ) : (
+              <View style={styles.radioEmpty} />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Escrow info */}
-        <View style={styles.escrowBanner}>
-          <Text style={{ fontSize: 18 }}>🔒</Text>
+        {/* Escrow notice */}
+        <View style={styles.escrowNotice}>
+          <Feather name="shield" size={18} color={color.textOnAccent} />
           <Text style={styles.escrowText}>
-            O valor fica <Text style={{ fontWeight: '700' }}>retido</Text> até você confirmar que o serviço foi concluído. Seguro e sem riscos.
+            Pagamento <Text style={{ fontWeight: font.weight.black }}>retido com segurança</Text> — só é liberado quando você confirmar o serviço.
           </Text>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button label={`Pagar R$ ${valor.toFixed(2).replace('.', ',')}`} onPress={proceed} loading={loading} disabled={!method} />
+        {/* CTA */}
+        <TouchableOpacity style={styles.cta} onPress={pay} activeOpacity={0.85} disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color={color.textOnAccent} />
+          ) : (
+            <Text style={styles.ctaText}>Pagar R$ {total.toFixed(2).replace('.', ',')}</Text>
+          )}
+        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.surface },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: color.line, alignSelf: 'center', marginTop: space[3] },
-  content: { flex: 1, paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[6], gap: space[4] },
-  summaryCard: {
+  overlay: { flex: 1, backgroundColor: 'rgba(14,42,51,0.55)', justifyContent: 'flex-end' },
+  dimArea: { flex: 1 },
+
+  sheet: {
+    backgroundColor: color.surface,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingHorizontal: space[5] - 2,
+    paddingBottom: space[5] + 4,
+    paddingTop: space[3] - 2,
+    gap: 18,
+    shadowColor: '#0E2A33',
+    shadowOffset: { width: 0, height: -20 },
+    shadowOpacity: 0.3,
+    shadowRadius: 40,
+    elevation: 20,
+  },
+  handle: {
+    width: 44,
+    height: 5,
+    borderRadius: 100,
+    backgroundColor: color.line,
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: font.weight.black,
+    color: color.text,
+    letterSpacing: -0.02 * 22,
+  },
+
+  summaryBox: {
     backgroundColor: color.bg,
-    borderRadius: radius.card,
-    padding: space[5],
+    borderRadius: radius.field,
+    padding: space[4],
     gap: space[3],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
   },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: font.size.bodySm, color: color.textSoft },
-  summaryValue: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.text },
-  summaryValueSub: { fontSize: font.size.bodySm, color: color.textSoft },
-  divider: { height: 1, backgroundColor: color.lineSoft },
-  totalRow: { marginTop: space[1] },
-  totalLabel: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.text },
-  totalValue: { fontSize: font.size.h2, fontWeight: font.weight.black, color: color.primary },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  summaryLabel: { fontSize: 14, color: color.textSoft },
+  summaryVal: { fontSize: 14, fontWeight: font.weight.semibold, color: color.text },
+  divider: { height: 1, backgroundColor: color.line },
+  totalLabel: { fontSize: 16, fontWeight: font.weight.bold, color: color.text },
+  totalVal: { fontSize: 16, fontWeight: font.weight.black, color: color.text },
+
   methods: { gap: space[3] },
-  methodsLabel: {
-    fontSize: font.size.eyebrow,
-    fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  methodCard: {
+  method: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space[4],
-    backgroundColor: color.bg,
+    gap: space[3],
+    backgroundColor: color.skyTint,
+    borderWidth: 2,
+    borderColor: color.primary,
     borderRadius: radius.field,
-    padding: space[4],
-    borderWidth: 1.5,
+    padding: space[3] + 2,
+  },
+  methodWhite: { backgroundColor: color.textOnAccent, borderWidth: 1, borderColor: color.lineSoft },
+  methodActive: { backgroundColor: color.skyTint, borderWidth: 2, borderColor: color.primary },
+  methodIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.field,
+    backgroundColor: color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  methodIconActive: { backgroundColor: color.primary },
+  methodIconCard: { backgroundColor: color.bg },
+  methodInfo: { flex: 1 },
+  methodName: { fontSize: 15, fontWeight: font.weight.bold, color: color.text },
+  methodSub: { fontSize: font.size.caption, color: color.textSoft, marginTop: 1 },
+  radioFilled: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioEmpty: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
     borderColor: color.line,
   },
-  methodCardActive: { borderColor: color.primary, backgroundColor: '#DFF5F3' },
-  methodName: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.text },
-  methodSub: { fontSize: font.size.caption, color: color.textSoft, marginTop: 2 },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: color.line },
-  radioOn: { borderColor: color.primary, backgroundColor: color.primary },
-  escrowBanner: {
+
+  escrowNotice: {
     flexDirection: 'row',
-    gap: space[3],
     alignItems: 'flex-start',
-    backgroundColor: color.skyTint,
+    gap: 9,
+    backgroundColor: color.institutional,
     borderRadius: radius.field,
-    padding: space[4],
+    padding: space[3] + 2,
   },
-  escrowText: { flex: 1, fontSize: font.size.bodySm, color: color.institutional, lineHeight: font.size.bodySm * 1.55 },
-  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
+  escrowText: { flex: 1, fontSize: font.size.caption, color: color.textOnAccent, lineHeight: font.size.caption * 1.45 },
+
+  cta: {
+    height: 56,
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.55,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

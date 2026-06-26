@@ -5,6 +5,14 @@ import { setToken } from '../store/auth';
 
 const BASE = 'http://localhost:8080/api/v1';
 
+function WaveLogo() {
+  return (
+    <svg width="30" height="21" viewBox="0 0 46 32" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round">
+      <path d="M3 20c5-12 11-12 16 0s11 12 16 0 8-8 8-8"/>
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -42,110 +50,125 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      flex: 1,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--bg)',
+      background: 'var(--institutional)',
       padding: '24px',
     }}>
-      <div style={{ width: '100%', maxWidth: 400 }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 420,
+        background: 'var(--surface)',
+        borderRadius: 24,
+        padding: 36,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 22,
+        boxShadow: '0 30px 60px -30px rgba(0,0,0,0.4)',
+      }}>
+        {/* Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
-            width: 64, height: 64,
-            background: 'var(--institutional)',
-            borderRadius: 18,
+            width: 48, height: 48, borderRadius: 15,
+            background: 'var(--primary)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px',
-            boxShadow: '0 12px 32px -8px rgba(14,63,82,0.5)',
+            flexShrink: 0,
           }}>
-            <span style={{ fontSize: 32 }}>🌊</span>
+            <WaveLogo />
           </div>
-          <h1 style={{
-            fontSize: 'var(--fs-h1)', fontWeight: 800,
-            color: 'var(--text)', letterSpacing: '-0.02em',
-          }}>Onda Admin</h1>
-          <p style={{ marginTop: 6, fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)' }}>
-            Painel de administração da plataforma
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="card" style={{ padding: 32 }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: 'var(--fs-eyebrow)',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.15em',
-                color: 'var(--text-faint)',
-                marginBottom: 8,
-              }}>E-mail</label>
-              <input
-                className="input-field"
-                type="email"
-                placeholder="admin@onda.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: 'var(--fs-eyebrow)',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.15em',
-                color: 'var(--text-faint)',
-                marginBottom: 8,
-              }}>Senha</label>
-              <input
-                className="input-field"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div className="alert alert--danger" style={{ borderRadius: 'var(--r-field)' }}>
-                <span>⚠️</span>
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={loading}
-              style={{ width: '100%', height: 48, fontSize: 'var(--fs-body)', marginTop: 4 }}
-            >
-              {loading ? 'Entrando…' : 'Entrar no painel'}
-            </button>
-          </form>
-
-          <div style={{
-            marginTop: 24,
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 14px',
-            background: 'var(--sky-tint)',
-            borderRadius: 'var(--r-field)',
-          }}>
-            <span>🔒</span>
-            <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--institutional)' }}>
-              Toda ação administrativa é registrada em log de auditoria imutável.
-            </span>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+            <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.02em' }}>Onda Admin</span>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--institutional-2)' }}>PAINEL DE MEDIAÇÃO</span>
           </div>
         </div>
+
+        {/* Restricted access badge */}
+        <span style={{
+          display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 6,
+          background: 'var(--institutional)', color: '#fff',
+          fontSize: 12, fontWeight: 700, letterSpacing: '0.05em',
+          padding: '6px 12px', borderRadius: 100,
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="11" width="14" height="9" rx="2"/>
+            <path d="M8 11V8a4 4 0 018 0v3"/>
+          </svg>
+          ACESSO RESTRITO
+        </span>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <label style={{
+              fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: 'var(--institutional-2)',
+            }}>
+              E-mail corporativo
+            </label>
+            <input
+              className="input-field"
+              type="email"
+              placeholder="admin@onda.com.br"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              style={{ background: '#fff', borderColor: 'var(--line-soft)', height: 50 }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <label style={{
+              fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: 'var(--institutional-2)',
+            }}>
+              Senha
+            </label>
+            <input
+              className="input-field"
+              type="password"
+              placeholder="••••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              style={{ background: '#fff', borderColor: 'var(--line-soft)', height: 50, letterSpacing: password ? '3px' : 'normal' }}
+            />
+          </div>
+
+          {error && (
+            <div className="alert alert--danger" style={{ borderRadius: 'var(--r-field)' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={loading}
+            style={{ width: '100%', height: 54, fontSize: 'var(--fs-body)', marginTop: 4, boxShadow: '0 16px 26px -14px rgba(20,168,160,0.85)' }}
+          >
+            {loading ? 'Entrando…' : 'Entrar no painel'}
+          </button>
+        </form>
+
+        {/* Audit notice */}
+        <span style={{
+          textAlign: 'center', fontSize: 12, color: 'var(--text-faint)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 3h11l3 3v15H5z"/>
+            <line x1="9" y1="12" x2="15" y2="12"/>
+          </svg>
+          Acesso monitorado e auditado.
+        </span>
       </div>
     </div>
   );

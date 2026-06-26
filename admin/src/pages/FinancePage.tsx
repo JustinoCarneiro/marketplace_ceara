@@ -1,265 +1,110 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
-interface Transaction {
-  id: string;
-  serviceRequestId: string;
-  valorTotal: number;
-  statusPagamento: string;
-  criadaEm: string;
-}
+interface Transaction { id: string; serviceRequestId: string; prestadorNome?: string; valorTotal: number; statusPagamento: string; criadaEm: string; }
+interface OutboxEvent { id: string; tipo: string; entidade: string; tentativas: number; status: string; }
 
-interface OutboxEvent {
-  id: string;
-  agregado: string;
-  tipoEvento: string;
-  tentativas: number;
-  status: string;
-  criadoEm: string;
+function statusBadge(s: string) {
+  const m: Record<string, { bg: string; color: string }> = {
+    RETIDO: { bg: '#E2EEF2', color: '#15596E' },
+    LIBERADO: { bg: '#DDF0EC', color: '#15756E' },
+    REEMBOLSADO: { bg: '#F7E3D6', color: '#C2572A' },
+    FALHA: { bg: '#FBE6E2', color: '#C0392B' },
+  };
+  const st = m[s] || m.RETIDO;
+  return <span style={{ fontSize: 12, fontWeight: 800, color: st.color, background: st.bg, padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{s}</span>;
 }
 
 export default function FinancePage() {
-  const [tab, setTab] = useState<'transactions' | 'outbox'>('transactions');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txs, setTxs] = useState<Transaction[]>([]);
   const [outbox, setOutbox] = useState<OutboxEvent[]>([]);
-  const [txStatus, setTxStatus] = useState('');
   const [loading, setLoading] = useState(true);
-  const [reprocessing, setReprocessing] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ id: string; type: 'ok' | 'err'; text: string } | null>(null);
-
-  async function loadTransactions() {
-    setLoading(true);
-    try {
-      const data = await api.get<Transaction[]>(`/admin/transactions?status=${txStatus}`);
-      setTransactions(Array.isArray(data) ? data : []);
-    } catch {
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadOutbox() {
-    setLoading(true);
-    try {
-      const data = await api.get<OutboxEvent[]>('/admin/outbox?status=FALHA');
-      setOutbox(Array.isArray(data) ? data : []);
-    } catch {
-      setOutbox([]);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   useEffect(() => {
-    if (tab === 'transactions') loadTransactions();
-    else loadOutbox();
-  }, [tab, txStatus]);
+    (async () => {
+      try {
+        const [t, o] = await Promise.all([
+          api.get<Transaction[]>('/admin/transactions').catch(() => []),
+          api.get<OutboxEvent[]>('/admin/outbox?status=FALHA').catch(() => []),
+        ]);
+        setTxs(Array.isArray(t) ? t : []);
+        setOutbox(Array.isArray(o) ? o : []);
+      } finally { setLoading(false); }
+    })();
+  }, []);
 
-  async function reprocess(eventId: string) {
-    setReprocessing(eventId);
-    try {
-      await api.post(`/admin/outbox/${eventId}/reprocess`);
-      setMsg({ id: eventId, type: 'ok', text: 'Evento reenfileirado com sucesso.' });
-      setTimeout(() => loadOutbox(), 1500);
-    } catch (e: unknown) {
-      setMsg({ id: eventId, type: 'err', text: e instanceof Error ? e.message : 'Erro.' });
-    } finally {
-      setReprocessing(null);
-    }
+  async function reprocess(id: string) {
+    try { await api.post(`/admin/outbox/${id}/reprocess`, {}); } catch {}
   }
 
-  function fmt(n: number | null | undefined) {
-    return (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function fmtDate(s: string | null | undefined) {
-    if (!s) return '—';
-    return new Date(s).toLocaleString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit',
-    });
-  }
+  const fmt = (n: number) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 0 });
+  const retido = txs.filter(t => t.statusPagamento === 'RETIDO').reduce((s, t) => s + t.valorTotal, 0);
+  const liberado = txs.filter(t => t.statusPagamento === 'LIBERADO').reduce((s, t) => s + t.valorTotal, 0);
+  const reembolsado = txs.filter(t => t.statusPagamento === 'REEMBOLSADO').reduce((s, t) => s + t.valorTotal, 0);
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1200 }}>
-      <PageHeader
-        title="Reconciliação Financeira"
-        subtitle="Transações de escrow e reprocessamento de eventos Outbox"
-      />
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid var(--line)' }}>
-        {(['transactions', 'outbox'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              padding: '10px 20px',
-              fontWeight: tab === t ? 700 : 500,
-              color: tab === t ? 'var(--primary)' : 'var(--text-soft)',
-              borderBottom: `2px solid ${tab === t ? 'var(--primary)' : 'transparent'}`,
-              fontSize: 'var(--fs-body-sm)',
-              marginBottom: -1,
-              transition: 'all var(--dur-fast)',
-            }}
-          >
-            {t === 'transactions' ? '💳 Transações' : '🔄 Outbox (falhas)'}
-          </button>
-        ))}
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Reconciliação financeira</span>
+        <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: '1.5px solid #14A8A0', borderRadius: 100, background: 'var(--surface)', color: '#0E7D77', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14A8A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
+        </button>
       </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
+          <>
+            {/* KPI cards */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              {[
+                { label: 'Retido', value: fmt(retido), color: '#15596E' },
+                { label: 'Liberado (30d)', value: fmt(liberado), color: '#1B8C84' },
+                { label: 'Reembolsado', value: fmt(reembolsado), color: '#DA6A32' },
+              ].map(k => (
+                <div key={k.label} style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>{k.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</div>
+                </div>
+              ))}
+            </div>
 
-      {/* Transactions tab */}
-      {tab === 'transactions' && (
-        <>
-          <div style={{ marginBottom: 20 }}>
-            <select
-              className="select-field"
-              value={txStatus}
-              onChange={e => setTxStatus(e.target.value)}
-              style={{ width: 180 }}
-            >
-              <option value="">Todos os status</option>
-              <option value="PENDENTE">Pendente</option>
-              <option value="RETIDO">Retido</option>
-              <option value="LIBERADO">Liberado</option>
-              <option value="REEMBOLSADO">Reembolsado</option>
-            </select>
-          </div>
+            {/* Outbox failures */}
+            {outbox.length > 0 && (
+              <div style={{ background: '#FBE6E2', border: '1.5px solid #C0392B', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C0392B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#0E2A33' }}>Fila outbox — {outbox.length} em FALHA</span>
+                </div>
+                {outbox.map(e => (
+                  <div key={e.id} style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33', fontFamily: 'monospace' }}>{e.tipo}</div>
+                      <div style={{ fontSize: 12, color: '#8A989B' }}>{e.entidade} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
+                    <button onClick={() => reprocess(e.id)} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Reprocessar</button>
+                  </div>
+                ))}
+                <span style={{ fontSize: 12, color: '#9A4A22' }}>Reprocessamento é idempotente — seguro repetir.</span>
+              </div>
+            )}
 
-          {loading ? (
-            <div className="loading-center"><div className="spinner" /></div>
-          ) : transactions.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state__icon">💳</div>
-              <div className="empty-state__title">Nenhuma transação</div>
-              <div className="empty-state__body">Nenhuma transação com o status selecionado.</div>
+            {/* Transaction table */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 0.9fr', background: '#F3ECDC', padding: '13px 20px', borderBottom: '1px solid #E6DDC9' }}>
+                {['Transação', 'Pedido', 'Valor', 'Status'].map(h => <span key={h} style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>{h}</span>)}
+              </div>
+              {txs.slice(0, 20).map(t => (
+                <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 0.9fr', padding: '13px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: '#4C636A', fontFamily: 'monospace' }}>tx_{t.id.slice(-4)}</span>
+                  <span style={{ fontSize: 13, color: '#0E2A33' }}>#{t.serviceRequestId?.slice(-4)}{t.prestadorNome ? ` · ${t.prestadorNome}` : ''}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33' }}>{fmt(t.valorTotal)}</span>
+                  {statusBadge(t.statusPagamento)}
+                </div>
+              ))}
             </div>
-          ) : (
-            <div className="card" style={{ overflowX: 'auto' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>ID Transação</th>
-                    <th>Pedido</th>
-                    <th>Valor total</th>
-                    <th>Status escrow</th>
-                    <th>Data</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map(tx => (
-                    <tr key={tx.id}>
-                      <td style={{ fontFamily: 'monospace', fontSize: 12 }}>#{tx.id.slice(0, 10)}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 12 }}>#{tx.serviceRequestId.slice(0, 8)}</td>
-                      <td style={{ fontWeight: 700, color: 'var(--institutional)' }}>{fmt(tx.valorTotal)}</td>
-                      <td>
-                        <span className={`badge badge--${tx.statusPagamento.toLowerCase()}`}>
-                          {tx.statusPagamento}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)' }}>
-                        {fmtDate(tx.criadaEm)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Outbox tab */}
-      {tab === 'outbox' && (
-        <>
-          {outbox.length > 0 && (
-            <div className="alert alert--warning" style={{ marginBottom: 16 }}>
-              <span>⚠️</span>
-              <span>
-                <strong>{outbox.length} evento{outbox.length !== 1 ? 's' : ''} com falha</strong> —
-                Reprocesse com idempotência para evitar duplicações.
-              </span>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="loading-center"><div className="spinner" /></div>
-          ) : outbox.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state__icon">✅</div>
-              <div className="empty-state__title">Nenhuma falha no Outbox</div>
-              <div className="empty-state__body">Todos os eventos foram processados com sucesso.</div>
-            </div>
-          ) : (
-            <div className="card" style={{ overflowX: 'auto' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Evento</th>
-                    <th>Agregado</th>
-                    <th>Tipo</th>
-                    <th>Tentativas</th>
-                    <th>Status</th>
-                    <th>Data</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outbox.map(ev => (
-                    <>
-                      <tr key={ev.id}>
-                        <td style={{ fontFamily: 'monospace', fontSize: 12 }}>#{ev.id.slice(0, 10)}</td>
-                        <td style={{ fontSize: 'var(--fs-caption)' }}>{ev.agregado}</td>
-                        <td style={{ fontWeight: 600 }}>{ev.tipoEvento}</td>
-                        <td>
-                          <span style={{
-                            display: 'inline-block',
-                            width: 28, height: 28,
-                            borderRadius: '50%',
-                            background: ev.tentativas >= 3 ? 'var(--danger-tint)' : 'var(--sun-tint)',
-                            color: ev.tentativas >= 3 ? 'var(--danger-ink)' : 'var(--sun-ink)',
-                            textAlign: 'center', lineHeight: '28px',
-                            fontSize: 12, fontWeight: 700,
-                          }}>
-                            {ev.tentativas}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`badge badge--${ev.status.toLowerCase()}`}>{ev.status}</span>
-                        </td>
-                        <td style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)' }}>
-                          {fmtDate(ev.criadoEm)}
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn--outline btn--sm"
-                            disabled={reprocessing === ev.id}
-                            onClick={() => reprocess(ev.id)}
-                          >
-                            {reprocessing === ev.id ? 'Reenfileirando…' : 'Reprocessar'}
-                          </button>
-                        </td>
-                      </tr>
-                      {msg?.id === ev.id && (
-                        <tr key={`${ev.id}-msg`}>
-                          <td colSpan={7} style={{ padding: '0 16px 12px' }}>
-                            <div className={`alert alert--${msg.type === 'ok' ? 'success' : 'danger'}`}>
-                              <span>{msg.type === 'ok' ? '✅' : '⚠️'}</span>
-                              <span>{msg.text}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

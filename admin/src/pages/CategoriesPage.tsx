@@ -1,214 +1,66 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
-interface Category {
-  id: string;
-  nome: string;
-  slug: string;
-  ativa: boolean;
-}
+interface Category { id: string; nome: string; slug: string; cor?: string; ativa: boolean; totalPrestadores?: number; }
 
-const CAT_ICON: Record<string, string> = {
-  eletrica: '⚡', hidraulica: '🔧', limpeza: '🧹',
-  pintura: '🎨', reforma: '🏗️', jardinagem: '🌿', geral: '🔨',
-};
+const CAT_COLORS: Record<string, string> = { eletrica: '#F2B015', hidraulica: '#15596E', limpeza: '#1B8C84', pintura: '#DA6A32', reforma: '#244C86', jardinagem: '#3C7A4E', geral: '#14A8A0' };
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
-  const [slug, setSlug] = useState('');
   const [saving, setSaving] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editNome, setEditNome] = useState('');
-  const [editAtiva, setEditAtiva] = useState(true);
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   async function load() {
     setLoading(true);
-    try {
-      const data = await api.get<Category[]>('/admin/categories');
-      setCategories(Array.isArray(data) ? data : []);
-    } catch {
-      setCategories([]);
-    } finally {
-      setLoading(false);
-    }
+    try { const d = await api.get<Category[]>('/admin/categories'); setCats(Array.isArray(d) ? d : []); }
+    catch { setCats([]); }
+    finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, []);
 
-  function handleNomeChange(v: string) {
-    setNome(v);
-    setSlug(v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
-  }
-
   async function create(e: FormEvent) {
     e.preventDefault();
+    if (!nome.trim()) return;
     setSaving(true);
-    try {
-      await api.post('/admin/categories', { nome, slug });
-      setMsg({ type: 'ok', text: `Categoria "${nome}" criada.` });
-      setNome(''); setSlug(''); setShowForm(false);
-      load();
-    } catch (err: unknown) {
-      setMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao criar.' });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function saveEdit(cat: Category) {
-    setSaving(true);
-    try {
-      await api.patch(`/admin/categories/${cat.id}`, { nome: editNome, ativa: editAtiva });
-      setMsg({ type: 'ok', text: `Categoria "${editNome}" atualizada.` });
-      setEditId(null);
-      load();
-    } catch (err: unknown) {
-      setMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao salvar.' });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function startEdit(cat: Category) {
-    setEditId(cat.id);
-    setEditNome(cat.nome);
-    setEditAtiva(cat.ativa);
+    try { await api.post('/admin/categories', { nome, slug: nome.toLowerCase().replace(/\s+/g, '_') }); setNome(''); setShowForm(false); load(); }
+    catch {} finally { setSaving(false); }
   }
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 900 }}>
-      <PageHeader
-        title="Catálogo de Categorias"
-        subtitle="Serviços disponíveis na plataforma por bairro"
-        action={
-          <button className="btn btn--primary" onClick={() => setShowForm(v => !v)}>
-            {showForm ? 'Cancelar' : '+ Nova categoria'}
-          </button>
-        }
-      />
-
-      {msg && (
-        <div className={`alert alert--${msg.type === 'ok' ? 'success' : 'danger'}`} style={{ marginBottom: 20 }}>
-          <span>{msg.type === 'ok' ? '✅' : '⚠️'}</span>
-          <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)} style={{ marginLeft: 'auto', fontSize: 18, color: 'inherit' }}>×</button>
-        </div>
-      )}
-
-      {/* New category form */}
-      {showForm && (
-        <div className="card" style={{ padding: 24, marginBottom: 24, borderLeft: '4px solid var(--primary)' }}>
-          <p className="section-title" style={{ marginBottom: 16 }}>Nova categoria</p>
-          <form onSubmit={create} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--fs-eyebrow)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-faint)', marginBottom: 8 }}>
-                  Nome
-                </label>
-                <input
-                  className="input-field"
-                  placeholder="Ex: Elétrica"
-                  value={nome}
-                  onChange={e => handleNomeChange(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--fs-eyebrow)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'var(--text-faint)', marginBottom: 8 }}>
-                  Slug (gerado automaticamente)
-                </label>
-                <input
-                  className="input-field"
-                  placeholder="eletrica"
-                  value={slug}
-                  onChange={e => setSlug(e.target.value)}
-                  required
-                  style={{ fontFamily: 'monospace' }}
-                />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn--ghost" onClick={() => setShowForm(false)}>Cancelar</button>
-              <button type="submit" className="btn btn--primary" disabled={saving}>
-                {saving ? 'Criando…' : 'Criar categoria'}
-              </button>
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Catálogo de categorias</span>
+        <button onClick={() => setShowForm(!showForm)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nova categoria
+        </button>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {showForm && (
+          <form onSubmit={create} style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, padding: 18, display: 'flex', gap: 12, alignItems: 'center' }}>
+            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome da categoria" style={{ flex: 1, height: 42, border: '1px solid #E6DDC9', borderRadius: 12, padding: '0 14px', fontSize: 14, color: '#0E2A33', background: '#fff', outline: 'none' }} />
+            <button type="submit" disabled={saving} style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>{saving ? 'Salvando…' : 'Criar'}</button>
           </form>
-        </div>
-      )}
-
-      {/* Categories list */}
-      {loading ? (
-        <div className="loading-center"><div className="spinner" /></div>
-      ) : categories.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__icon">🏷️</div>
-          <div className="empty-state__title">Nenhuma categoria</div>
-          <div className="empty-state__body">Crie a primeira categoria para habilitar serviços na plataforma.</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {categories.map(cat => (
-            <div key={cat.id} className="card" style={{
-              padding: '16px 20px',
-              display: 'flex', alignItems: 'center', gap: 16,
-              opacity: cat.ativa ? 1 : 0.55,
-            }}>
-              {/* Icon */}
-              <div style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: cat.ativa ? 'var(--sky-tint)' : 'var(--bg-alt)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, flexShrink: 0,
-              }}>
-                {CAT_ICON[cat.slug] ?? '🏷️'}
-              </div>
-
-              {editId === cat.id ? (
-                /* Edit mode */
-                <div style={{ flex: 1, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input
-                    className="input-field"
-                    value={editNome}
-                    onChange={e => setEditNome(e.target.value)}
-                    style={{ width: 200 }}
-                  />
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--fs-body-sm)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={editAtiva} onChange={e => setEditAtiva(e.target.checked)} />
-                    Ativa
-                  </label>
-                  <button className="btn btn--primary btn--sm" disabled={saving} onClick={() => saveEdit(cat)}>
-                    Salvar
-                  </button>
-                  <button className="btn btn--ghost btn--sm" onClick={() => setEditId(null)}>Cancelar</button>
+        )}
+        {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, alignContent: 'start' }}>
+            {cats.map(c => (
+              <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, opacity: c.ativa ? 1 : 0.6 }}>
+                <span style={{ width: 14, height: 14, borderRadius: 5, background: CAT_COLORS[c.slug] || '#14A8A0', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0E2A33' }}>{c.nome}</div>
+                  <div style={{ fontSize: 12.5, color: '#8A989B' }}>{c.totalPrestadores ?? 0} prestadores</div>
                 </div>
-              ) : (
-                /* View mode */
-                <>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 'var(--fs-h3)' }}>{cat.nome}</div>
-                    <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>
-                      /{cat.slug}
-                    </div>
-                  </div>
-                  <span className={`badge badge--${cat.ativa ? 'ativo' : 'suspenso'}`}>
-                    {cat.ativa ? 'Ativa' : 'Inativa'}
-                  </span>
-                  <button className="btn btn--ghost btn--sm" onClick={() => startEdit(cat)}>
-                    Editar
-                  </button>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+                <span style={{ fontSize: 12, fontWeight: 800, color: c.ativa ? '#15756E' : '#8A989B', background: c.ativa ? '#DDF0EC' : '#EAE0CB', padding: '4px 10px', borderRadius: 100 }}>{c.ativa ? 'ATIVA' : 'INATIVA'}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#14A8A0', cursor: 'pointer' }}>Editar</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

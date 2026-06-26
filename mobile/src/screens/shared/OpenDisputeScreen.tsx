@@ -1,23 +1,31 @@
 import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TextInput, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, TextInput,
+  KeyboardAvoidingView, Platform, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { color, font, space, radius } from '../../theme';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
-import ScreenHeader from '../../components/ScreenHeader';
-import Button from '../../components/Button';
+
+const C = {
+  bg: '#F3ECDC',
+  surface: '#FCF8EE',
+  text: '#0E2A33',
+  textSoft: '#4C636A',
+  textFaint: '#8A989B',
+  primary: '#14A8A0',
+  institutional2: '#15596E',
+  lineSoft: '#E6DDC9',
+  warmTerra: '#DA6A32',
+  danger: '#C0392B',
+};
 
 const REASONS = [
-  'Serviço não foi realizado',
-  'Qualidade abaixo do esperado',
-  'Prestador não compareceu',
-  'Cobrança diferente do combinado',
-  'Dano causado durante o serviço',
-  'Outro motivo',
+  'Serviço não foi concluído',
+  'Qualidade abaixo do combinado',
+  'Profissional não compareceu',
 ];
 
 export default function OpenDisputeScreen() {
@@ -51,43 +59,53 @@ export default function OpenDisputeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.handle} />
-      <ScreenHeader title="Abrir disputa" onBack={() => nav.goBack()} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7}>
+            <Feather name="chevron-left" size={22} color={C.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Abrir disputa</Text>
+        </View>
 
-          {/* Aviso */}
-          <View style={styles.warning}>
-            <Text style={{ fontSize: 20 }}>⚠️</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.warningTitle}>Antes de abrir uma disputa</Text>
-              <Text style={styles.warningBody}>
-                Tente resolver diretamente com a outra parte. A mediação Onda é o último recurso e pode levar até 5 dias úteis.
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Warning banner */}
+            <View style={styles.warningBanner}>
+              <Feather name="alert-triangle" size={20} color="#C2572A" style={{ flexShrink: 0 }} />
+              <Text style={styles.warningText}>
+                Seu dinheiro <Text style={styles.warningBold}>permanece retido</Text> enquanto avaliamos a disputa. Nossa equipe entra em contato em até 48h.
               </Text>
             </View>
-          </View>
 
-          {/* Motivo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>MOTIVO DA DISPUTA</Text>
-            {REASONS.map(r => (
-              <TouchableOption
-                key={r}
-                label={r}
-                selected={reason === r}
-                onPress={() => setReason(r)}
-              />
-            ))}
-          </View>
+            {/* Reason */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Qual o motivo?</Text>
+              <View style={styles.reasonList}>
+                {REASONS.map(r => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.reasonOption, reason === r && styles.reasonOptionSelected]}
+                    onPress={() => setReason(r)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.radio, reason === r && styles.radioSelected]} />
+                    <Text style={[styles.reasonText, reason === r && styles.reasonTextSelected]}>{r}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-          {/* Detalhes */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>DETALHES ADICIONAIS</Text>
-            <View style={styles.textAreaWrap}>
+            {/* Description */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Conte o que aconteceu</Text>
               <TextInput
                 style={styles.textArea}
-                placeholder="Descreva o problema com detalhes para ajudar a mediação…"
-                placeholderTextColor={color.textFaint}
+                placeholder="O profissional desligou a energia e foi embora sem terminar a instalação."
+                placeholderTextColor={C.textFaint}
                 value={details}
                 onChangeText={setDetails}
                 multiline
@@ -95,76 +113,153 @@ export default function OpenDisputeScreen() {
                 textAlignVertical="top"
               />
             </View>
-          </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button label="Abrir disputa" variant="danger" onPress={openDispute} loading={loading} />
-          <Button label="Cancelar" variant="ghost" onPress={() => nav.goBack()} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </ScrollView>
+
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={[styles.btnDanger, loading && { opacity: 0.7 }]}
+              onPress={openDispute}
+              activeOpacity={0.85}
+              disabled={loading}
+            >
+              <Text style={styles.btnDangerText}>
+                {loading ? 'Abrindo disputa…' : 'Abrir disputa'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
 
-function TouchableOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  const { TouchableOpacity } = require('react-native');
-  return (
-    <TouchableOpacity
-      style={[styles.option, selected && styles.optionSelected]}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      <View style={[styles.radio, selected && styles.radioOn]} />
-      <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.surface },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: color.line, alignSelf: 'center', marginTop: space[3] },
-  content: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7], gap: space[5] },
-  warning: {
-    flexDirection: 'row',
-    gap: space[3],
-    backgroundColor: color.terraTint,
-    borderRadius: radius.field,
-    padding: space[4],
-    alignItems: 'flex-start',
-  },
-  warningTitle: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.terraInk },
-  warningBody: { fontSize: font.size.caption, color: color.textSoft, marginTop: 2, lineHeight: font.size.caption * 1.5 },
-  section: { gap: space[2] },
-  sectionLabel: {
-    fontSize: font.size.eyebrow,
-    fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  option: {
+  safe: { flex: 1, backgroundColor: C.bg },
+  screen: { flex: 1, backgroundColor: C.bg },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space[3],
-    padding: space[3],
-    borderRadius: radius.field,
-    borderWidth: 1.5,
-    borderColor: color.line,
-    backgroundColor: color.bg,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    paddingBottom: 16,
   },
-  optionSelected: { borderColor: color.danger, backgroundColor: color.dangerTint },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: color.line },
-  radioOn: { borderColor: color.danger, backgroundColor: color.danger },
-  optionText: { flex: 1, fontSize: font.size.bodySm, color: color.textSoft },
-  optionTextSelected: { color: color.dangerInk, fontWeight: font.weight.semibold },
-  textAreaWrap: {
-    borderRadius: radius.field,
-    borderWidth: 1.5,
-    borderColor: color.line,
-    backgroundColor: color.bg,
-    padding: space[4],
-    minHeight: 110,
+  headerTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    color: C.text,
   },
-  textArea: { fontSize: font.size.body, color: color.text, fontFamily: font.family },
-  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
+  content: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    gap: 18,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#F7E3D6',
+    borderWidth: 1,
+    borderColor: '#E6BFA6',
+    borderRadius: 12,
+    padding: 14,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 13 * 1.5,
+    color: '#9A4A22',
+  },
+  warningBold: {
+    fontWeight: '700',
+  },
+  section: {
+    gap: 8,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: C.institutional2,
+  },
+  reasonList: {
+    gap: 10,
+  },
+  reasonOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
+    borderRadius: 12,
+    padding: 14,
+  },
+  reasonOptionSelected: {
+    borderWidth: 2,
+    borderColor: C.warmTerra,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#DCD2BC',
+  },
+  radioSelected: {
+    borderWidth: 6,
+    borderColor: C.warmTerra,
+  },
+  reasonText: {
+    fontSize: 14.5,
+    color: C.textSoft,
+  },
+  reasonTextSelected: {
+    fontWeight: '600',
+    color: C.text,
+  },
+  textArea: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
+    borderRadius: 12,
+    padding: 14,
+    minHeight: 80,
+    fontSize: 14.5,
+    lineHeight: 14.5 * 1.55,
+    color: C.textSoft,
+  },
+  error: {
+    fontSize: 12,
+    color: C.danger,
+    textAlign: 'center',
+  },
+  footer: {
+    padding: 14,
+    paddingBottom: 20,
+    backgroundColor: C.surface,
+    borderTopWidth: 1,
+    borderTopColor: C.lineSoft,
+  },
+  btnDanger: {
+    height: 56,
+    borderRadius: 100,
+    backgroundColor: C.warmTerra,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: C.warmTerra,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  btnDangerText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+  },
 });

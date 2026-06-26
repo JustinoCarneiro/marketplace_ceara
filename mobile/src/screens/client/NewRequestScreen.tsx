@@ -7,15 +7,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import ScreenHeader from '../../components/ScreenHeader';
-import Button from '../../components/Button';
 
 type RouteProps = RouteProp<ClientStackParams, 'NewRequest'>;
 
-const CATEGORIES = ['Elétrica', 'Hidráulica', 'Limpeza', 'Pintura', 'Reforma', 'Jardinagem', 'Serviços Gerais'];
+const CATEGORIES: { label: string; icon: React.ComponentProps<typeof Feather>['name']; color: string; bg: string; border: string }[] = [
+  { label: 'Elétrica',   icon: 'zap',       color: '#B5810A', bg: color.sunTint,     border: color.warmSun },
+  { label: 'Hidráulica', icon: 'droplet',   color: color.institutional2, bg: color.skyTint, border: color.institutional2 },
+  { label: 'Limpeza',    icon: 'edit-2',    color: '#15756E', bg: color.successTint, border: color.success },
+  { label: 'Pintura',    icon: 'edit-3',    color: color.terraInk, bg: color.terraTint, border: color.warmTerra },
+  { label: 'Reforma',    icon: 'tool',      color: '#244C86', bg: '#E8EEFA', border: '#244C86' },
+  { label: 'Jardinagem', icon: 'sun',       color: '#3C7A4E', bg: '#E2F0E6', border: '#3C7A4E' },
+  { label: 'Geral',      icon: 'grid',      color: color.textSoft, bg: color.surface, border: color.lineSoft },
+];
 
 export default function NewRequestScreen() {
   const nav = useNavigation<ClientNavProp>();
@@ -40,12 +47,7 @@ export default function NewRequestScreen() {
           Authorization: `Bearer ${token}`,
           'X-Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify({
-          categoria,
-          descricao,
-          lat: -3.7319,
-          lng: -38.5267,
-        }),
+        body: JSON.stringify({ categoria, descricao, lat: -3.7319, lng: -38.5267 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao criar pedido');
@@ -57,76 +59,117 @@ export default function NewRequestScreen() {
     }
   }
 
+  const selectedCat = CATEGORIES.find(c => c.label === categoria);
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScreenHeader title="Novo pedido" onBack={() => nav.goBack()} />
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          {/* Categoria */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>CATEGORIA DO SERVIÇO</Text>
-            <View style={styles.chipRow}>
-              {CATEGORIES.map(c => (
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}>
+              <Feather name="chevron-left" size={22} color={color.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Novo pedido</Text>
+          </View>
+
+          <View style={styles.form}>
+            {/* Categoria */}
+            <View style={styles.field}>
+              <Text style={styles.label}>CATEGORIA</Text>
+              {selectedCat ? (
                 <TouchableOpacity
-                  key={c}
-                  style={[styles.chip, categoria === c && styles.chipActive]}
-                  onPress={() => setCategoria(c)}
+                  style={[styles.catSelected, { backgroundColor: selectedCat.bg, borderColor: selectedCat.border }]}
+                  onPress={() => setCategoria('')}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.chipText, categoria === c && styles.chipTextActive]}>{c}</Text>
+                  <Feather name={selectedCat.icon} size={16} color={selectedCat.color} />
+                  <Text style={[styles.catSelectedText, { color: color.text }]}>{selectedCat.label}</Text>
                 </TouchableOpacity>
-              ))}
+              ) : (
+                <View style={styles.catGrid}>
+                  {CATEGORIES.map(c => (
+                    <TouchableOpacity
+                      key={c.label}
+                      style={[styles.catChip, { backgroundColor: c.bg, borderColor: c.border }]}
+                      onPress={() => setCategoria(c.label)}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name={c.icon} size={14} color={c.color} />
+                      <Text style={[styles.catChipText, { color: c.color }]}>{c.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-          </View>
 
-          {/* Descrição */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>DESCREVA O PROBLEMA</Text>
-            <View style={styles.textAreaWrap}>
-              <TextInput
-                style={styles.textArea}
-                placeholder="Ex: Torneira da cozinha vazando há 2 dias, necessário substituição do reparo…"
-                placeholderTextColor={color.textFaint}
-                value={descricao}
-                onChangeText={setDescricao}
-                multiline
-                numberOfLines={5}
-                textAlignVertical="top"
-              />
+            {/* Descrição */}
+            <View style={styles.field}>
+              <Text style={styles.label}>DESCRIÇÃO</Text>
+              <View style={styles.textAreaWrap}>
+                <TextInput
+                  style={styles.textArea}
+                  placeholder="A tomada da cozinha solta faísca quando ligo a air fryer. Preciso trocar com segurança."
+                  placeholderTextColor={color.textFaint}
+                  value={descricao}
+                  onChangeText={setDescricao}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
             </View>
-            <Text style={styles.charCount}>{descricao.length}/500</Text>
-          </View>
 
-          {/* Mídia (placeholder) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>FOTOS / ÁUDIO (OPCIONAL)</Text>
-            <View style={styles.mediaRow}>
-              <TouchableOpacity style={styles.mediaBtn}>
-                <Text style={{ fontSize: 24 }}>📸</Text>
-                <Text style={styles.mediaBtnText}>Foto</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.mediaBtn}>
-                <Text style={{ fontSize: 24 }}>🎤</Text>
-                <Text style={styles.mediaBtnText}>Áudio</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.mediaBtn}>
-                <Text style={{ fontSize: 24 }}>📹</Text>
-                <Text style={styles.mediaBtnText}>Vídeo</Text>
-              </TouchableOpacity>
+            {/* Anexos */}
+            <View style={styles.field}>
+              <Text style={styles.label}>ANEXOS</Text>
+              <View style={styles.anexosRow}>
+                <TouchableOpacity style={styles.anexoBtn}>
+                  <Feather name="camera" size={22} color={color.primary} />
+                  <Text style={styles.anexoBtnText}>Foto</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.anexoBtn}>
+                  <Feather name="mic" size={22} color={color.primary} />
+                  <Text style={styles.anexoBtnText}>Áudio</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
 
-          {/* IA info */}
-          <View style={styles.aiInfo}>
-            <Text style={{ fontSize: 18 }}>✨</Text>
-            <Text style={styles.aiText}>
-              Nossa IA vai sugerir a descrição e faixa de orçamento após você criar o pedido.
-            </Text>
+            {/* Localização */}
+            <View style={styles.field}>
+              <Text style={styles.label}>LOCALIZAÇÃO</Text>
+              <View style={styles.locRow}>
+                <Feather name="map-pin" size={18} color={color.primary} />
+                <Text style={styles.locText}>Aldeota, Fortaleza-CE</Text>
+              </View>
+            </View>
+
+            {/* Permissões */}
+            <View style={styles.permNotice}>
+              <Feather name="info" size={16} color={color.institutional2} style={{ flexShrink: 0, marginTop: 1 }} />
+              <Text style={styles.permText}>
+                Vamos pedir acesso à <Text style={styles.permBold}>câmera</Text> e ao{' '}
+                <Text style={styles.permBold}>microfone</Text> só quando você anexar.
+              </Text>
+            </View>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button label="Criar pedido" onPress={createRequest} loading={loading} />
         </ScrollView>
+
+        {/* Footer CTA */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.cta, loading && { opacity: 0.7 }]}
+            onPress={createRequest}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>{loading ? 'Criando...' : 'Continuar'}</Text>
+            {!loading && <Feather name="arrow-right" size={18} color={color.textOnAccent} />}
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -134,58 +177,115 @@ export default function NewRequestScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  content: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7], gap: space[5] },
-  section: { gap: space[3] },
-  sectionLabel: {
-    fontSize: font.size.eyebrow,
-    fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  chip: {
-    paddingHorizontal: space[3],
-    paddingVertical: space[2],
-    borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: color.line,
-    backgroundColor: color.surface,
-  },
-  chipActive: { borderColor: color.primary, backgroundColor: '#DFF5F3' },
-  chipText: { fontSize: font.size.bodySm, color: color.textSoft },
-  chipTextActive: { color: color.primary, fontWeight: font.weight.bold },
-  textAreaWrap: {
-    borderRadius: radius.field,
-    borderWidth: 1.5,
-    borderColor: color.line,
-    backgroundColor: color.surface,
-    padding: space[4],
-    minHeight: 130,
-  },
-  textArea: { fontSize: font.size.body, color: color.text, flex: 1, fontFamily: font.family },
-  charCount: { fontSize: font.size.caption, color: color.textFaint, textAlign: 'right' },
-  mediaRow: { flexDirection: 'row', gap: space[3] },
-  mediaBtn: {
-    flex: 1,
+  scroll: { flexGrow: 1, paddingBottom: space[3] },
+
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: space[2],
+    gap: space[3],
+    paddingHorizontal: space[5],
+    paddingVertical: space[3],
+  },
+  headerTitle: { fontSize: font.size.h2, fontWeight: font.weight.black, color: color.text, letterSpacing: -0.02 * font.size.h2 },
+
+  form: { paddingHorizontal: space[5], gap: 18 },
+  field: { gap: 8 },
+  label: { fontSize: font.size.eyebrow, fontWeight: font.weight.semibold, color: color.institutional2, letterSpacing: 0.1 * font.size.eyebrow },
+
+  catSelected: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  catSelectedText: { fontSize: 14, fontWeight: font.weight.bold },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  catChipText: { fontSize: 13, fontWeight: font.weight.semibold },
+
+  textAreaWrap: {
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    padding: space[3] + 2,
+    minHeight: 96,
+  },
+  textArea: { fontSize: font.size.bodySm, color: color.text, lineHeight: font.size.bodySm * 1.55 },
+
+  anexosRow: { flexDirection: 'row', gap: space[3] },
+  anexoBtn: {
+    flex: 1,
+    height: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
     backgroundColor: color.surface,
     borderRadius: radius.field,
-    padding: space[4],
     borderWidth: 1.5,
-    borderColor: color.line,
+    borderColor: '#B7DCE3',
     borderStyle: 'dashed',
   },
-  mediaBtnText: { fontSize: font.size.caption, color: color.textSoft, fontWeight: font.weight.medium },
-  aiInfo: {
+  anexoBtnText: { fontSize: 12, fontWeight: font.weight.semibold, color: color.textSoft },
+
+  locRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    padding: space[3] + 2,
+  },
+  locText: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.text },
+
+  permNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: space[3],
+    gap: 8,
     backgroundColor: color.skyTint,
     borderRadius: radius.field,
-    padding: space[4],
+    padding: 12,
   },
-  aiText: { flex: 1, fontSize: font.size.caption, color: color.textSoft, lineHeight: font.size.caption * 1.55 },
-  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
+  permText: { flex: 1, fontSize: font.size.caption, color: color.institutional2, lineHeight: font.size.caption * 1.5 },
+  permBold: { fontWeight: font.weight.bold },
+
+  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', paddingHorizontal: space[5] },
+
+  footer: {
+    paddingHorizontal: space[5],
+    paddingTop: space[3],
+    paddingBottom: space[5],
+    backgroundColor: color.surface,
+    borderTopWidth: 1,
+    borderTopColor: color.lineSoft,
+  },
+  cta: {
+    height: 56,
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[3],
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.55,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

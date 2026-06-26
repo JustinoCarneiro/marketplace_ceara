@@ -3,17 +3,28 @@ import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TextInput, KeyboardAvoidingView, Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { color, font, space, radius } from '../../theme';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
-import ScreenHeader from '../../components/ScreenHeader';
-import StarRating from '../../components/StarRating';
-import Button from '../../components/Button';
 
-const NOTA_LABELS: Record<number, string> = {
-  1: 'Muito ruim', 2: 'Ruim', 3: 'Regular', 4: 'Bom', 5: 'Excelente!',
+const COLORS = {
+  bg: '#F3ECDC',
+  surface: '#FCF8EE',
+  text: '#0E2A33',
+  textSoft: '#4C636A',
+  textFaint: '#8A989B',
+  primary: '#14A8A0',
+  institutional2: '#15596E',
+  lineSoft: '#E6DDC9',
+  line: '#DCD2BC',
+  danger: '#C0392B',
+  warmTerra: '#DA6A32',
+  warmSun: '#F2B015',
+  concluido: '#15756E',
+  concluidoBg: '#DDF0EC',
 };
 
 export default function RateScreen() {
@@ -46,96 +57,232 @@ export default function RateScreen() {
     }
   }
 
+  const initials = typeof avaliadoNome === 'string'
+    ? avaliadoNome.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
+    : 'JW';
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScreenHeader title="Avaliar" onBack={() => nav.goBack()} />
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          {/* Quem está avaliando */}
-          <View style={styles.whoCard}>
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backBtn}>
+            <Feather name="chevron-left" size={22} color={COLORS.text} />
+          </TouchableOpacity>
+
+          <View style={styles.hero}>
+            <View style={[styles.completedBadge]}>
+              <Feather name="check" size={13} color={COLORS.concluido} />
+              <Text style={styles.completedText}>SERVIÇO CONCLUÍDO</Text>
+            </View>
+
             <View style={styles.avatar}>
-              <Text style={{ fontSize: 32 }}>👤</Text>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <Text style={styles.whoText}>Como foi {avaliadoNome}?</Text>
+
+            <Text style={styles.heroTitle}>Como foi o serviço{'\n'}de {avaliadoNome}?</Text>
           </View>
 
-          {/* Estrelas */}
-          <View style={styles.starsSection}>
-            <StarRating value={nota} onSelect={setNota} size={44} />
-            {nota > 0 && (
-              <Text style={styles.notaLabel}>{NOTA_LABELS[nota]}</Text>
-            )}
+          <View style={styles.starsRow}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <TouchableOpacity key={i} onPress={() => setNota(i)} hitSlop={6} activeOpacity={0.7}>
+                <Text style={[styles.star, { color: i <= nota ? COLORS.warmSun : COLORS.line }]}>★</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          {/* Comentário */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>COMENTÁRIO (OPCIONAL)</Text>
-            <View style={styles.textAreaWrap}>
-              <TextInput
-                style={styles.textArea}
-                placeholder="Conte mais sobre a sua experiência…"
-                placeholderTextColor={color.textFaint}
-                value={comentario}
-                onChangeText={setComentario}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-                maxLength={500}
-              />
+          <View style={styles.fields}>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Comentário</Text>
+              <View style={styles.textAreaWrap}>
+                <TextInput
+                  style={styles.textArea}
+                  placeholder="Trabalho limpo e rápido, explicou tudo direitinho. Recomendo!"
+                  placeholderTextColor={COLORS.textSoft}
+                  value={comentario}
+                  onChangeText={setComentario}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  maxLength={500}
+                />
+              </View>
             </View>
-            <Text style={styles.charCount}>{comentario.length}/500</Text>
+
+            <TouchableOpacity style={styles.photoBtn} activeOpacity={0.75}>
+              <View style={styles.photoBox}>
+                <Feather name="camera" size={22} color={COLORS.primary} />
+              </View>
+              <Text style={styles.photoBtnText}>
+                Adicionar foto <Text style={styles.photoOptional}>(opcional)</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button label="Enviar avaliação" onPress={submit} loading={loading} disabled={nota === 0} />
-          <Button label="Pular" variant="ghost" onPress={() => nav.popToTop()} />
+
         </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.submitBtn, (nota === 0 || loading) && { opacity: 0.5 }]}
+            onPress={submit}
+            disabled={nota === 0 || loading}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.submitBtnText}>{loading ? 'Enviando…' : 'Enviar avaliação'}</Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.bg },
-  content: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7], gap: space[5] },
-  whoCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[5],
+  safe: { flex: 1, backgroundColor: COLORS.bg },
+  scrollContent: {
+    paddingBottom: 24,
+  },
+  backBtn: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 0,
+  },
+  hero: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 8,
     alignItems: 'center',
-    gap: space[3],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+    gap: 14,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.concluidoBg,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 100,
+  },
+  completedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.06,
+    color: COLORS.concluido,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: color.bgAlt,
+    width: 74,
+    height: 74,
+    borderRadius: 24,
+    backgroundColor: COLORS.warmTerra,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  whoText: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
-  starsSection: { alignItems: 'center', gap: space[3] },
-  notaLabel: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.warmSun },
-  section: { gap: space[2] },
-  sectionLabel: {
-    fontSize: font.size.eyebrow,
-    fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
+  avatarText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    color: COLORS.text,
+    textAlign: 'center',
+    lineHeight: 32,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  star: {
+    fontSize: 42,
+  },
+  fields: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  fieldGroup: {
+    gap: 8,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.1,
     textTransform: 'uppercase',
+    color: COLORS.institutional2,
   },
   textAreaWrap: {
-    borderRadius: radius.field,
-    borderWidth: 1.5,
-    borderColor: color.line,
-    backgroundColor: color.surface,
-    padding: space[4],
-    minHeight: 120,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.lineSoft,
+    borderRadius: 12,
+    padding: 14,
+    minHeight: 84,
   },
-  textArea: { fontSize: font.size.body, color: color.text, fontFamily: font.family },
-  charCount: { fontSize: font.size.caption, color: color.textFaint, textAlign: 'right' },
-  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
+  textArea: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: COLORS.textSoft,
+  },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  photoBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#B7DCE3',
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoBtnText: {
+    fontSize: 13.5,
+    color: COLORS.textSoft,
+  },
+  photoOptional: {
+    color: COLORS.textFaint,
+  },
+  error: {
+    fontSize: 12,
+    color: COLORS.danger,
+    textAlign: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+  },
+  footer: {
+    backgroundColor: COLORS.surface,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lineSoft,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 20,
+  },
+  submitBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 100,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    elevation: 6,
+  },
+  submitBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
 });

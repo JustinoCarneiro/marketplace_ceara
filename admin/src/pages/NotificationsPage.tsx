@@ -1,205 +1,98 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
-interface Notification {
-  id: string;
-  tipo: 'SOS' | 'DISPUTA' | 'VERIFICACAO';
-  refId: string;
-  criadoEm: string;
-  lida: boolean;
-  descricao?: string;
+interface Notification { id: string; tipo: string; titulo: string; descricao: string; lida: boolean; criadaEm: string; link?: string; }
+
+function iconFor(tipo: string) {
+  if (tipo === 'SOS') return { bg: '#C0392B', el: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> };
+  if (tipo === 'DISPUTA') return { bg: '#F7E3D6', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C2572A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> };
+  if (tipo === 'VERIFICACAO') return { bg: '#FDF3D6', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B5810A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><line x1="12" y1="9" x2="12" y2="12.5"/><line x1="12" y1="15" x2="12.01" y2="15"/></svg> };
+  return { bg: '#DDF0EC', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15756E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg> };
 }
 
-const TIPO_CONFIG = {
-  SOS: { icon: '🆘', label: 'SOS Acionado', bg: 'var(--danger-tint)', color: 'var(--danger-ink)', urgent: true },
-  DISPUTA: { icon: '⚖️', label: 'Nova Disputa', bg: 'var(--terra-tint)', color: 'var(--terra-ink)', urgent: false },
-  VERIFICACAO: { icon: '🛡️', label: 'Verificação inconclusiva', bg: 'var(--sun-tint)', color: 'var(--sun-ink)', urgent: false },
-};
+function timeAgo(s: string) {
+  const ms = Date.now() - new Date(s).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `há ${h} h`;
+  return `há ${Math.floor(h / 24)} d`;
+}
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showUnread, setShowUnread] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   async function load() {
     setLoading(true);
-    try {
-      const param = showUnread ? 'lida=false' : '';
-      const data = await api.get<Notification[]>(`/admin/notifications?${param}`);
-      setNotifications(Array.isArray(data) ? data : []);
-    } catch {
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
+    try { const d = await api.get<Notification[]>('/admin/notifications'); setNotifs(Array.isArray(d) ? d : []); }
+    catch { setNotifs([]); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [showUnread]);
-
-  async function markRead(id: string) {
-    try {
-      await api.post(`/admin/notifications/${id}/read`);
-      setNotifications(prev =>
-        prev.map(n => n.id === id ? { ...n, lida: true } : n)
-      );
-    } catch {
-      /* silent */
-    }
-  }
+  useEffect(() => { load(); }, []);
 
   async function markAllRead() {
-    const unread = notifications.filter(n => !n.lida);
-    await Promise.all(unread.map(n => api.post(`/admin/notifications/${n.id}/read`)));
-    setNotifications(prev => prev.map(n => ({ ...n, lida: true })));
+    try { await api.post('/admin/notifications/mark-all-read', {}); load(); } catch {}
   }
 
-  function fmtDate(s: string) {
-    return new Date(s).toLocaleString('pt-BR', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit',
-    });
-  }
-
-  const unreadCount = notifications.filter(n => !n.lida).length;
-  const sos = notifications.filter(n => n.tipo === 'SOS' && !n.lida);
+  const unreadCount = notifs.filter(n => !n.lida).length;
+  const filtered = filter === 'unread' ? notifs.filter(n => !n.lida) : notifs;
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 800 }}>
-      <PageHeader
-        title="Central de Notificações"
-        subtitle="Alertas operacionais: SOS, disputas e verificações inconclusivas"
-        action={
-          <div style={{ display: 'flex', gap: 10 }}>
-            {unreadCount > 0 && (
-              <button className="btn btn--ghost btn--sm" onClick={markAllRead}>
-                Marcar todas como lidas
-              </button>
-            )}
-            <button
-              className={`btn btn--sm ${showUnread ? 'btn--primary' : 'btn--ghost'}`}
-              onClick={() => setShowUnread(v => !v)}
-            >
-              {showUnread ? 'Exibindo: não lidas' : 'Exibindo: todas'}
-            </button>
-          </div>
-        }
-      />
-
-      {/* SOS banner */}
-      {sos.length > 0 && (
-        <div style={{
-          background: 'var(--danger)',
-          borderRadius: 'var(--r-card)',
-          padding: '16px 20px',
-          display: 'flex', alignItems: 'center', gap: 14,
-          marginBottom: 20,
-          color: '#fff',
-          animation: 'pulse 2s infinite',
-        }}>
-          <span style={{ fontSize: 32 }}>🆘</span>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 'var(--fs-h3)' }}>
-              {sos.length} SOS ativo{sos.length !== 1 ? 's' : ''}
-            </div>
-            <div style={{ fontSize: 'var(--fs-body-sm)', opacity: 0.9, marginTop: 2 }}>
-              Emergência em andamento — verifique imediatamente e contate as partes.
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Central de notificações</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ position: 'relative', width: 44, height: 44, borderRadius: 12, background: '#F3ECDC', border: '1px solid #E6DDC9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0E2A33" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z"/><path d="M9.5 21a2.5 2.5 0 005 0"/></svg>
+            {unreadCount > 0 && <span style={{ position: 'absolute', top: -5, right: -5, minWidth: 19, height: 19, padding: '0 5px', borderRadius: 100, background: '#14A8A0', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--surface)' }}>{unreadCount}</span>}
           </div>
         </div>
-      )}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,0.5); }
-          50% { box-shadow: 0 0 0 12px rgba(192,57,43,0); }
-        }
-      `}</style>
-
-      {loading ? (
-        <div className="loading-center"><div className="spinner" /></div>
-      ) : notifications.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__icon">🔔</div>
-          <div className="empty-state__title">Nenhuma notificação</div>
-          <div className="empty-state__body">
-            {showUnread
-              ? 'Não há alertas não lidos. Você está em dia!'
-              : 'Nenhuma notificação registrada no sistema.'}
-          </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span onClick={() => setFilter('all')} style={{ fontSize: 13, fontWeight: 700, color: filter === 'all' ? '#fff' : '#15596E', background: filter === 'all' ? '#0E3F52' : '#E2EEF2', padding: '8px 16px', borderRadius: 100, cursor: 'pointer' }}>Todas</span>
+          <span onClick={() => setFilter('unread')} style={{ fontSize: 13, fontWeight: 700, color: '#15596E', background: '#E2EEF2', padding: '8px 16px', borderRadius: 100, cursor: 'pointer' }}>Não lidas · {unreadCount}</span>
+          <span onClick={markAllRead} style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: '#14A8A0', cursor: 'pointer' }}>Marcar todas como lidas</span>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {notifications.map(n => {
-            const cfg = TIPO_CONFIG[n.tipo];
-            return (
-              <div
-                key={n.id}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 14,
-                  padding: '16px 20px',
-                  background: n.lida ? 'var(--surface)' : cfg.bg,
-                  border: `1px solid ${n.lida ? 'var(--line-soft)' : 'transparent'}`,
-                  borderRadius: 'var(--r-card)',
-                  transition: 'background var(--dur-fast)',
-                  position: 'relative',
-                  boxShadow: !n.lida ? 'var(--shadow-soft)' : 'none',
-                }}
-              >
-                {/* Unread dot */}
-                {!n.lida && (
-                  <div style={{
-                    position: 'absolute', top: 16, right: 16,
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: cfg.urgent ? 'var(--danger)' : 'var(--primary)',
-                  }} />
-                )}
 
-                <span style={{ fontSize: 28, flexShrink: 0 }}>{cfg.icon}</span>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, color: n.lida ? 'var(--text)' : cfg.color }}>
-                      {cfg.label}
-                    </span>
-                    {cfg.urgent && !n.lida && (
-                      <span className="badge badge--sos">Urgente</span>
-                    )}
-                  </div>
-
-                  {n.descricao && (
-                    <div style={{
-                      fontSize: 'var(--fs-body-sm)',
-                      color: 'var(--text-soft)',
-                      marginTop: 4,
-                      lineHeight: 1.5,
-                    }}>{n.descricao}</div>
-                  )}
-
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)' }}>
-                      {fmtDate(n.criadoEm)}
-                    </span>
-                    <span style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-faint)', fontFamily: 'monospace' }}>
-                      ref: #{n.refId.slice(0, 8)}
-                    </span>
-                  </div>
+        {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> :
+         filtered.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 16, padding: 40 }}>
+            <div style={{ width: 84, height: 84, borderRadius: 26, background: '#E2EEF2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z"/><path d="M9.5 21a2.5 2.5 0 005 0"/><polyline points="9 11 11 13 15 9"/></svg>
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 800, color: '#0E2A33' }}>Nenhum alerta pendente</span>
+            <span style={{ fontSize: 14, color: '#4C636A', maxWidth: 320, lineHeight: 1.5, textAlign: 'center' }}>Quando houver um SOS, disputa ou verificação, ele aparece aqui.</span>
+          </div>
+        ) : filtered.map(n => {
+          const icon = iconFor(n.tipo);
+          const isSOS = n.tipo === 'SOS';
+          return (
+            <div key={n.id} style={{ background: isSOS ? '#FBE6E2' : 'var(--surface)', border: isSOS ? '1.5px solid #C0392B' : '1px solid var(--line-soft)', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16, opacity: n.lida && !isSOS ? 0.6 : 1, boxShadow: isSOS ? '0 14px 30px -22px rgba(192,57,43,.6)' : 'none' }}>
+              {!n.lida && <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#14A8A0', flexShrink: 0 }} />}
+              {n.lida && <span style={{ width: 9, height: 9, flexShrink: 0 }} />}
+              <div style={{ width: isSOS ? 48 : 44, height: isSOS ? 48 : 44, borderRadius: isSOS ? 12 : 13, background: icon.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon.el}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {isSOS && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#C0392B', color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', padding: '3px 9px', borderRadius: 100 }}>SOS</span>}
+                  <span style={{ fontSize: isSOS ? 16 : 15.5, fontWeight: 800, color: '#0E2A33' }}>{n.titulo}</span>
                 </div>
-
-                {!n.lida && (
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    style={{ flexShrink: 0 }}
-                    onClick={() => markRead(n.id)}
-                  >
-                    Marcar como lida
-                  </button>
-                )}
+                <div style={{ fontSize: 13.5, color: isSOS ? '#9A2820' : '#4C636A', marginTop: 3 }}>{n.descricao}</div>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: isSOS ? '#9A2820' : '#8A989B', flexShrink: 0 }}>{timeAgo(n.criadaEm)}</span>
+              {isSOS ? (
+                <button style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
+              ) : (
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: n.lida ? '#8A989B' : '#14A8A0', flexShrink: 0, cursor: 'pointer' }}>Ver →</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

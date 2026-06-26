@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { AuthNavProp } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
-import Button from '../../components/Button';
-import TrustBadge from '../../components/TrustBadge';
 
 export default function SplashScreen() {
   const nav = useNavigation<AuthNavProp>();
@@ -20,31 +20,40 @@ export default function SplashScreen() {
           <View style={styles.headline}>
             <Text style={styles.appName}>Onda</Text>
             <Text style={styles.tagline}>
-              Profissionais de confiança para a sua casa — com pagamento{' '}
-              <Text style={styles.bold}>retido até o serviço terminar.</Text>
+              Profissionais de confiança para a sua casa —{' '}
+              <Text style={styles.taglineBold}>com pagamento retido até o serviço terminar.</Text>
             </Text>
           </View>
-          <TrustBadge label="Pagamento seguro com escrow" icon="🔒" />
+          <View style={styles.trustBadge}>
+            <Feather name="lock" size={13} color={color.textSoft} />
+            <Text style={styles.trustText}>Pagamento seguro com escrow</Text>
+          </View>
         </View>
 
         {/* CTAs */}
         <View style={styles.actions}>
           <Text style={styles.eyebrow}>Como você quer começar?</Text>
-          <Button
-            label="Sou Cliente"
+
+          <TouchableOpacity
+            style={styles.ctaPrimary}
             onPress={() => nav.navigate('RegisterClient')}
-            icon={<Text style={styles.arrow}>→</Text>}
-          />
-          <Button
-            label="Sou Prestador"
-            variant="outline"
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaPrimaryText}>Sou Cliente</Text>
+            <Feather name="arrow-right" size={18} color={color.textOnAccent} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.ctaOutline}
             onPress={() => nav.navigate('RegisterProvider')}
-          />
-          <Button
-            label="Já tenho conta"
-            variant="ghost"
-            onPress={() => nav.navigate('Login')}
-          />
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaOutlineText}>Sou Prestador</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => nav.navigate('Login')} activeOpacity={0.7}>
+            <Text style={styles.ghostLink}>Já tenho conta</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -70,7 +79,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowColor: color.primary,
     shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.55,
     shadowRadius: 24,
     elevation: 8,
   },
@@ -89,14 +98,69 @@ const styles = StyleSheet.create({
     lineHeight: font.size.h3 * font.lineHeight.body,
     maxWidth: 300,
   },
-  bold: { color: color.text, fontWeight: font.weight.bold },
+  taglineBold: { color: color.text, fontWeight: font.weight.bold },
+  trustBadge: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  trustText: {
+    fontSize: font.size.caption,
+    color: color.textSoft,
+    fontWeight: font.weight.medium,
+  },
   actions: { gap: space[3] },
   eyebrow: {
     fontSize: font.size.eyebrow,
     fontWeight: font.weight.semibold,
     color: color.institutional2,
-    letterSpacing: font.tracking.eyebrow,
+    letterSpacing: font.tracking.eyebrow * font.size.eyebrow,
     textTransform: 'uppercase',
   },
-  arrow: { color: color.textOnAccent, fontSize: 18 },
+  ctaPrimary: {
+    height: 56,
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    elevation: 6,
+  },
+  ctaPrimaryText: {
+    fontSize: font.size.body,
+    fontWeight: font.weight.bold,
+    color: color.textOnAccent,
+  },
+  ctaOutline: {
+    height: 56,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: color.institutional,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaOutlineText: {
+    fontSize: font.size.body,
+    fontWeight: font.weight.bold,
+    color: color.institutional,
+  },
+  ghostLink: {
+    textAlign: 'center',
+    fontSize: font.size.bodySm,
+    fontWeight: font.weight.semibold,
+    color: color.institutional2,
+    paddingVertical: 8,
+  },
 });

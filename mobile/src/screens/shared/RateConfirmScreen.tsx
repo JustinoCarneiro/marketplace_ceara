@@ -1,61 +1,126 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { color, font, space, radius } from '../../theme';
-import Button from '../../components/Button';
-import StarRating from '../../components/StarRating';
+import { Feather } from '@expo/vector-icons';
+
+const COLORS = {
+  bg: '#F3ECDC',
+  surface: '#FCF8EE',
+  text: '#0E2A33',
+  textSoft: '#4C636A',
+  primary: '#14A8A0',
+  lineSoft: '#E6DDC9',
+  concluido: '#15756E',
+  concluidoBg: '#DDF0EC',
+  warmSun: '#F2B015',
+};
 
 export default function RateConfirmScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
-  const { nota, comentario } = route.params;
+  const { nota } = route.params;
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <View style={styles.card}>
-          <Text style={{ fontSize: 56 }}>⭐</Text>
-          <Text style={styles.title}>Avaliação enviada!</Text>
-          <Text style={styles.body}>
-            Obrigado pelo feedback. Sua avaliação ajuda a comunidade a encontrar os melhores profissionais.
-          </Text>
+        <View style={styles.body}>
+          <View style={styles.starsRow}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <Feather
+                key={i}
+                name="star"
+                size={30}
+                color={i <= (nota ?? 5) ? COLORS.warmSun : '#DCD2BC'}
+                fill={i <= (nota ?? 5) ? COLORS.warmSun : 'none'}
+              />
+            ))}
+          </View>
 
-          <View style={styles.divider} />
+          <View style={styles.checkCircle}>
+            <Feather name="check" size={50} color={COLORS.concluido} />
+          </View>
 
-          <StarRating value={nota} size={28} readonly />
-          {comentario ? (
-            <Text style={styles.comentario}>"{comentario}"</Text>
-          ) : null}
+          <View style={styles.textBlock}>
+            <Text style={styles.title}>Obrigado!</Text>
+            <Text style={styles.bodyText}>
+              Sua avaliação ajuda toda a comunidade a encontrar bons profissionais.
+            </Text>
+          </View>
         </View>
 
-        <Button label="Voltar ao início" onPress={() => nav.popToTop()} />
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => nav.popToTop()}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.homeBtnText}>Voltar ao início</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.bg },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
   content: {
     flex: 1,
-    paddingHorizontal: space[5],
-    paddingTop: space[7],
-    paddingBottom: space[6],
-    gap: space[4],
-    justifyContent: 'space-between',
+    paddingHorizontal: 28,
+    paddingTop: 28,
+    paddingBottom: 28,
+    flexDirection: 'column',
   },
-  card: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[6],
+  body: {
+    flex: 1,
     alignItems: 'center',
-    gap: space[4],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+    justifyContent: 'center',
+    gap: 22,
   },
-  title: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.text },
-  body: { fontSize: font.size.body, color: color.textSoft, textAlign: 'center', lineHeight: font.size.body * font.lineHeight.body },
-  divider: { width: '100%', height: 1, backgroundColor: color.lineSoft },
-  comentario: { fontSize: font.size.bodySm, color: color.textSoft, fontStyle: 'italic', textAlign: 'center' },
+  starsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  checkCircle: {
+    width: 104,
+    height: 104,
+    borderRadius: 34,
+    backgroundColor: COLORS.concluidoBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textBlock: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    color: COLORS.text,
+  },
+  bodyText: {
+    fontSize: 16,
+    lineHeight: 25.6,
+    color: COLORS.textSoft,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+  homeBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 100,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    elevation: 6,
+  },
+  homeBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
 });

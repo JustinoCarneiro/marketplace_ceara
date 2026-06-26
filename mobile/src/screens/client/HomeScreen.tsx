@@ -4,22 +4,57 @@ import {
   TouchableOpacity, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { ClientNavProp } from '../../navigation/types';
-import { color, font, space, radius, shadow } from '../../theme';
+import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import ProviderCard, { ProviderData } from '../../components/ProviderCard';
+import { ProviderData } from '../../components/ProviderCard';
 import { API_BASE } from '../../api/config';
 
 const CATEGORIES = [
-  { slug: 'eletrica',   label: 'Elétrica',    icon: '⚡', bg: color.sunTint,    border: color.warmSun,    ink: color.sunInk },
-  { slug: 'hidraulica', label: 'Hidráulica',  icon: '🔧', bg: color.skyTint,    border: color.institutional2, ink: color.institutional2 },
-  { slug: 'limpeza',    label: 'Limpeza',     icon: '🧹', bg: color.successTint,border: color.success,    ink: color.successInk },
-  { slug: 'pintura',    label: 'Pintura',     icon: '🎨', bg: color.terraTint,  border: color.warmTerra,  ink: color.terraInk },
-  { slug: 'reforma',    label: 'Reforma',     icon: '🏗️', bg: '#E8EBF5',        border: color.catReforma, ink: color.catReforma },
-  { slug: 'jardinagem', label: 'Jardinagem',  icon: '🌱', bg: '#E3F0E8',        border: color.catJardinagem, ink: color.catJardinagem },
-  { slug: 'geral',      label: 'Serviços',    icon: '🔩', bg: '#DFF5F3',        border: color.primary,    ink: color.primary },
+  {
+    slug: 'eletrica',
+    label: 'Elétrica',
+    bg: '#FDF3D6',
+    border: '#F2B015',
+    icon: <Feather name="zap" size={26} color="#B5810A" />,
+  },
+  {
+    slug: 'hidraulica',
+    label: 'Hidráulica',
+    bg: '#E2EEF2',
+    border: '#15596E',
+    icon: <Feather name="droplet" size={26} color="#15596E" />,
+  },
+  {
+    slug: 'limpeza',
+    label: 'Limpeza',
+    bg: '#DDF0EC',
+    border: '#1B8C84',
+    icon: <Feather name="edit-3" size={26} color="#15756E" />,
+  },
+  {
+    slug: 'pintura',
+    label: 'Pintura',
+    bg: '#F7E3D6',
+    border: '#DA6A32',
+    icon: <Feather name="edit-2" size={26} color="#C2572A" />,
+  },
 ];
+
+const AVATAR_COLORS = [
+  color.warmTerra, color.catHidraulica, color.catLimpeza,
+  color.catReforma, color.catJardinagem, color.catGeral,
+];
+
+function avatarBgColor(nome: string) {
+  return AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function initials(nome: string) {
+  return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -64,39 +99,32 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header: localização + avatar ── */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.locationBtn} activeOpacity={0.7}>
-            <Text style={styles.locationPin}>📍</Text>
-            <Text style={styles.locationText}>Fortaleza, CE</Text>
-            <Text style={styles.locationChevron}>▾</Text>
-          </TouchableOpacity>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initStr}</Text>
+        <View style={styles.topPad}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.locationRow} activeOpacity={0.7}>
+              <Feather name="map-pin" size={16} color={color.primary} />
+              <Text style={styles.locationText}>Aldeota, Fortaleza</Text>
+              <Feather name="chevron-down" size={16} color={color.textFaint} />
+            </TouchableOpacity>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initStr}</Text>
+            </View>
           </View>
+
+          <Text style={styles.greeting}>
+            {greeting()}, {firstName}.{'\n'}Do que sua casa precisa hoje?
+          </Text>
+
+          <TouchableOpacity
+            style={styles.searchBar}
+            onPress={() => nav.navigate('Results', {})}
+            activeOpacity={0.85}
+          >
+            <Feather name="search" size={20} color={color.textFaint} />
+            <Text style={styles.searchPlaceholder}>Buscar serviço ou profissional</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ── Saudação ── */}
-        <View style={styles.greetingBlock}>
-          <Text style={styles.greetingText}>
-            {greeting()}, {firstName}.
-          </Text>
-          <Text style={styles.greetingSubtitle}>
-            Do que sua casa precisa hoje?
-          </Text>
-        </View>
-
-        {/* ── Barra de busca pílula ── */}
-        <TouchableOpacity
-          style={styles.searchBar}
-          onPress={() => nav.navigate('Results', {})}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.searchIcon}>🔍</Text>
-          <Text style={styles.searchPlaceholder}>Buscar serviço ou profissional</Text>
-        </TouchableOpacity>
-
-        {/* ── Categorias (scroll horizontal) ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -110,14 +138,13 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <View style={[styles.catIcon, { backgroundColor: cat.bg, borderColor: cat.border }]}>
-                <Text style={{ fontSize: 24 }}>{cat.icon}</Text>
+                {cat.icon}
               </View>
-              <Text style={[styles.catLabel, { color: cat.ink }]}>{cat.label}</Text>
+              <Text style={styles.catLabel}>{cat.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* ── Próximos de você ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Próximos de você</Text>
           <TouchableOpacity onPress={() => nav.navigate('Results', {})}>
@@ -125,187 +152,223 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={color.primary} />
-          </View>
-        ) : nearby.length === 0 ? (
-          /* Banner CTA quando não há prestadores carregados */
-          <TouchableOpacity
-            style={styles.ctaBanner}
-            onPress={() => nav.navigate('NewRequest', {})}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ctaTitle}>Descreva seu problema</Text>
-              <Text style={styles.ctaBody}>
-                Nossa IA sugere o serviço e o orçamento certo para você
-              </Text>
+        <View style={styles.providerList}>
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color={color.primary} />
             </View>
-            <Text style={{ fontSize: 30 }}>📸</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.providerList}>
-            {nearby.map(p => (
-              <ProviderCard
+          ) : nearby.length === 0 ? (
+            <TouchableOpacity
+              style={styles.emptyCard}
+              onPress={() => nav.navigate('NewRequest', {})}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.emptyCardText}>Nenhum prestador encontrado próximo. Toque para criar um pedido.</Text>
+            </TouchableOpacity>
+          ) : (
+            nearby.map(p => (
+              <ProviderCardInline
                 key={p.id}
                 data={p}
                 onPress={() => nav.navigate('ProviderProfile', { providerId: p.id })}
               />
-            ))}
-          </View>
-        )}
-
-        {/* ── Banner IA (sempre visível) ── */}
-        <TouchableOpacity
-          style={styles.iaBanner}
-          onPress={() => nav.navigate('NewRequest', {})}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.iaBannerIcon}>✨</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.iaBannerTitle}>Abrir novo pedido com IA</Text>
-            <Text style={styles.iaBannerBody}>
-              Descreva, tire foto ou grave áudio — a IA organiza tudo
-            </Text>
-          </View>
-          <Text style={[styles.locationChevron, { color: color.textOnAccent }]}>›</Text>
-        </TouchableOpacity>
+            ))
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function ProviderCardInline({ data, onPress }: { data: ProviderData; onPress: () => void }) {
+  const bgColor = data.avatarColor ?? avatarBgColor(data.nome);
+  const init = initials(data.nome);
+  const nota = data.nota ?? 0;
+  const precoStr = data.precoMin && data.precoMax
+    ? `R$ ${data.precoMin} – R$ ${data.precoMax}`
+    : null;
+
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+      <View style={[styles.cardAvatar, { backgroundColor: bgColor }]}>
+        <Text style={styles.cardAvatarText}>{init}</Text>
+      </View>
+      <View style={styles.cardInfo}>
+        <View style={styles.cardNameRow}>
+          <Text style={styles.cardName} numberOfLines={1}>{data.nome}</Text>
+          {data.verificado !== false && (
+            <View style={styles.verifiedBadge}>
+              <Feather name="shield" size={11} color="#fff" />
+              <Text style={styles.verifiedBadgeText}>VERIFICADO</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.cardMeta}>
+          {nota > 0 && (
+            <View style={styles.ratingRow}>
+              <Feather name="star" size={14} color={color.warmSun} />
+              <Text style={styles.ratingVal}>{nota.toFixed(1)}</Text>
+            </View>
+          )}
+          {nota > 0 && <Text style={styles.dot}>·</Text>}
+          <Text style={styles.metaText}>{data.categoria}</Text>
+          {data.distanciaKm != null && (
+            <>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.metaText}>{data.distanciaKm.toFixed(1)} km</Text>
+            </>
+          )}
+        </View>
+        {precoStr && <Text style={styles.cardPreco}>{precoStr}</Text>}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  scroll: {
-    paddingTop: space[3],
-    paddingBottom: space[7],
-    gap: space[5],
+  scroll: { paddingBottom: 48 },
+
+  topPad: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 16,
+    paddingBottom: 18,
+    flexDirection: 'column',
   },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space[5],
   },
-  locationBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  locationPin: { fontSize: 15 },
-  locationText: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.text },
-  locationChevron: { fontSize: 13, color: color.textFaint, fontWeight: font.weight.bold },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  locationText: { fontSize: 14, fontWeight: font.weight.bold, color: color.text },
   avatar: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: radius.field,
     backgroundColor: color.institutional2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: font.size.bodySm, fontWeight: font.weight.black, color: color.textOnAccent },
+  avatarText: { fontSize: 15, fontWeight: font.weight.black, color: color.textOnAccent },
 
-  // Greeting
-  greetingBlock: { paddingHorizontal: space[5], gap: 4 },
-  greetingText: {
-    fontSize: font.size.h1,
+  greeting: {
+    fontSize: 26,
     fontWeight: font.weight.black,
     color: color.text,
-    letterSpacing: font.tracking.display * font.size.h1,
-    lineHeight: font.size.h1 * 1.1,
-  },
-  greetingSubtitle: {
-    fontSize: font.size.body,
-    color: color.textSoft,
-    lineHeight: font.size.body * 1.5,
+    letterSpacing: -0.025 * 26,
+    lineHeight: 26 * 1.1,
   },
 
-  // Search
   searchBar: {
-    marginHorizontal: space[5],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space[3],
+    gap: 10,
     height: 52,
     borderRadius: radius.pill,
     backgroundColor: color.surface,
     borderWidth: 1,
     borderColor: color.lineSoft,
-    paddingHorizontal: space[4] + 4,
-    ...shadow.soft,
+    paddingHorizontal: 18,
+    shadowColor: '#0E2A33',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    elevation: 6,
   },
-  searchIcon: { fontSize: 17, color: color.textFaint },
-  searchPlaceholder: { fontSize: font.size.body, color: color.textFaint },
+  searchPlaceholder: { fontSize: 15, color: color.textFaint },
 
-  // Categories
-  catRow: { paddingHorizontal: space[5], gap: space[3] },
-  catItem: { alignItems: 'center', gap: space[2] },
+  catRow: { paddingHorizontal: 20, paddingBottom: 18, gap: 10 },
+  catItem: { alignItems: 'center', gap: 8 },
   catIcon: {
     width: 60,
     height: 60,
-    borderRadius: 20,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
-  catLabel: {
-    fontSize: font.size.caption,
-    fontWeight: font.weight.semibold,
-    textAlign: 'center',
-  },
+  catLabel: { fontSize: 12, fontWeight: font.weight.semibold, color: color.textSoft },
 
-  // Section header
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space[5],
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   sectionTitle: {
-    fontSize: font.size.h3,
+    fontSize: 18,
     fontWeight: font.weight.black,
     color: color.text,
-    letterSpacing: -0.02 * font.size.h3,
+    letterSpacing: -0.02 * 18,
   },
-  sectionLink: {
-    fontSize: font.size.caption,
-    fontWeight: font.weight.bold,
-    color: color.primary,
-  },
+  sectionLink: { fontSize: 13, fontWeight: font.weight.bold, color: color.primary },
+
+  providerList: { paddingHorizontal: 20, gap: 14, paddingBottom: 24 },
 
   loadingBox: { height: 80, alignItems: 'center', justifyContent: 'center' },
 
-  providerList: { paddingHorizontal: space[5], gap: space[3] + 2 },
-
-  // CTA banner (oceano)
-  ctaBanner: {
-    marginHorizontal: space[5],
-    backgroundColor: color.institutional,
+  emptyCard: {
+    backgroundColor: color.surface,
     borderRadius: radius.card,
-    padding: space[5],
-    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    padding: space[4],
     alignItems: 'center',
-    gap: space[4],
+    justifyContent: 'center',
+    minHeight: 80,
   },
-  ctaTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.textOnAccent },
-  ctaBody: { fontSize: font.size.bodySm, color: color.accentSky, marginTop: 4 },
+  emptyCardText: { fontSize: font.size.bodySm, color: color.textSoft, textAlign: 'center' },
 
-  // IA banner
-  iaBanner: {
-    marginHorizontal: space[5],
-    backgroundColor: color.primary,
+  card: {
+    backgroundColor: color.surface,
     borderRadius: radius.card,
-    padding: space[5],
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    padding: 16,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: space[3],
-    shadowColor: color.primary,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.38,
-    shadowRadius: 24,
+    gap: 14,
+    shadowColor: '#0E2A33',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
     elevation: 5,
   },
-  iaBannerIcon: { fontSize: 26 },
-  iaBannerTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.textOnAccent },
-  iaBannerBody: { fontSize: font.size.caption, color: 'rgba(255,255,255,0.8)', marginTop: 3 },
+  cardAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardAvatarText: { fontSize: 18, fontWeight: font.weight.black, color: color.textOnAccent },
+  cardInfo: { flex: 1, gap: 6, minWidth: 0 },
+  cardNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
+  cardName: { fontSize: 18, fontWeight: font.weight.bold, color: color.text, flexShrink: 1 },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: color.institutional,
+    borderRadius: radius.pill,
+    paddingLeft: 6,
+    paddingRight: 8,
+    paddingVertical: 3,
+  },
+  verifiedBadgeText: {
+    fontSize: 12,
+    fontWeight: font.weight.bold,
+    color: color.textOnAccent,
+    letterSpacing: 0.5,
+  },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  ratingVal: { fontSize: 13, fontWeight: font.weight.bold, color: color.text },
+  dot: { fontSize: 13, color: color.textSoft },
+  metaText: { fontSize: 13, color: color.textSoft },
+  cardPreco: { fontSize: 14, fontWeight: font.weight.bold, color: color.institutional2 },
 });

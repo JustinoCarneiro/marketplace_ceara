@@ -1,189 +1,68 @@
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
-interface User {
-  id: string;
-  nome: string;
-  email: string;
-  role: string;
-  status: string;
-}
+interface User { id: string; nome: string; email: string; role: string; status: string; }
 
-const ROLE_LABEL: Record<string, string> = {
-  ROLE_CLIENT: 'Cliente',
-  ROLE_PROVIDER: 'Prestador',
-  ROLE_ADMIN: 'Admin',
-};
+const AVATAR_COLORS = ['#15596E', '#DA6A32', '#C0392B', '#1B8C84', '#3C7A4E', '#244C86'];
+function avatarBg(n: string) { return AVATAR_COLORS[n.charCodeAt(0) % AVATAR_COLORS.length]; }
+function initials(n: string) { return n.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase(); }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [acting, setActing] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ id: string; type: 'ok' | 'err'; text: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
-  async function search(e?: FormEvent) {
-    e?.preventDefault();
+  async function load() {
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (q) params.set('q', q);
-      if (roleFilter) params.set('role', roleFilter);
-      if (statusFilter) params.set('status', statusFilter);
-      const data = await api.get<User[]>(`/admin/users?${params}`);
-      setUsers(Array.isArray(data) ? data : []);
-    } catch {
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
+    try { const d = await api.get<User[]>('/admin/users'); setUsers(Array.isArray(d) ? d : []); }
+    catch { setUsers([]); }
+    finally { setLoading(false); }
   }
 
-  useEffect(() => { search(); }, [roleFilter, statusFilter]);
+  useEffect(() => { load(); }, []);
 
-  async function suspend(userId: string) {
-    setActing(userId);
-    try {
-      await api.post(`/admin/users/${userId}/suspend`);
-      setMsg({ id: userId, type: 'ok', text: 'Usuário suspenso.' });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'SUSPENSO' } : u));
-    } catch (e: unknown) {
-      setMsg({ id: userId, type: 'err', text: e instanceof Error ? e.message : 'Erro.' });
-    } finally {
-      setActing(null);
-    }
+  async function toggleStatus(id: string, current: string) {
+    const action = current === 'ATIVO' ? 'suspend' : 'reactivate';
+    try { await api.post(`/admin/users/${id}/${action}`, {}); load(); } catch {}
   }
 
-  async function reactivate(userId: string) {
-    setActing(userId);
-    try {
-      await api.post(`/admin/users/${userId}/reactivate`);
-      setMsg({ id: userId, type: 'ok', text: 'Usuário reativado.' });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'ATIVO' } : u));
-    } catch (e: unknown) {
-      setMsg({ id: userId, type: 'err', text: e instanceof Error ? e.message : 'Erro.' });
-    } finally {
-      setActing(null);
-    }
-  }
+  const filtered = search ? users.filter(u => u.nome.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())) : users;
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1200 }}>
-      <PageHeader
-        title="Gestão de Usuários"
-        subtitle="Busca, suporte e controle de acesso de clientes e prestadores"
-      />
-
-      {/* Filters */}
-      <form onSubmit={search} style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <input
-          className="input-field"
-          placeholder="Buscar por nome ou e-mail…"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          style={{ flex: 1, minWidth: 200 }}
-        />
-        <select
-          className="select-field"
-          value={roleFilter}
-          onChange={e => setRoleFilter(e.target.value)}
-          style={{ width: 150 }}
-        >
-          <option value="">Todos os papéis</option>
-          <option value="ROLE_CLIENT">Cliente</option>
-          <option value="ROLE_PROVIDER">Prestador</option>
-        </select>
-        <select
-          className="select-field"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          style={{ width: 140 }}
-        >
-          <option value="">Todos os status</option>
-          <option value="ATIVO">Ativo</option>
-          <option value="SUSPENSO">Suspenso</option>
-        </select>
-        <button type="submit" className="btn btn--primary" disabled={loading}>
-          {loading ? 'Buscando…' : 'Buscar'}
-        </button>
-      </form>
-
-      {loading ? (
-        <div className="loading-center"><div className="spinner" /></div>
-      ) : users.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state__icon">👥</div>
-          <div className="empty-state__title">Nenhum usuário encontrado</div>
-          <div className="empty-state__body">Ajuste os filtros ou realize uma nova busca.</div>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Gestão de usuários</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F3ECDC', border: '1px solid #E6DDC9', borderRadius: 100, padding: '0 16px', height: 42, width: 320 }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8A989B" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou e-mail…" style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13.5, color: '#0E2A33', flex: 1 }} />
         </div>
-      ) : (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>E-mail</th>
-                <th>Papel</th>
-                <th>Status</th>
-                <th>ID</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <>
-                  <tr key={u.id}>
-                    <td style={{ fontWeight: 600 }}>{u.nome}</td>
-                    <td style={{ color: 'var(--text-soft)' }}>{u.email}</td>
-                    <td><span className="tag">{ROLE_LABEL[u.role] ?? u.role}</span></td>
-                    <td>
-                      <span className={`badge badge--${u.status.toLowerCase()}`}>{u.status}</span>
-                    </td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-faint)' }}>
-                      #{u.id.slice(0, 8)}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {u.status === 'ATIVO' ? (
-                          <button
-                            className="btn btn--danger btn--sm"
-                            disabled={acting === u.id}
-                            onClick={() => suspend(u.id)}
-                          >
-                            Suspender
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btn--outline btn--sm"
-                            disabled={acting === u.id}
-                            onClick={() => reactivate(u.id)}
-                          >
-                            Reativar
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {msg?.id === u.id && (
-                    <tr key={`${u.id}-msg`}>
-                      <td colSpan={6} style={{ padding: '0 16px 12px' }}>
-                        <div className={`alert alert--${msg.type === 'ok' ? 'success' : 'danger'}`}>
-                          <span>{msg.type === 'ok' ? '✅' : '⚠️'}</span>
-                          <span>{msg.text}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px' }}>
+        {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', background: '#F3ECDC', padding: '14px 20px', borderBottom: '1px solid #E6DDC9' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>Usuário</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>Perfil</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>Status</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E', justifySelf: 'end' }}>Ação</span>
+            </div>
+            {filtered.map(u => {
+              const isSuspended = u.status === 'SUSPENSO';
+              return (
+                <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center', background: isSuspended ? '#FBE6E2' : 'transparent' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 11, background: avatarBg(u.nome), color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.nome)}</div>
+                    <div><div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{u.nome}</div><div style={{ fontSize: 12, color: '#8A989B' }}>{u.email}</div></div>
+                  </div>
+                  <span style={{ fontSize: 13, color: '#4C636A' }}>{u.role === 'ROLE_PROVIDER' ? 'Prestador' : 'Cliente'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isSuspended ? '#C0392B' : '#15756E', background: isSuspended ? '#fff' : '#DDF0EC', border: isSuspended ? '1px solid #E6BFA6' : 'none', padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{isSuspended ? 'SUSPENSO' : 'ATIVO'}</span>
+                  <button onClick={() => toggleStatus(u.id, u.status)} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#14A8A0' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: 'pointer', justifySelf: 'end' }}>{isSuspended ? 'Reativar' : 'Suspender'}</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { color } from '../theme';
 import type { ClientStackParams, ClientTabParams } from './types';
 
@@ -29,40 +29,57 @@ import SosActiveScreen from '../screens/shared/SosActiveScreen';
 const Tab = createBottomTabNavigator<ClientTabParams>();
 const Stack = createNativeStackNavigator<ClientStackParams>();
 
-const TAB_ICONS: Record<string, { active: string; inactive: string }> = {
-  Home:       { active: '⌂',  inactive: '⌂' },
-  Search:     { active: '⊙',  inactive: '⊙' },
-  MyRequests: { active: '❑',  inactive: '❑' },
-  Profile:    { active: '◉',  inactive: '◉' },
+type FeatherName = React.ComponentProps<typeof Feather>['name'];
+
+const TAB_ICONS: Record<string, FeatherName> = {
+  Home: 'home',
+  Search: 'search',
+  MyRequests: 'bookmark',
+  Profile: 'user',
 };
 
-function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const label: Record<string, string> = {
-    Home: '🏠', Search: '🔍', MyRequests: '📋', Profile: '👤',
-  };
-  return (
-    <View style={styles.tabIcon}>
-      <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.4 }}>{label[name]}</Text>
-    </View>
-  );
-}
+const TAB_LABELS: Record<string, string> = {
+  Home: 'Início',
+  Search: 'Buscar',
+  MyRequests: 'Pedidos',
+  Profile: 'Perfil',
+};
 
 function ClientTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
+        tabBarIcon: ({ focused, color: iconColor }) => (
+          <Feather
+            name={TAB_ICONS[route.name]}
+            size={22}
+            color={iconColor}
+            strokeWidth={focused ? 2.2 : 1.8}
+          />
+        ),
+        tabBarLabel: TAB_LABELS[route.name],
         tabBarActiveTintColor: color.primary,
         tabBarInactiveTintColor: color.textFaint,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabLabel,
+        tabBarStyle: {
+          backgroundColor: color.surface,
+          borderTopColor: color.lineSoft,
+          borderTopWidth: 1,
+          height: 72,
+          paddingBottom: 10,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 2,
+        },
       })}
     >
-      <Tab.Screen name="Home"       component={HomeScreen}       options={{ tabBarLabel: 'Início' }} />
-      <Tab.Screen name="Search"     component={ResultsScreen}    options={{ tabBarLabel: 'Buscar' }} />
-      <Tab.Screen name="MyRequests" component={MyRequestsScreen} options={{ tabBarLabel: 'Pedidos' }} />
-      <Tab.Screen name="Profile"    component={ProfileScreen}    options={{ tabBarLabel: 'Perfil' }} />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Search" component={ResultsScreen} />
+      <Tab.Screen name="MyRequests" component={MyRequestsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -78,7 +95,7 @@ export default function ClientNavigator() {
       <Stack.Screen name="AiAssistant" component={AiAssistantScreen} />
       <Stack.Screen name="RequestCreated" component={RequestCreatedScreen} />
       <Stack.Screen name="CompareProposals" component={CompareProposalsScreen} />
-      <Stack.Screen name="PaymentChoice" component={PaymentChoiceScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="PaymentChoice" component={PaymentChoiceScreen} options={{ presentation: 'transparentModal' }} />
       <Stack.Screen name="PaymentPix" component={PaymentPixScreen} />
       <Stack.Screen name="PaymentCard" component={PaymentCardScreen} />
       <Stack.Screen name="EscrowConfirmed" component={EscrowConfirmedScreen} />
@@ -91,15 +108,3 @@ export default function ClientNavigator() {
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: color.surface,
-    borderTopColor: color.line,
-    borderTopWidth: 1,
-    height: 64,
-    paddingBottom: 8,
-  },
-  tabLabel: { fontSize: 11, fontWeight: '600' },
-  tabIcon: { marginTop: 4 },
-});

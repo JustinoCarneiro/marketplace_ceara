@@ -1,35 +1,66 @@
 import { API_BASE } from '../../api/config';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import type { ProviderNavProp } from '../../navigation/types';
 import { color, font, space, radius, shadow } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 
 interface ServiceRequest {
   id: string;
+  titulo?: string;
+  descricao?: string;
   categoria: string;
-  descricao: string;
+  bairro?: string;
+  distanciaKm?: number;
+  orcamentoMin?: number;
+  orcamentoMax?: number;
   status: string;
-  clienteNome?: string;
-  createdAt: string;
+  criadoEm?: string;
 }
+
+function timeAgo(iso?: string) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `há ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `há ${hrs} h`;
+  return `há ${Math.floor(hrs / 24)} d`;
+}
+
+const CAT_COLORS: Record<string, string> = {
+  ELETRICA: color.sunInk,
+  HIDRAULICA: color.institutional2,
+  LIMPEZA: color.success,
+  PINTURA: color.terraInk,
+  REFORMA: '#244C86',
+  JARDINAGEM: '#3C7A4E',
+};
+const CAT_BG: Record<string, string> = {
+  ELETRICA: color.sunTint,
+  HIDRAULICA: color.skyTint,
+  LIMPEZA: color.successTint,
+  PINTURA: color.terraTint,
+  REFORMA: '#E8EEFA',
+  JARDINAGEM: '#E2F0E6',
+};
 
 export default function AvailableRequestsScreen() {
   const nav = useNavigation<ProviderNavProp>();
   const token = useAuthStore(s => s.accessToken);
-  const nome = useAuthStore(s => s.nome);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/service-requests?status=PENDENTE`, {
+      const res = await fetch(`${API_BASE}/providers/available-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -40,62 +71,101 @@ export default function AvailableRequestsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, [token]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const firstName = nome?.split(' ')[0] ?? 'você';
+  const catKey = (r: ServiceRequest) => (r.categoria ?? '').toUpperCase().replace(/\s/g, '');
+  const catLabel = (r: ServiceRequest) => {
+    const map: Record<string, string> = {
+      ELETRICA: 'Elétrica', HIDRAULICA: 'Hidráulica',
+      LIMPEZA: 'Limpeza', PINTURA: 'Pintura',
+      REFORMA: 'Reforma', JARDINAGEM: 'Jardinagem',
+    };
+    return map[catKey(r)] ?? r.categoria;
+  };
+
+  const preco = (r: ServiceRequest) => {
+    if (!r.orcamentoMin && !r.orcamentoMax) return null;
+    if (r.orcamentoMin && r.orcamentoMax) return `R$ ${r.orcamentoMin} – R$ ${r.orcamentoMax}`;
+    return `R$ ${r.orcamentoMin ?? r.orcamentoMax}`;
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Sticky header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Olá, {firstName} 👷</Text>
-          <Text style={styles.subtitle}>Chamados disponíveis na sua área</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Pedidos disponíveis</Text>
+          <Text style={styles.headerSub}>Elétrica · até 10 km</Text>
         </View>
+        <TouchableOpacity style={styles.filterBtn} hitSlop={8}>
+          <Feather name="sliders" size={20} color={color.text} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={color.primary} size="large" />
         </View>
-      ) : requests.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={{ fontSize: 48 }}>📭</Text>
-          <Text style={styles.emptyTitle}>Nenhum chamado disponível</Text>
-          <Text style={styles.emptyBody}>Novos pedidos da sua região aparecerão aqui.</Text>
-        </View>
       ) : (
         <FlatList
           data={requests}
-          keyExtractor={i => i.id}
+          keyExtractor={r => r.id}
           contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={{ height: space[3] }} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[color.primary]} />}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => nav.navigate('SendProposal', { requestId: item.id })}
-              activeOpacity={0.85}
-            >
-              <View style={styles.cardTop}>
-                <View style={styles.catChip}>
-                  <Text style={styles.catText}>{item.categoria}</Text>
+          ItemSeparatorComponent={() => <View style={{ height: space[3] + 2 }} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={color.primary} />}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Feather name="inbox" size={40} color={color.textFaint} />
+              <Text style={styles.emptyTitle}>Nenhum pedido no momento</Text>
+              <Text style={styles.emptySub}>Novos pedidos aparecem aqui em tempo real.</Text>
+            </View>
+          }
+          renderItem={({ item: r }) => {
+            const ck = catKey(r);
+            const catColor = CAT_COLORS[ck] ?? color.textSoft;
+            const catBg = CAT_BG[ck] ?? color.surface;
+            return (
+              <View style={styles.card}>
+                {/* Status + cat + time */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.pendenteBadge}>
+                    <View style={styles.pendenteDot} />
+                    <Text style={styles.pendenteText}>PENDENTE</Text>
+                  </View>
+                  <View style={[styles.catChip, { backgroundColor: catBg }]}>
+                    <Text style={[styles.catChipText, { color: catColor }]}>{catLabel(r)}</Text>
+                  </View>
+                  <Text style={styles.timeText}>{timeAgo(r.criadoEm)}</Text>
                 </View>
-                <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString('pt-BR')}</Text>
+
+                {/* Title + location */}
+                <View style={styles.cardBody}>
+                  <Text style={styles.cardTitle} numberOfLines={2}>
+                    {r.titulo ?? r.descricao ?? 'Sem título'}
+                  </Text>
+                  {(r.bairro || r.distanciaKm) && (
+                    <Text style={styles.cardLoc}>
+                      {r.bairro}{r.bairro && r.distanciaKm ? ' · ' : ''}{r.distanciaKm ? `${r.distanciaKm.toFixed(1)} km de você` : ''}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Price + CTA */}
+                <View style={styles.cardFooter}>
+                  {preco(r) && <Text style={styles.cardPreco}>{preco(r)}</Text>}
+                  <TouchableOpacity
+                    style={styles.proposalBtn}
+                    onPress={() => nav.navigate('SendProposal', { requestId: r.id })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.proposalBtnText}>Enviar proposta</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <Text style={styles.desc} numberOfLines={3}>{item.descricao}</Text>
-              <View style={styles.cardFooter}>
-                <Text style={styles.client}>👤 {item.clienteNome ?? 'Cliente'}</Text>
-                <TouchableOpacity
-                  style={styles.proposeBtn}
-                  onPress={() => nav.navigate('SendProposal', { requestId: item.id })}
-                >
-                  <Text style={styles.proposeBtnText}>Enviar proposta →</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          )}
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -104,45 +174,80 @@ export default function AvailableRequestsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[3], padding: space[5] },
+  emptyTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
+  emptySub: { fontSize: font.size.caption, color: color.textSoft, textAlign: 'center' },
+
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: space[5],
-    paddingTop: space[4],
-    paddingBottom: space[3],
+    paddingVertical: space[3] + 2,
+    backgroundColor: color.bg,
     borderBottomWidth: 1,
     borderBottomColor: color.lineSoft,
   },
-  greeting: { fontSize: font.size.h2, fontWeight: font.weight.bold, color: color.text },
-  subtitle: { fontSize: font.size.bodySm, color: color.textSoft, marginTop: 2 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[3], padding: space[5] },
-  emptyTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
-  emptyBody: { fontSize: font.size.bodySm, color: color.textSoft, textAlign: 'center' },
-  list: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7] },
+  headerLeft: { gap: 2 },
+  headerTitle: { fontSize: font.size.h2, fontWeight: font.weight.black, color: color.text, letterSpacing: -0.02 * font.size.h2 },
+  headerSub: { fontSize: font.size.caption, color: color.textSoft },
+  filterBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.field,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  list: { padding: space[5], paddingTop: space[4] },
+
   card: {
     backgroundColor: color.surface,
     borderRadius: radius.card,
-    padding: space[5],
-    gap: space[3],
     borderWidth: 1,
     borderColor: color.lineSoft,
+    padding: space[4],
+    gap: space[3],
     ...shadow.soft,
   },
-  cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  catChip: {
-    backgroundColor: color.primary + '18',
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
+  pendenteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: color.surface2,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
     borderRadius: radius.pill,
-    paddingHorizontal: space[3],
+    paddingHorizontal: 9,
     paddingVertical: 4,
   },
-  catText: { fontSize: font.size.caption, fontWeight: font.weight.bold, color: color.primary },
-  date: { fontSize: font.size.caption, color: color.textFaint },
-  desc: { fontSize: font.size.body, color: color.text, lineHeight: font.size.body * font.lineHeight.body },
+  pendenteDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: color.textFaint },
+  pendenteText: { fontSize: 12, fontWeight: font.weight.black, color: color.textFaint, letterSpacing: 0.5 },
+
+  catChip: { borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  catChipText: { fontSize: 12, fontWeight: font.weight.bold },
+
+  timeText: { marginLeft: 'auto', fontSize: 12, color: color.textFaint },
+
+  cardBody: { gap: 2 },
+  cardTitle: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.text },
+  cardLoc: { fontSize: font.size.caption, color: color.textSoft, marginTop: 2 },
+
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  client: { fontSize: font.size.caption, color: color.textSoft },
-  proposeBtn: {
+  cardPreco: { fontSize: 15, fontWeight: font.weight.black, color: color.institutional2 },
+
+  proposalBtn: {
+    height: 42,
+    paddingHorizontal: space[5],
     backgroundColor: color.primary,
     borderRadius: radius.pill,
-    paddingHorizontal: space[4],
-    paddingVertical: space[2],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  proposeBtnText: { fontSize: font.size.caption, fontWeight: font.weight.bold, color: color.textOnAccent },
+  proposalBtnText: { fontSize: 14, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

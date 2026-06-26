@@ -3,8 +3,21 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { color, font, space, radius } from '../../theme';
+import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
+
+const COLORS = {
+  bg: '#F3ECDC',
+  surface: '#FCF8EE',
+  text: '#0E2A33',
+  textSoft: '#4C636A',
+  textFaint: '#8A989B',
+  danger: '#C0392B',
+  dangerTint: '#FBE6E2',
+  line: '#DCD2BC',
+  lineSoft: '#E6DDC9',
+  overlayBg: 'rgba(14,42,51,0.6)',
+};
 
 export default function SosScreen() {
   const nav = useNavigation<any>();
@@ -35,84 +48,194 @@ export default function SosScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.handle} />
-      <View style={styles.content}>
-        <View style={styles.icon}>
-          <Text style={{ fontSize: 56 }}>🆘</Text>
+    <View style={styles.overlay}>
+      <SafeAreaView style={styles.safeOverlay} edges={['top']}>
+        <View style={styles.bgContent}>
+          <View style={styles.bgStatusBadge}>
+            <Text style={styles.bgStatusText}>EM ANDAMENTO</Text>
+          </View>
+          <View style={styles.bgLine} />
         </View>
-        <Text style={styles.title}>Botão de Emergência</Text>
-        <Text style={styles.body}>
-          Use apenas em situação de risco real. Nossa equipe e os serviços de emergência serão acionados imediatamente.
-        </Text>
+      </SafeAreaView>
 
-        <View style={styles.divider} />
+      <View style={styles.sheet}>
+        <View style={styles.handle} />
 
-        <TouchableOpacity
-          style={[styles.sosBtn, loading && styles.sosBtnDisabled]}
-          onPress={triggerSos}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.sosBtnIcon}>🆘</Text>
-          <Text style={styles.sosBtnText}>{loading ? 'Acionando…' : 'ACIONAR SOS'}</Text>
-        </TouchableOpacity>
+        <View style={styles.sheetBody}>
+          <View style={styles.iconCircle}>
+            <Feather name="alert-triangle" size={36} color={COLORS.danger} />
+          </View>
 
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => nav.goBack()}>
-          <Text style={styles.cancelText}>Cancelar — estou bem</Text>
-        </TouchableOpacity>
+          <Text style={styles.sheetTitle}>Acionar emergência?</Text>
+
+          <Text style={styles.sheetDesc}>
+            Vamos registrar sua <Text style={styles.sheetDescBold}>localização</Text> e{' '}
+            <Text style={styles.sheetDescBold}>horário</Text> e acionar nosso canal de emergência.
+            Use apenas em situação de risco real.
+          </Text>
+        </View>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.acionarBtn, loading && { opacity: 0.6 }]}
+            onPress={triggerSos}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Feather name="alert-triangle" size={18} color="#fff" />
+            <Text style={styles.acionarText}>{loading ? 'Acionando…' : 'Acionar agora'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={() => nav.goBack()}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.cancelText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.auditRow}>
+          <Feather name="lock" size={13} color={COLORS.textFaint} />
+          <Text style={styles.auditText}>Este acionamento fica auditável.</Text>
+        </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.bg },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: color.line, alignSelf: 'center', marginTop: space[3] },
-  content: {
+  overlay: {
     flex: 1,
-    paddingHorizontal: space[5],
-    paddingTop: space[5],
-    paddingBottom: space[6],
-    alignItems: 'center',
-    gap: space[4],
+    backgroundColor: COLORS.overlayBg,
+    justifyContent: 'flex-end',
   },
-  icon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: color.dangerTint,
+  safeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  bgContent: {
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    gap: 10,
+    opacity: 0.45,
+  },
+  bgStatusBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#14A8A0',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 100,
+  },
+  bgStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  bgLine: {
+    height: 14,
+    width: '65%',
+    backgroundColor: '#F3ECDC',
+    borderRadius: 8,
+  },
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    paddingBottom: 24,
+    gap: 18,
+    shadowColor: '#0E2A33',
+    shadowOffset: { width: 0, height: -20 },
+    shadowOpacity: 0.5,
+    shadowRadius: 50,
+    elevation: 20,
+  },
+  handle: {
+    width: 44,
+    height: 5,
+    borderRadius: 100,
+    backgroundColor: COLORS.line,
+    alignSelf: 'center',
+  },
+  sheetBody: {
+    alignItems: 'center',
+    gap: 14,
+  },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: COLORS.dangerTint,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: space[4],
   },
-  title: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.danger, textAlign: 'center' },
-  body: {
-    fontSize: font.size.body,
-    color: color.textSoft,
+  sheetTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    color: COLORS.text,
     textAlign: 'center',
-    lineHeight: font.size.body * font.lineHeight.body,
+  },
+  sheetDesc: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: COLORS.textSoft,
+    textAlign: 'center',
     maxWidth: 300,
   },
-  divider: { width: '100%', height: 1, backgroundColor: color.lineSoft },
-  sosBtn: {
-    width: 200,
-    height: 200,
+  sheetDescBold: {
+    color: COLORS.text,
+    fontWeight: '700',
+  },
+  actions: {
+    gap: 10,
+  },
+  acionarBtn: {
+    width: '100%',
+    height: 56,
     borderRadius: 100,
-    backgroundColor: color.danger,
+    backgroundColor: COLORS.danger,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space[2],
-    shadowColor: color.danger,
+    gap: 8,
+    shadowColor: COLORS.danger,
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.55,
-    shadowRadius: 32,
-    elevation: 10,
-    marginTop: space[3],
+    shadowOpacity: 0.85,
+    shadowRadius: 28,
+    elevation: 8,
   },
-  sosBtnDisabled: { opacity: 0.6 },
-  sosBtnIcon: { fontSize: 48 },
-  sosBtnText: { fontSize: font.size.bodySm, fontWeight: font.weight.black, color: color.textOnAccent, letterSpacing: 1 },
-  cancelBtn: { marginTop: space[2] },
-  cancelText: { fontSize: font.size.body, color: color.textSoft, fontWeight: font.weight.medium },
+  acionarText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  cancelBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 100,
+    borderWidth: 1.5,
+    borderColor: COLORS.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textSoft,
+  },
+  auditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  auditText: {
+    fontSize: 12,
+    color: COLORS.textFaint,
+  },
 });

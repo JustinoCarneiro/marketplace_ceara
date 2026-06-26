@@ -1,107 +1,248 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { color, font, space, radius } from '../../theme';
-import Button from '../../components/Button';
+import { Feather } from '@expo/vector-icons';
+
+const C = {
+  bg: '#F3ECDC',
+  surface: '#FCF8EE',
+  text: '#0E2A33',
+  textSoft: '#4C636A',
+  textFaint: '#8A989B',
+  primary: '#14A8A0',
+  institutional: '#0E3F52',
+  institutional2: '#15596E',
+  lineSoft: '#E6DDC9',
+  accentSky: '#B7DCE3',
+};
 
 export default function EscrowHeldScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
 
+  const valor = route.params?.valor ?? 220;
+  const clienteNome = route.params?.clienteNome ?? 'Lúcia Alves';
+  const endereco = route.params?.endereco ?? 'Aldeota · 1,4 km';
+  const prazo = route.params?.prazo ?? '2 dias';
+  const requestId = route.params?.requestId;
+  const chamadoId = route.params?.chamadoId ?? '1042';
+  const serviceTitle = route.params?.serviceTitle ?? 'Troca de tomada';
+
+  const valorFormatted = `R$ ${Number(valor).toFixed(2).replace('.', ',')}`;
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
-
-        {/* Hero */}
-        <View style={styles.heroCard}>
-          <View style={styles.icon}>
-            <Text style={{ fontSize: 48 }}>🔒</Text>
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7}>
+            <Feather name="chevron-left" size={22} color={C.text} />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Chamado #{chamadoId}</Text>
+            <Text style={styles.headerSubtitle}>{serviceTitle} · {clienteNome}</Text>
           </View>
-          <Text style={styles.title}>Proposta aceita!</Text>
-          <Text style={styles.subtitle}>Pagamento retido no escrow</Text>
-          <Text style={styles.body}>
-            O cliente aceitou sua proposta e efetuou o pagamento. O valor está retido e será liberado ao concluir o serviço com sucesso.
-          </Text>
         </View>
 
-        {/* Instruções */}
-        <View style={styles.stepsCard}>
-          <Text style={styles.stepsTitle}>Próximos passos</Text>
-          {[
-            { icon: '📞', step: 'Entre em contato com o cliente para combinar a visita' },
-            { icon: '🔨', step: 'Execute o serviço com qualidade e pontualidade' },
-            { icon: '✅', step: 'Marque como concluído no app para o cliente confirmar' },
-            { icon: '💰', step: 'Após confirmação, o pagamento é liberado em 1–2 dias' },
-          ].map((item, i) => (
-            <View key={i} style={styles.step}>
-              <Text style={{ fontSize: 20 }}>{item.icon}</Text>
-              <Text style={styles.stepText}>{item.step}</Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Dark escrow card */}
+          <View style={styles.escrowCard}>
+            <View style={styles.escrowCardTop}>
+              <View style={styles.shieldIconWrap}>
+                <Feather name="shield" size={26} color="#fff" />
+              </View>
+              <View style={styles.escrowCardTopText}>
+                <Text style={styles.escrowCardTitle}>Pago e retido</Text>
+                <Text style={styles.escrowCardSubtitle}>Pode iniciar sem risco</Text>
+              </View>
             </View>
-          ))}
-        </View>
 
-        {/* Aviso comissão */}
-        <View style={styles.commissionInfo}>
-          <Text style={{ fontSize: 16 }}>ℹ️</Text>
-          <Text style={styles.commissionText}>
-            A comissão Onda (15%) será descontada automaticamente na liberação. O valor líquido será creditado em sua conta.
-          </Text>
-        </View>
+            <Text style={styles.escrowCardBody}>
+              O valor já está <Text style={styles.escrowCardBodyBold}>retido na Onda</Text>. Quando o cliente confirmar a conclusão, ele é liberado para você.
+            </Text>
 
-        <Button
-          label="Acompanhar chamado"
-          onPress={() => nav.navigate('RequestDetail', { requestId: route.params.requestId })}
-        />
-      </ScrollView>
+            <View style={styles.retidoBadge}>
+              <View style={styles.retidoDot} />
+              <Text style={styles.retidoLabel}>RETIDO</Text>
+              <Text style={styles.retidoValor}>{valorFormatted}</Text>
+            </View>
+          </View>
+
+          {/* Service details */}
+          <View style={styles.detailsCard}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Cliente</Text>
+              <Text style={styles.detailValue}>{clienteNome}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Endereço</Text>
+              <Text style={styles.detailValue}>{endereco}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Prazo combinado</Text>
+              <Text style={styles.detailValue}>{prazo}</Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.btnPrimary}
+            onPress={() => nav.navigate('RequestDetail', { requestId })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.btnPrimaryText}>Iniciar serviço</Text>
+            <Feather name="play" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.bg },
-  content: { paddingHorizontal: space[5], paddingTop: space[6], paddingBottom: space[7], gap: space[4] },
-  heroCard: {
-    backgroundColor: color.institutional,
-    borderRadius: radius.card,
-    padding: space[6],
+  safe: { flex: 1, backgroundColor: C.bg },
+  screen: { flex: 1, backgroundColor: C.bg },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: space[3],
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    paddingBottom: 16,
   },
-  icon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    color: C.text,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: C.textSoft,
+    marginTop: 1,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  escrowCard: {
+    backgroundColor: C.institutional,
+    borderRadius: 24,
+    padding: 22,
+    gap: 16,
+  },
+  escrowCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  shieldIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: C.institutional2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.textOnAccent },
-  subtitle: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.accentSky },
-  body: {
-    fontSize: font.size.body,
-    color: color.accentSky,
-    textAlign: 'center',
-    lineHeight: font.size.body * font.lineHeight.body,
+  escrowCardTopText: {
+    flex: 1,
   },
-  stepsCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[5],
-    gap: space[4],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+  escrowCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
   },
-  stepsTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
-  step: { flexDirection: 'row', gap: space[3], alignItems: 'flex-start' },
-  stepText: { flex: 1, fontSize: font.size.bodySm, color: color.text, lineHeight: font.size.bodySm * 1.6, paddingTop: 2 },
-  commissionInfo: {
+  escrowCardSubtitle: {
+    fontSize: 13,
+    color: C.accentSky,
+    marginTop: 2,
+  },
+  escrowCardBody: {
+    fontSize: 14.5,
+    lineHeight: 14.5 * 1.55,
+    color: C.accentSky,
+  },
+  escrowCardBodyBold: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  retidoBadge: {
+    backgroundColor: C.institutional2,
+    borderRadius: 12,
+    padding: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    gap: space[3],
-    backgroundColor: color.sunTint,
-    borderRadius: radius.field,
-    padding: space[4],
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 7,
   },
-  commissionText: { flex: 1, fontSize: font.size.caption, color: color.textSoft, lineHeight: font.size.caption * 1.5 },
+  retidoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.accentSky,
+  },
+  retidoLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: '#fff',
+  },
+  retidoValor: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  detailsCard: {
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
+    borderRadius: 12,
+    padding: 16,
+    gap: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: C.textSoft,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
+  },
+  footer: {
+    padding: 14,
+    paddingBottom: 20,
+    backgroundColor: C.surface,
+    borderTopWidth: 1,
+    borderTopColor: C.lineSoft,
+  },
+  btnPrimary: {
+    height: 56,
+    borderRadius: 100,
+    backgroundColor: C.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  btnPrimaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
 });

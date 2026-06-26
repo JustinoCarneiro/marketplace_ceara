@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import PageHeader from '../components/PageHeader';
 
 interface DisputeDetail {
   id: string;
@@ -19,242 +18,96 @@ interface DisputeDetail {
   partePrestador?: { nome: string; email: string };
 }
 
+const S = {
+  topbar: { height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 14, padding: '0 28px' } as React.CSSProperties,
+  badge: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F7E3D6', color: '#C2572A', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '4px 10px', borderRadius: 100 } as React.CSSProperties,
+  card: { background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column' as const, gap: 12 } as React.CSSProperties,
+  escrow: { background: '#0E3F52', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column' as const, gap: 10 } as React.CSSProperties,
+  btnG: { width: '100%', height: 50, border: 'none', borderRadius: 12, color: '#fff', fontWeight: 700, fontSize: 14.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' } as React.CSSProperties,
+};
+
 export default function DisputeDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [dispute, setDispute] = useState<DisputeDetail | null>(null);
+  const nav = useNavigate();
+  const [d, setD] = useState<DisputeDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [decisao, setDecisao] = useState<'LIBERAR_PRESTADOR' | 'REEMBOLSAR_CLIENTE' | ''>('');
-  const [justificativa, setJustificativa] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
 
   useEffect(() => {
     (async () => {
-      try {
-        const data = await api.get<DisputeDetail>(`/admin/disputes/${id}`);
-        setDispute(data);
-      } catch {
-        setDispute(null);
-      } finally {
-        setLoading(false);
-      }
+      try { setD(await api.get<DisputeDetail>(`/admin/disputes/${id}`)); }
+      catch { setD(null); }
+      finally { setLoading(false); }
     })();
   }, [id]);
 
-  async function resolve() {
-    if (!decisao || !justificativa.trim()) {
-      setErr('Selecione uma decisão e informe a justificativa.');
-      return;
-    }
-    setErr('');
-    setSubmitting(true);
-    try {
-      await api.post(`/admin/disputes/${id}/resolve`, { decisao, justificativa });
-      setDone(true);
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : 'Erro ao resolver disputa.');
-    } finally {
-      setSubmitting(false);
-    }
+  async function resolve(decisao: string) {
+    setErr(''); setSubmitting(true);
+    try { await api.post(`/admin/disputes/${id}/resolve`, { decisao, justificativa: 'Mediação admin' }); setDone(true); }
+    catch (e: unknown) { setErr(e instanceof Error ? e.message : 'Erro'); }
+    finally { setSubmitting(false); }
   }
 
-  function fmt(n: number) {
-    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
+  const fmt = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  if (loading) return <div className="loading-center"><div className="spinner" /></div>;
-  if (!dispute) return (
-    <div style={{ padding: 36 }}>
-      <div className="alert alert--danger"><span>⚠️</span><span>Disputa não encontrada.</span></div>
+  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><div className="spinner" /></div>;
+  if (!d) return <div style={{ padding: 36, color: 'var(--danger)' }}>Disputa não encontrada.</div>;
+
+  if (done) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12 }}>
+      <div style={{ width: 80, height: 80, borderRadius: 26, background: '#DDF0EC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#15756E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>
+      </div>
+      <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)' }}>Disputa resolvida</span>
+      <button onClick={() => nav('/disputes')} style={{ height: 44, padding: '0 20px', border: '1.5px solid var(--line)', borderRadius: 100, background: 'transparent', color: 'var(--text-soft)', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Voltar</button>
     </div>
   );
 
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 800 }}>
-      <PageHeader
-        title={`Disputa #${dispute.id.slice(0, 8)}`}
-        subtitle={`Pedido #${dispute.serviceRequestId.slice(0, 8)}`}
-        action={
-          <button className="btn btn--ghost btn--sm" onClick={() => navigate('/disputes')}>
-            ← Voltar
-          </button>
-        }
-      />
-
-      {done ? (
-        <div className="alert alert--success" style={{ marginBottom: 24, borderRadius: 'var(--r-card)', padding: 24 }}>
-          <span style={{ fontSize: 24 }}>✅</span>
-          <div>
-            <div style={{ fontWeight: 700 }}>Disputa resolvida com sucesso</div>
-            <div style={{ fontSize: 'var(--fs-body-sm)', marginTop: 4 }}>
-              Decisão registrada. O pagamento será processado conforme a resolução.
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={S.topbar}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0E2A33" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" onClick={() => nav('/disputes')} style={{ cursor: 'pointer' }}><polyline points="15 5 8 12 15 19"/></svg>
+        <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Disputa · Chamado #{d.serviceRequestId?.slice(-4) || d.id.slice(-4)}</span>
+        <span style={S.badge}>EM DISPUTA</span>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', gap: 20 }}>
+        <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={S.card}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Histórico</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#15596E', marginTop: 6, flexShrink: 0 }} /><div><div style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>Cliente abriu disputa</div><div style={{ fontSize: 12, color: '#8A989B' }}>"{d.motivo}"</div></div></div>
+              {d.descricao && <div style={{ display: 'flex', gap: 12 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#15596E', marginTop: 6, flexShrink: 0 }} /><div><div style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>Prestador respondeu</div><div style={{ fontSize: 12, color: '#8A989B' }}>"{d.descricao}"</div></div></div>}
+              <div style={{ display: 'flex', gap: 12 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#14A8A0', marginTop: 6, flexShrink: 0 }} /><div><div style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>Em análise da mediação</div><div style={{ fontSize: 12, color: '#8A989B' }}>agora</div></div></div>
             </div>
-            <button className="btn btn--ghost btn--sm" style={{ marginTop: 12 }} onClick={() => navigate('/disputes')}>
-              Voltar para a fila
+          </div>
+          <div style={S.card}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Mídias anexadas</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[0,1,2].map(i => <div key={i} style={{ width: 84, height: 84, borderRadius: 12, background: '#E6DDC9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8A7E66" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8h3l1.5-2h9L18 8h3v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg></div>)}
+            </div>
+          </div>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={S.escrow}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', color: '#fff' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#B7DCE3' }} />VALOR RETIDO</span>
+            <span style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>{fmt(d.valorRetido)}</span>
+            <span style={{ fontSize: 12.5, color: '#B7DCE3' }}>Decida para quem o valor será liberado.</span>
+          </div>
+          <div style={S.card}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A33' }}>Resolver disputa</span>
+            <button style={{ ...S.btnG, background: '#1B8C84' }} onClick={() => resolve('LIBERAR_PRESTADOR')} disabled={submitting}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg>Liberar ao prestador
             </button>
+            <button style={{ ...S.btnG, background: '#DA6A32' }} onClick={() => resolve('REEMBOLSAR_CLIENTE')} disabled={submitting}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3"/><polyline points="3 4 3 8 7 8"/></svg>Reembolsar o cliente
+            </button>
+            {err && <span style={{ fontSize: 13, color: '#C0392B' }}>{err}</span>}
+            <span style={{ fontSize: 12, color: '#8A989B', textAlign: 'center' }}>Ação auditada e irreversível.</span>
           </div>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Parties */}
-          <div className="card" style={{ padding: 24 }}>
-            <p className="eyebrow" style={{ marginBottom: 16 }}>Partes envolvidas</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{
-                background: 'var(--sky-tint)', borderRadius: 'var(--r-field)',
-                padding: '14px 18px',
-              }}>
-                <div style={{ fontSize: 'var(--fs-eyebrow)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 6 }}>
-                  Cliente
-                </div>
-                <div style={{ fontWeight: 700 }}>{dispute.parteCliente?.nome ?? '—'}</div>
-                <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{dispute.parteCliente?.email}</div>
-              </div>
-              <div style={{
-                background: 'var(--sky-tint)', borderRadius: 'var(--r-field)',
-                padding: '14px 18px',
-              }}>
-                <div style={{ fontSize: 'var(--fs-eyebrow)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 6 }}>
-                  Prestador
-                </div>
-                <div style={{ fontWeight: 700 }}>{dispute.partePrestador?.nome ?? '—'}</div>
-                <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)' }}>{dispute.partePrestador?.email}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Dispute info */}
-          <div className="card" style={{ padding: 24 }}>
-            <p className="eyebrow" style={{ marginBottom: 16 }}>Detalhes da disputa</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)' }}>Valor retido no escrow</span>
-                <span style={{ fontWeight: 800, fontSize: 'var(--fs-h2)', color: 'var(--institutional)' }}>
-                  {fmt(dispute.valorRetido)}
-                </span>
-              </div>
-              <div className="divider" />
-              <div>
-                <div style={{ fontSize: 'var(--fs-eyebrow)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 6 }}>
-                  Motivo relatado
-                </div>
-                <div style={{ fontWeight: 600 }}>{dispute.motivo}</div>
-              </div>
-              {dispute.descricao && (
-                <div>
-                  <div style={{ fontSize: 'var(--fs-eyebrow)', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 6 }}>
-                    Descrição
-                  </div>
-                  <div style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)', lineHeight: 1.6 }}>
-                    {dispute.descricao}
-                  </div>
-                </div>
-              )}
-              <div>
-                <span className={`badge badge--${dispute.status.toLowerCase()}`}>{dispute.status}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Resolution */}
-          {dispute.status === 'ABERTA' && (
-            <div className="card" style={{ padding: 24, borderLeft: '4px solid var(--warm-terra)' }}>
-              <p className="eyebrow" style={{ marginBottom: 16 }}>Resolução da disputa</p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <label style={{
-                    flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12,
-                    padding: 16, border: `2px solid ${decisao === 'LIBERAR_PRESTADOR' ? 'var(--success)' : 'var(--line)'}`,
-                    borderRadius: 'var(--r-field)', cursor: 'pointer',
-                    background: decisao === 'LIBERAR_PRESTADOR' ? 'var(--success-tint)' : 'var(--surface)',
-                    transition: 'all var(--dur-fast)',
-                  }}>
-                    <input
-                      type="radio" name="decisao" value="LIBERAR_PRESTADOR"
-                      checked={decisao === 'LIBERAR_PRESTADOR'}
-                      onChange={() => setDecisao('LIBERAR_PRESTADOR')}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 700 }}>Liberar para o prestador</div>
-                      <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 2 }}>
-                        Serviço foi executado conforme combinado. {fmt(dispute.valorRetido)} transferido ao prestador.
-                      </div>
-                    </div>
-                  </label>
-
-                  <label style={{
-                    flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12,
-                    padding: 16, border: `2px solid ${decisao === 'REEMBOLSAR_CLIENTE' ? 'var(--primary)' : 'var(--line)'}`,
-                    borderRadius: 'var(--r-field)', cursor: 'pointer',
-                    background: decisao === 'REEMBOLSAR_CLIENTE' ? '#E8FAF9' : 'var(--surface)',
-                    transition: 'all var(--dur-fast)',
-                  }}>
-                    <input
-                      type="radio" name="decisao" value="REEMBOLSAR_CLIENTE"
-                      checked={decisao === 'REEMBOLSAR_CLIENTE'}
-                      onChange={() => setDecisao('REEMBOLSAR_CLIENTE')}
-                    />
-                    <div>
-                      <div style={{ fontWeight: 700 }}>Reembolsar o cliente</div>
-                      <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-soft)', marginTop: 2 }}>
-                        Serviço não foi entregue ou houve falha. {fmt(dispute.valorRetido)} devolvido ao cliente.
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: 'var(--fs-eyebrow)', fontWeight: 600,
-                    textTransform: 'uppercase', letterSpacing: '0.15em',
-                    color: 'var(--text-faint)', marginBottom: 8,
-                  }}>
-                    Justificativa (registrada em auditoria)
-                  </label>
-                  <textarea
-                    className="textarea-field"
-                    rows={4}
-                    placeholder="Descreva os critérios que embasaram a decisão..."
-                    value={justificativa}
-                    onChange={e => setJustificativa(e.target.value)}
-                  />
-                </div>
-
-                {err && (
-                  <div className="alert alert--danger">
-                    <span>⚠️</span><span>{err}</span>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                  <button className="btn btn--ghost" onClick={() => navigate('/disputes')}>
-                    Cancelar
-                  </button>
-                  <button
-                    className={`btn ${decisao === 'REEMBOLSAR_CLIENTE' ? 'btn--primary' : 'btn--primary'}`}
-                    onClick={resolve}
-                    disabled={submitting || !decisao}
-                  >
-                    {submitting ? 'Processando…' : 'Confirmar resolução'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {dispute.status !== 'ABERTA' && dispute.justificativaAdmin && (
-            <div className="card" style={{ padding: 24, borderLeft: '4px solid var(--success)' }}>
-              <p className="eyebrow" style={{ marginBottom: 12 }}>Resolução registrada</p>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>{dispute.decisao}</div>
-              <div style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-soft)' }}>{dispute.justificativaAdmin}</div>
-            </div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

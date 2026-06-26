@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
-import Button from '../../components/Button';
 
 type RouteProps = RouteProp<ClientStackParams, 'EscrowConfirmed'>;
 
@@ -15,101 +15,169 @@ export default function EscrowConfirmedScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
-
-        {/* Confirmação */}
-        <View style={styles.heroCard}>
-          <View style={styles.lockCircle}>
-            <Text style={{ fontSize: 48 }}>🔒</Text>
+      <View style={styles.container}>
+        <View style={styles.center}>
+          {/* Shield icon */}
+          <View style={styles.shieldWrap}>
+            <Feather name="shield" size={52} color={color.textOnAccent} />
+            <View style={styles.checkBadge}>
+              <Feather name="check" size={12} color={color.textOnAccent} />
+            </View>
           </View>
-          <Text style={styles.title}>Pagamento retido!</Text>
-          <Text style={styles.body}>
-            Seu dinheiro está seguro no escrow Onda. Será liberado ao prestador
-            <Text style={{ fontWeight: '700' }}> somente quando você confirmar</Text> que o serviço foi concluído.
-          </Text>
+
+          {/* Heading + body */}
+          <View style={styles.textBlock}>
+            <Text style={styles.heading}>Pagamento retido{'\n'}com segurança</Text>
+            <Text style={styles.body}>
+              Seu dinheiro fica retido na Onda e só é liberado para o profissional quando você{' '}
+              <Text style={styles.bodyBold}>confirmar a conclusão</Text> do serviço.
+            </Text>
+          </View>
+
+          {/* Status chips */}
+          <View style={styles.chipsRow}>
+            <View style={styles.chipGhost}>
+              <View style={styles.dot} />
+              <Text style={styles.chipGhostText}>PEDIDO ACEITO</Text>
+            </View>
+            <View style={styles.chipWhite}>
+              <Feather name="lock" size={13} color={color.institutional} />
+              <Text style={styles.chipWhiteText}>R$ 242 RETIDO</Text>
+            </View>
+          </View>
+
+          {/* Provider mini card */}
+          <View style={styles.providerCard}>
+            <View style={styles.providerAvatar}>
+              <Text style={styles.providerAvatarText}>JW</Text>
+            </View>
+            <View style={styles.providerInfo}>
+              <Text style={styles.providerName}>José Wagner</Text>
+              <Text style={styles.providerSub}>Instalação elétrica · prazo 2 dias</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Status escrow */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: color.success }]} />
-            <Text style={styles.statusLabel}>Pagamento recebido</Text>
-            <Text style={[styles.statusValue, { color: color.success }]}>✓</Text>
-          </View>
-          <View style={styles.statusDivider} />
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: color.institutional }]} />
-            <Text style={styles.statusLabel}>Em escrow — protegido</Text>
-            <Text style={[styles.statusValue, { color: color.institutional }]}>🔒</Text>
-          </View>
-          <View style={styles.statusDivider} />
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: color.line }]} />
-            <Text style={[styles.statusLabel, { color: color.textFaint }]}>Aguardando conclusão</Text>
-            <Text style={styles.statusValue}>⏳</Text>
-          </View>
-        </View>
-
-        {/* Próximos passos */}
-        <View style={styles.nextSteps}>
-          <Text style={styles.nextTitle}>O que acontece agora?</Text>
-          <Text style={styles.nextItem}>• O prestador será notificado e irá entrar em contato</Text>
-          <Text style={styles.nextItem}>• Você acompanha o progresso do serviço neste app</Text>
-          <Text style={styles.nextItem}>• Ao concluir, confirme a entrega para liberar o pagamento</Text>
-          <Text style={styles.nextItem}>• Em caso de problema, acione a mediação Onda</Text>
-        </View>
-
-        <Button
-          label="Acompanhar serviço"
+        {/* CTA */}
+        <TouchableOpacity
+          style={styles.cta}
           onPress={() => nav.navigate('RequestDetail', { requestId: route.params.requestId })}
-        />
-        <Button label="Voltar ao início" variant="ghost" onPress={() => nav.popToTop()} />
-      </ScrollView>
+          activeOpacity={0.85}
+        >
+          <Text style={styles.ctaText}>Acompanhar pedido</Text>
+          <Feather name="arrow-right" size={18} color={color.textOnAccent} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: color.bg },
-  content: { paddingHorizontal: space[5], paddingTop: space[7], paddingBottom: space[7], gap: space[4] },
-  heroCard: {
-    backgroundColor: color.institutional,
-    borderRadius: radius.card,
-    padding: space[6],
-    alignItems: 'center',
-    gap: space[4],
-  },
-  lockCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+  safe: { flex: 1, backgroundColor: color.institutional },
+  container: { flex: 1, paddingHorizontal: space[5], paddingVertical: space[5] },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 22 },
+
+  shieldWrap: {
+    width: 104,
+    height: 104,
+    borderRadius: 34,
+    backgroundColor: color.institutional2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.textOnAccent },
-  body: { fontSize: font.size.body, color: color.accentSky, textAlign: 'center', lineHeight: font.size.body * font.lineHeight.body },
-  statusCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[5],
-    gap: space[3],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+  checkBadge: {
+    position: 'absolute',
+    bottom: 14,
+    right: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusLabel: { flex: 1, fontSize: font.size.body, color: color.text },
-  statusValue: { fontSize: font.size.body },
-  statusDivider: { height: 1, backgroundColor: color.lineSoft, marginLeft: space[4] + 10 },
-  nextSteps: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    padding: space[5],
-    gap: space[3],
-    borderWidth: 1,
-    borderColor: color.lineSoft,
+
+  textBlock: { alignItems: 'center', gap: space[3] },
+  heading: {
+    fontSize: font.size.h1,
+    fontWeight: font.weight.black,
+    color: color.textOnAccent,
+    textAlign: 'center',
+    letterSpacing: -0.025 * font.size.h1,
+    lineHeight: font.size.h1 * 1.1,
   },
-  nextTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
-  nextItem: { fontSize: font.size.bodySm, color: color.textSoft, lineHeight: font.size.bodySm * 1.6 },
+  body: {
+    fontSize: font.size.body,
+    color: '#B7DCE3',
+    textAlign: 'center',
+    lineHeight: font.size.body * 1.6,
+    maxWidth: 300,
+  },
+  bodyBold: { color: color.textOnAccent, fontWeight: font.weight.bold },
+
+  chipsRow: { flexDirection: 'row', gap: space[3] },
+  chipGhost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#B7DCE3' },
+  chipGhostText: { fontSize: 12, fontWeight: font.weight.black, color: color.textOnAccent, letterSpacing: 0.5 },
+  chipWhite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: color.textOnAccent,
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  chipWhiteText: { fontSize: 12, fontWeight: font.weight.black, color: color.institutional, letterSpacing: 0.5 },
+
+  providerCard: {
+    width: '100%',
+    backgroundColor: color.institutional2,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+  },
+  providerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: color.warmTerra,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerAvatarText: { fontSize: 15, fontWeight: font.weight.black, color: color.textOnAccent },
+  providerInfo: { flex: 1 },
+  providerName: { fontSize: 15, fontWeight: font.weight.bold, color: color.textOnAccent },
+  providerSub: { fontSize: font.size.caption, color: '#B7DCE3', marginTop: 2 },
+
+  cta: {
+    height: 56,
+    backgroundColor: color.primary,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[3],
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

@@ -5,13 +5,12 @@ import {
   ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
-import { color, font, space, radius, shadow } from '../../theme';
+import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import StarRating from '../../components/StarRating';
-import Button from '../../components/Button';
 
 type RouteProps = RouteProp<ClientStackParams, 'ProviderProfile'>;
 
@@ -38,6 +37,9 @@ function initials(nome: string) {
 
 const AVATAR_COLORS = [color.warmTerra, color.catHidraulica, color.catLimpeza, color.catReforma];
 function avatarBg(nome: string) { return AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COLORS.length]; }
+
+const REVIEW_AVATAR_COLORS = [color.institutional2, color.catJardinagem, color.warmTerra, color.catLimpeza];
+function reviewAvatarBg(nome: string) { return REVIEW_AVATAR_COLORS[nome.charCodeAt(0) % REVIEW_AVATAR_COLORS.length]; }
 
 export default function ProviderProfileScreen() {
   const nav = useNavigation<ClientNavProp>();
@@ -74,8 +76,8 @@ export default function ProviderProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView style={styles.safe}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad}>
-          <Text style={styles.backIcon}>‹</Text>
+        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}>
+          <Feather name="chevron-left" size={22} color={color.text} />
         </TouchableOpacity>
         <View style={styles.center}><Text style={styles.emptyText}>Perfil não encontrado.</Text></View>
       </SafeAreaView>
@@ -93,34 +95,36 @@ export default function ProviderProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Back button */}
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}>
-          <Text style={styles.backIcon}>‹</Text>
+          <Feather name="chevron-left" size={22} color={color.text} />
         </TouchableOpacity>
 
-        {/* Hero: avatar + nome + badge + nota */}
         <View style={styles.hero}>
           <View style={[styles.avatar, { backgroundColor: bg }]}>
             <Text style={styles.avatarText}>{init}</Text>
           </View>
-          <Text style={styles.name}>{profile.nome}</Text>
-          {isVerified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeIcon}>✓</Text>
-              <Text style={styles.verifiedBadgeText}>PRESTADOR VERIFICADO</Text>
+          <View style={styles.heroInfo}>
+            <Text style={styles.name}>{profile.nome}</Text>
+            {isVerified && (
+              <View style={styles.verifiedBadge}>
+                <Feather name="shield" size={13} color="#fff" />
+                <Text style={styles.verifiedBadgeText}>PRESTADOR VERIFICADO</Text>
+              </View>
+            )}
+            <View style={styles.ratingMeta}>
+              <View style={styles.starRow}>
+                <Feather name="star" size={16} color={color.warmSun} />
+                <Text style={styles.ratingVal}>{nota > 0 ? nota.toFixed(1) : 'Novo'}</Text>
+              </View>
+              <Text style={styles.metaText}>
+                {profile.totalAvaliacoes ? `· ${profile.totalAvaliacoes} avaliações · ` : '· '}
+                {profile.categoria}
+                {profile.tempoRespostaMin ? ` · ~${profile.tempoRespostaMin} min` : ''}
+              </Text>
             </View>
-          )}
-          <View style={styles.ratingMeta}>
-            <StarRating value={nota} size={16} readonly />
-            <Text style={styles.ratingVal}>{nota > 0 ? nota.toFixed(1) : 'Novo'}</Text>
-            {profile.totalAvaliacoes ? (
-              <Text style={styles.metaText}>· {profile.totalAvaliacoes} avaliações</Text>
-            ) : null}
-            <Text style={styles.metaText}>· {profile.categoria}</Text>
           </View>
         </View>
 
-        {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statValue}>{profile.totalServicos ?? 0}+</Text>
@@ -132,7 +136,7 @@ export default function ProviderProfileScreen() {
             </Text>
             <Text style={styles.statLabel}>resposta</Text>
           </View>
-          <View style={[styles.statBox, { borderRightWidth: 0 }]}>
+          <View style={styles.statBox}>
             <Text style={[styles.statValue, { color: color.success }]}>
               {profile.pontualidadePct ? `${profile.pontualidadePct}%` : '—'}
             </Text>
@@ -140,70 +144,60 @@ export default function ProviderProfileScreen() {
           </View>
         </View>
 
-        {/* Faixa de preço */}
         {precoStr && (
-          <View style={styles.priceChip}>
-            <Text style={styles.priceLabel}>Faixa de preço</Text>
-            <Text style={styles.priceValue}>{precoStr}</Text>
-          </View>
-        )}
-
-        {/* Bio */}
-        {profile.bio && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>SOBRE MIM</Text>
-            <Text style={styles.bio}>{profile.bio}</Text>
-          </View>
-        )}
-
-        {/* Avaliações */}
-        {profile.avaliacoes && profile.avaliacoes.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>AVALIAÇÕES RECENTES</Text>
-            <View style={styles.reviewList}>
-              {profile.avaliacoes.slice(0, 3).map((r, i) => (
-                <View key={i} style={styles.reviewCard}>
-                  <View style={styles.reviewHeader}>
-                    <View style={styles.reviewAvatar}>
-                      <Text style={styles.reviewAvatarText}>
-                        {r.autorNome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </Text>
-                    </View>
-                    <Text style={styles.reviewAuthor}>{r.autorNome}</Text>
-                    <View style={styles.reviewStars}>
-                      {Array.from({ length: 5 }).map((_, si) => (
-                        <Text key={si} style={{ fontSize: 12, color: si < r.nota ? color.warmSun : color.lineSoft }}>★</Text>
-                      ))}
-                    </View>
-                  </View>
-                  <Text style={styles.reviewText}>{r.comentario}</Text>
-                </View>
-              ))}
+          <View style={styles.priceRow}>
+            <View style={styles.priceChip}>
+              <Text style={styles.priceLabel}>Faixa de preço</Text>
+              <Text style={styles.priceValue}>{precoStr}</Text>
             </View>
           </View>
         )}
 
-        {/* Escrow trust */}
-        <View style={styles.escrowBanner}>
-          <Text style={{ fontSize: 20 }}>🔒</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.escrowTitle}>Pagamento seguro com escrow</Text>
-            <Text style={styles.escrowBody}>
-              Seu dinheiro fica retido até o serviço ser concluído com sua aprovação.
-            </Text>
+        {profile.avaliacoes && profile.avaliacoes.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Avaliações recentes</Text>
+            <View style={styles.reviewList}>
+              {profile.avaliacoes.slice(0, 3).map((r, i) => {
+                const rInit = r.autorNome.split(' ').slice(0, 2).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                const rBg = reviewAvatarBg(r.autorNome);
+                return (
+                  <View key={i} style={styles.reviewCard}>
+                    <View style={styles.reviewHeader}>
+                      <View style={[styles.reviewAvatar, { backgroundColor: rBg }]}>
+                        <Text style={styles.reviewAvatarText}>{rInit}</Text>
+                      </View>
+                      <Text style={styles.reviewAuthor}>{r.autorNome}</Text>
+                      <View style={styles.reviewStars}>
+                        {Array.from({ length: 5 }).map((_, si) => (
+                          <Text
+                            key={si}
+                            style={{ fontSize: 13, color: si < r.nota ? color.warmSun : color.lineSoft }}
+                          >
+                            ★
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                    <Text style={styles.reviewText}>{r.comentario}</Text>
+                  </View>
+                );
+              })}
+            </View>
           </View>
-        </View>
+        )}
 
-        <View style={{ height: space[7] }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* CTA fixo */}
       <View style={styles.footer}>
-        <Button
-          label="Solicitar serviço"
+        <TouchableOpacity
+          style={styles.ctaBtn}
           onPress={() => nav.navigate('NewRequest', { providerId: profile.userId, categoria: profile.categoria })}
-          icon={<Text style={{ color: color.textOnAccent, fontSize: 18 }}>→</Text>}
-        />
+          activeOpacity={0.85}
+        >
+          <Text style={styles.ctaBtnText}>Solicitar serviço</Text>
+          <Feather name="arrow-right" size={18} color="#fff" />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -213,115 +207,137 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { fontSize: font.size.bodySm, color: color.textSoft },
-
   scroll: { paddingBottom: space[4] },
 
-  backPad: { paddingHorizontal: space[5], paddingVertical: space[3] },
-  backIcon: { fontSize: 28, color: color.text, lineHeight: 32 },
+  backPad: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 0,
+  },
 
-  hero: { alignItems: 'center', gap: space[3], paddingHorizontal: space[5], paddingBottom: space[5] },
+  hero: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    alignItems: 'center',
+    gap: 12,
+    textAlign: 'center',
+  },
   avatar: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 30, fontWeight: font.weight.black, color: color.textOnAccent },
-  name: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.text, letterSpacing: -0.02 * font.size.h1 },
+  heroInfo: { alignItems: 'center', gap: 8 },
+  name: {
+    fontSize: 26,
+    fontWeight: font.weight.black,
+    color: color.text,
+    letterSpacing: -0.02 * 26,
+    textAlign: 'center',
+  },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: color.institutional,
     borderRadius: radius.pill,
-    paddingHorizontal: space[3] + 2,
+    paddingLeft: 9,
+    paddingRight: 12,
     paddingVertical: 5,
   },
-  verifiedBadgeIcon: { fontSize: 11, color: color.textOnAccent, fontWeight: font.weight.black },
-  verifiedBadgeText: { fontSize: 11, fontWeight: font.weight.black, color: color.textOnAccent, letterSpacing: 0.5 },
-  ratingMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'center' },
-  ratingVal: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.text },
-  metaText: { fontSize: font.size.caption, color: color.textSoft },
+  verifiedBadgeText: {
+    fontSize: 12,
+    fontWeight: font.weight.bold,
+    color: color.textOnAccent,
+    letterSpacing: 0.5,
+  },
+  ratingMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', justifyContent: 'center' },
+  starRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  ratingVal: { fontSize: 15, fontWeight: font.weight.black, color: color.text },
+  metaText: { fontSize: 14, color: color.textSoft },
 
   statsRow: {
     flexDirection: 'row',
-    marginHorizontal: space[5],
+    marginHorizontal: 20,
+    marginBottom: 20,
+    gap: 10,
+  },
+  statBox: {
+    flex: 1,
     backgroundColor: color.surface,
     borderRadius: radius.field,
     borderWidth: 1,
     borderColor: color.lineSoft,
-    overflow: 'hidden',
-  },
-  statBox: {
-    flex: 1,
+    padding: 14,
     alignItems: 'center',
-    padding: space[4],
-    borderRightWidth: 1,
-    borderRightColor: color.lineSoft,
-    gap: 3,
+    gap: 2,
   },
-  statValue: { fontSize: font.size.h3, fontWeight: font.weight.black, color: color.text },
-  statLabel: { fontSize: font.size.caption, color: color.textSoft },
+  statValue: { fontSize: 20, fontWeight: font.weight.black, color: color.text },
+  statLabel: { fontSize: 12, color: color.textSoft, marginTop: 2 },
 
+  priceRow: { paddingHorizontal: 20, marginBottom: 16 },
   priceChip: {
-    marginHorizontal: space[5],
     backgroundColor: color.skyTint,
     borderWidth: 1,
     borderColor: color.accentSky,
     borderRadius: radius.field,
-    padding: space[4],
+    padding: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  priceLabel: { fontSize: font.size.caption, fontWeight: font.weight.semibold, color: color.institutional2 },
-  priceValue: { fontSize: font.size.h3, fontWeight: font.weight.black, color: color.institutional },
+  priceLabel: { fontSize: 13, fontWeight: font.weight.semibold, color: color.institutional2 },
+  priceValue: { fontSize: 16, fontWeight: font.weight.black, color: color.institutional },
 
-  section: { paddingHorizontal: space[5], gap: space[3] },
-  sectionLabel: {
-    fontSize: font.size.eyebrow,
-    fontWeight: font.weight.semibold,
-    color: color.textSoft,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
+  section: { paddingHorizontal: 20, marginBottom: 20, gap: 12 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: font.weight.black,
+    color: color.text,
   },
-  bio: { fontSize: font.size.body, color: color.textSoft, lineHeight: font.size.body * font.lineHeight.body },
-
-  reviewList: { gap: space[3] },
+  reviewList: { gap: 12 },
   reviewCard: {
     backgroundColor: color.surface,
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: color.lineSoft,
-    padding: space[4],
-    gap: space[2],
-    ...shadow.soft,
+    padding: 14,
+    gap: 6,
   },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reviewAvatar: {
     width: 34,
     height: 34,
     borderRadius: 11,
-    backgroundColor: color.institutional2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewAvatarText: { fontSize: 12, fontWeight: font.weight.bold, color: color.textOnAccent },
-  reviewAuthor: { flex: 1, fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.text },
+  reviewAvatarText: { fontSize: 13, fontWeight: font.weight.bold, color: color.textOnAccent },
+  reviewAuthor: { flex: 1, fontSize: 14, fontWeight: font.weight.bold, color: color.text },
   reviewStars: { flexDirection: 'row', gap: 1 },
-  reviewText: { fontSize: font.size.caption, color: color.textSoft, lineHeight: font.size.caption * 1.55 },
-
-  escrowBanner: {
-    marginHorizontal: space[5],
-    flexDirection: 'row',
-    gap: space[3],
-    backgroundColor: color.skyTint,
-    borderRadius: radius.field,
-    padding: space[4],
-  },
-  escrowTitle: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.institutional },
-  escrowBody: { fontSize: font.size.caption, color: color.textSoft, marginTop: 2, lineHeight: font.size.caption * 1.5 },
+  reviewText: { fontSize: 13.5, color: color.textSoft, lineHeight: 13.5 * 1.55 },
 
   footer: {
-    padding: space[5],
-    paddingBottom: space[6],
+    padding: 14,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: color.surface,
     borderTopWidth: 1,
     borderTopColor: color.lineSoft,
-    backgroundColor: color.surface,
   },
+  ctaBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: color.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: 'rgba(20,168,160,0.85)',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.85,
+    shadowRadius: 26,
+    elevation: 8,
+  },
+  ctaBtnText: { fontSize: 16, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

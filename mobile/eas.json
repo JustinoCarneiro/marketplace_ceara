@@ -11,7 +11,7 @@
         "gradleCommand": ":app:assembleRelease"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://kathy-incidents-surveys-finance.trycloudflare.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://echo-manufacture-organized-site.trycloudflare.com/api/v1"
       },
       "channel": "preview"
     }
