@@ -113,8 +113,8 @@ const styles = StyleSheet.create({
   },
   trustText: {
     fontSize: font.size.caption,
-    color: color.textSoft,
-    fontWeight: font.weight.medium,
+    color: color.institutional,
+    fontWeight: font.weight.semibold,
   },
   actions: { gap: space[3] },
   eyebrow: {
@@ -147,14 +147,14 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: color.institutional,
+    borderColor: color.text,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaOutlineText: {
     fontSize: font.size.body,
     fontWeight: font.weight.bold,
-    color: color.institutional,
+    color: color.text,
   },
   ghostLink: {
     textAlign: 'center',
