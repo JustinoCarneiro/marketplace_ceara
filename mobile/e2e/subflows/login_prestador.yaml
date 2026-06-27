@@ -1,0 +1,10 @@
+appId: com.onda.marketplace
+---
+- tapOn: "Já tenho conta"
+- tapOn:
+    text: "seu@email.com"
+- inputText: ${EMAIL_PRESTADOR}
+- tapOn:
+    text: "••••••••"
+- inputText: ${SENHA}
+- tapOn: "Entrar"

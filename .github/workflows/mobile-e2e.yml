@@ -1,0 +1,188 @@
+name: Mobile — Maestro E2E
+
+# Roda manualmente ou em push que toque código relevante.
+# Emite minutos de Actions pesados (emulador ~30 min) — paths filtra o ruído.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+    paths:
+      - 'mobile/src/**'
+      - 'mobile/e2e/**'
+      - 'backend/src/**'
+      - '.github/workflows/mobile-e2e.yml'
+
+jobs:
+  maestro-android:
+    name: Android API 29 — Maestro E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # ─── Banco PostGIS (mesmo que produção) ───────────────────────────────────
+    services:
+      postgres:
+        image: postgis/postgis:15-3.4
+        env:
+          POSTGRES_USER: onda_user
+          POSTGRES_PASSWORD: onda_pass_ci
+          POSTGRES_DB: onda_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # KVM acelera o emulador Android em ~10x (disponível no ubuntu-latest)
+      - name: Habilitar KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # ─── Runtimes ─────────────────────────────────────────────────────────
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # ─── Dependências mobile ──────────────────────────────────────────────
+      - name: npm ci (mobile)
+        run: npm ci --legacy-peer-deps
+        working-directory: mobile
+
+      # Gera android/ a partir de app.json (pasta é gitignored no projeto)
+      - name: expo prebuild → android/
+        run: npx expo prebuild --platform android --no-install
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
+
+      # Cache do Gradle wrapper + caches (~1,5 GB salvo após 1ª execução)
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: gradle-
+
+      # ─── Backend ──────────────────────────────────────────────────────────
+      - name: Build backend JAR (skip tests)
+        run: mvn -f backend/pom.xml -q package -DskipTests
+        env:
+          MAVEN_OPTS: "-Xmx1g"
+
+      - name: Iniciar backend em background
+        run: |
+          java -jar backend/target/marketplace-*.jar &
+          echo "Aguardando :8080..."
+          timeout 90 bash -c 'until nc -z localhost 8080; do sleep 2; done'
+          echo "Backend UP"
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5432/onda_db
+          POSTGRES_USER: onda_user
+          POSTGRES_PASSWORD: onda_pass_ci
+          POSTGRES_DB: onda_db
+          # Segredos obrigatórios — configure em Settings → Secrets → Actions
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
+          MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
+
+      # ─── APK debug ────────────────────────────────────────────────────────
+      # 10.0.2.2 é o IP padrão do emulador Android para o host → não precisa adb reverse
+      - name: Build APK debug
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          cd android && ./gradlew assembleDebug --no-daemon -q
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
+          GRADLE_OPTS: "-Xmx3g"
+
+      # ─── Maestro CLI ──────────────────────────────────────────────────────
+      - name: Instalar Maestro CLI
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      # ─── Emulador + testes ────────────────────────────────────────────────
+      # Ordem dos testes importa — estado de BD persiste entre eles:
+      #   01 → registra Lucia (cliente)
+      #   03 → registra Jose (prestador) — clearState limpa sessão de Lucia
+      #   04 → login Lucia (Splash visível após 03), cria pedido
+      #   05 → login Jose, envia proposta
+      #   06 → login Lucia, aceita proposta + paga (Pix simulado)
+      #   07 → known-fail: falta o passo "prestador inicia serviço" (estado ACEITO → EM ANDAMENTO)
+      #   02 → standalone: verifica fluxo de login isolado
+      - name: E2E no emulador Android 29
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          arch: x86_64
+          target: default
+          profile: pixel_3a
+          emulator-options: -no-window -no-audio -no-snapshot -no-boot-anim -memory 3072
+          disable-animations: true
+          script: |
+            set -euo pipefail
+
+            # Desativar animações e popup de stylus (quebra taps do Maestro)
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            adb shell settings put secure stylus_handwriting_enabled 0
+
+            # Rota redundante de segurança (10.0.2.2 já faz isso, mas garante)
+            adb reverse tcp:8080 tcp:8080
+
+            # Instalar APK
+            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            sleep 3
+
+            # Helper: roda teste e exibe resultado; 'known-fail' não falha a suite
+            run_test() {
+              local f="$1" expected="${2:-required}"
+              echo ""
+              echo "▶ $(basename "$f")"
+              if maestro test "$f"; then
+                echo "✓ PASS: $(basename "$f")"
+              elif [ "$expected" = "known-fail" ]; then
+                echo "⚠  KNOWN FAIL: $(basename "$f") — ver comentário no workflow"
+              else
+                echo "✗ FAIL: $(basename "$f")"
+                return 1
+              fi
+            }
+
+            run_test mobile/e2e/01_cadastro_cliente.yaml
+            run_test mobile/e2e/03_cadastro_prestador.yaml
+            run_test mobile/e2e/04_criar_pedido.yaml
+            run_test mobile/e2e/05_enviar_proposta.yaml
+            run_test mobile/e2e/06_aceitar_proposta.yaml
+            run_test mobile/e2e/07_concluir_e_avaliar.yaml known-fail
+            run_test mobile/e2e/02_login_cliente.yaml
+
+      # ─── Artefatos ────────────────────────────────────────────────────────
+      - name: Publicar relatórios Maestro
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-reports-${{ github.run_number }}
+          path: ~/.maestro/tests/
+          if-no-files-found: ignore

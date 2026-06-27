@@ -74,7 +74,15 @@ export default function DisputesPage() {
           <div style={S.center}><div className="spinner" /></div>
         ) : disputes.length === 0 ? (
           <div style={S.center}>
-            <div style={S.emptyIcon}>⚖️</div>
+            <div style={S.emptyIcon}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+                <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
+                <path d="M7 21H17"/>
+                <path d="M12 3v18"/>
+                <path d="M3 7h2c2 0 4-1 6-2 2 1 4 2 6 2h2"/>
+              </svg>
+            </div>
             <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>Nenhuma disputa aberta</div>
             <div style={{ fontSize: 14, color: 'var(--text-soft)' }}>Ótimo! Não há disputas pendentes de mediação.</div>
           </div>
@@ -144,7 +152,7 @@ const S: Record<string, React.CSSProperties> = {
     flex: 1, display: 'flex', flexDirection: 'column' as const,
     alignItems: 'center', justifyContent: 'center', gap: 12,
   },
-  emptyIcon: { fontSize: 48 },
+  emptyIcon: { width: 84, height: 84, borderRadius: 26, background: '#E2EEF2', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   tableWrap: {
     background: 'var(--surface)', border: '1px solid var(--line-soft)',
     borderRadius: 12, overflow: 'hidden',

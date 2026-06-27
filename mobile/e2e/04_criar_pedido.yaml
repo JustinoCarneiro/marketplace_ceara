@@ -1,0 +1,17 @@
+appId: com.onda.marketplace
+env:
+  EMAIL_CLIENTE: "lucia.teste@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: false
+- runFlow: subflows/login_cliente.yaml
+- tapOn: "Novo pedido"
+- assertVisible: "Novo pedido"
+- tapOn: "Elétrica"
+- tapOn:
+    text: "A tomada da cozinha"
+- inputText: "Tomada da sala parou de funcionar."
+- tapOn: "Continuar"
+- assertVisible: "Pedido criado!"
+- assertVisible: "PENDENTE"

@@ -1,0 +1,12 @@
+appId: com.onda.marketplace
+env:
+  EMAIL_CLIENTE: "lucia.teste@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Já tenho conta"
+    timeout: 10000
+- runFlow: subflows/login_cliente.yaml
+- assertVisible: "Elétrica"

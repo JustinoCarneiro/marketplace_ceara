@@ -1,0 +1,22 @@
+appId: com.onda.marketplace
+env:
+  EMAIL_CLIENTE: "lucia.teste@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Já tenho conta"
+    timeout: 10000
+- runFlow: subflows/login_cliente.yaml
+- tapOn: "Meus pedidos"
+- tapOn:
+    text: "Ver detalhes"
+    index: 0
+- assertVisible: "PROPOSTO"
+- tapOn: "Aceitar proposta"
+- assertVisible: "Pagar com Pix"
+- tapOn: "Pagar com Pix"
+- assertVisible: "Paguei"
+- tapOn: "Paguei"
+- assertVisible: "ACEITO"

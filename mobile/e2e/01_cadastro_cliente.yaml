@@ -1,0 +1,25 @@
+appId: com.onda.marketplace
+env:
+  NOME: "Lucia Teste"
+  EMAIL: "lucia.teste@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Sou Cliente"
+    timeout: 10000
+- tapOn: "Sou Cliente"
+- assertVisible: "Criar conta"
+- tapOn:
+    text: "Lúcia Maria Alves"
+- inputText: ${NOME}
+- tapOn:
+    text: "lucia.alves@email.com"
+- inputText: ${EMAIL}
+- tapOn:
+    text: "mínimo 8 caracteres"
+- inputText: ${SENHA}
+- tapOn: "Criar conta"
+- assertVisible: "Elétrica"
+- waitForAnimationToEnd

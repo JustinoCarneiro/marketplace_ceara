@@ -1,0 +1,13 @@
+appId: com.onda.marketplace
+---
+- tapOn: "Já tenho conta"
+- tapOn:
+    text: "seu@email.com"
+- inputText: ${EMAIL_CLIENTE}
+- tapOn:
+    text: "••••••••"
+- inputText: ${SENHA}
+- tapOn: "Entrar"
+- assertVisible:
+    text: "Olá"
+    optional: true

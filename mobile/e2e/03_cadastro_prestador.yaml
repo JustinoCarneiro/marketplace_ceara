@@ -1,0 +1,29 @@
+appId: com.onda.marketplace
+env:
+  NOME: "Jose Prestador"
+  CPF: "123.456.789-00"
+  EMAIL: "jose.prestador@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Sou Prestador"
+    timeout: 10000
+- tapOn: "Sou Prestador"
+- assertVisible: "Cadastro de prestador"
+- tapOn:
+    text: "José Wagner Ferreira"
+- inputText: ${NOME}
+- tapOn:
+    text: "123.456.789-00"
+- inputText: ${CPF}
+- tapOn:
+    text: "jose@email.com"
+- inputText: ${EMAIL}
+- tapOn:
+    text: "mínimo 8 caracteres"
+- inputText: ${SENHA}
+- tapOn: "Elétrica"
+- tapOn: "Cadastrar"
+- assertVisible: "EM VERIFICAÇÃO"

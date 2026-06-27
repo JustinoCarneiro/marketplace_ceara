@@ -1,0 +1,26 @@
+appId: com.onda.marketplace
+env:
+  EMAIL_PRESTADOR: "jose.prestador@onda.dev"
+  SENHA: "senha1234"
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Já tenho conta"
+    timeout: 10000
+- runFlow: subflows/login_prestador.yaml
+- assertVisible: "Pedidos disponíveis"
+- tapOn:
+    text: "Ver detalhes"
+    index: 0
+- assertVisible: "Enviar proposta"
+- tapOn: "Enviar proposta"
+- tapOn:
+    text: "0,00"
+- inputText: "150"
+- tapOn:
+    text: "dias"
+- eraseText: 10
+- inputText: "2"
+- tapOn: "Enviar proposta"
+- assertVisible: "Proposta enviada"
