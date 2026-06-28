@@ -21,4 +21,8 @@ fi
 echo ""
 echo "==> Metro"
 cd "$ROOT/mobile"
+# React Native DevTools (Electron empacotado via dotslash) fica num diretório com
+# espaço no nome, e o sandbox SUID do Chromium não lida com isso no Linux. Desligar
+# o sandbox do Electron evita o crash do DevTools — seguro por ser ferramenta de dev local.
+export ELECTRON_DISABLE_SANDBOX=1
 npx expo start --port 8081

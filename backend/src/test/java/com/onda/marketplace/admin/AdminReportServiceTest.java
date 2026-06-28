@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("null")
 class AdminReportServiceTest {
 
     @Mock ServiceRequestRepository  srRepository;

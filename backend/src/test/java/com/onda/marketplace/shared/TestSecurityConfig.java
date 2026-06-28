@@ -12,6 +12,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * da lógica de auth que será configurada no M01.
  */
 @TestConfiguration
+@SuppressWarnings("null")
 public class TestSecurityConfig {
 
     @Bean
