@@ -180,6 +180,32 @@ Pesos: **Pequeno (1–2d)** · **Médio (3–4d)** · **Grande (5–7d)**.
 
 JSON · DTOs = **Records** (nunca expõem entidades, TS04) · erros padronizados via `@ControllerAdvice` (400/404/422).
 
+### ⚠️ Auditoria de drift — contrato projetado vs. implementado (2026-06-28)
+
+Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação adotou convenções diferentes — **a fonte da verdade é o código**. Convenção real de URL: recurso é `/api/v1/service-requests` (kebab-case, top-level), **não** `/api/v1/services/requests`.
+
+| Projetado (nas seções abaixo) | Implementado (real) |
+|---|---|
+| `POST /api/v1/providers` | `POST /api/v1/auth/register/provider` |
+| `POST /api/v1/services/requests` | `POST /api/v1/service-requests` (+ `POST .../{id}/media`) |
+| `POST .../{id}/proposals` · accept `POST` | `POST`/`GET /api/v1/service-requests/{id}/proposals` · accept/reject = **`PUT`** `/api/v1/proposals/{id}/accept\|reject` |
+| `POST /api/v1/payments` (body serviceRequestId) | `POST /api/v1/service-requests/{id}/payment` · header **`X-Idempotency-Key`** |
+| `POST .../{id}/disputes` (abrir) | `POST /api/v1/service-requests/{id}/dispute` |
+| `.../complete` + `.../confirm` | `POST /api/v1/service-requests/{id}/confirm-completion` |
+| `POST .../{id}/reviews` | `POST /api/v1/service-requests/{id}/review` |
+| `POST .../{id}/sos` | `POST /api/v1/sos` + `PATCH /api/v1/sos/{id}/resolve` (top-level) |
+| `POST /api/v1/admin/providers/{id}/verify` | `POST /api/v1/admin/providers/{userId}/moderate` |
+| `POST /api/v1/disputes/{id}/resolve` | `POST /api/v1/admin/disputes/{serviceRequestId}/resolve` |
+
+**Especificados mas NÃO implementados no backend** (apesar de os módulos estarem marcados ✅ — pendência real, não só de doc):
+- `POST /api/v1/services/ai/suggest` (US14/M04) — não há endpoint de IA.
+- `GET /api/v1/transactions/{id}` (US07/M06) — prestador não tem GET público da transação retida.
+- `GET/POST/PATCH /api/v1/admin/categories` (US28/M10) — tabela `service_categories` existe, mas sem CRUD no backend.
+- `GET /api/v1/admin/users` + suspend/reactivate (US26/M10) — sem endpoints de gestão de usuários.
+- `GET /api/v1/admin/audit` + tabela `admin_audit_log` (US22/TS09) — auditoria não implementada (sem tabela/entidade/endpoint).
+
+Alinhados ao projetado: `nearby`, `payments/webhook`, `admin/metrics`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf`.
+
 ### M01 — Identidade & Auth
 ```
 POST /api/v1/auth/register/client

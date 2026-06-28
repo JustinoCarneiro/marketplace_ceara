@@ -207,17 +207,23 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 
 ---
 
-## Dicionário de dados (base — refinar na Fase 3)
+## Dicionário de dados (reconciliado com as migrations Flyway V1–V7 em 2026-06-28)
 - `users` (id, nome, email, cpf_cifrado, senha_hash, role)
+- `refresh_tokens` (id, user_id, token_hash, expires_at, revogado, created_at) — sessão persistente (US12)
 - `providers_profile` (id, user_id, categoria, status_verificacao, saldo_retido, nota_media)
-- `service_requests` (id, cliente_id, prestador_id, descricao, url_midia, status)
+- `background_checks` (id, provider_id, status, resultado, requested_at, completed_at) — verificação assíncrona (US02)
+- `service_categories` (id, nome, slug, ativa) — catálogo do admin (US28)
+- `service_requests` (id, cliente_id, prestador_id, descricao, status)
+- `service_media` (id, service_request_id, tipo, url, created_at) — mídia em object storage; banco só a URL (TS07)
 - `proposals` (id, service_id, prestador_id, valor, prazo, status)
 - `transactions` (id, service_id, valor_total, valor_comissao, status_pagamento, gateway_transaction_id, idempotency_key)
-- `reviews` (id, service_id, avaliador_id, avaliado_id, nota, comentario, url_imagem)
 - `outbox_events` (id, agregado, tipo_evento, payload, status, criado_em) — motor do Escrow
-- `sos_events` (id, service_id, user_id, lat, lng, criado_em)
-- `admin_audit_log` (id, admin_id, acao, entidade, entidade_id, detalhe, criado_em) — auditoria de ações administrativas (TS09)
-- `service_categories` (id, nome, slug, ativa) — catálogo gerido pelo admin (US28)
+- `reviews` (id, service_id, avaliador_id, avaliado_id, nota, comentario, url_imagem)
+- `sos_alerts` (id, user_id, service_request_id, latitude, longitude, status, criado_em, resolvido_em) — Botão SOS (US21)
+- `dispute_resolutions` (id, service_request_id, admin_id, decisao, justificativa, criado_em) — mediação (US24)
+- `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
+
+> ⚠️ `admin_audit_log` (US22/TS09) está especificado mas **ainda não existe** no backend (sem tabela/entidade/endpoint). Ver "Auditoria de drift" no `ROADMAP.md` §4.
 
 ---
 

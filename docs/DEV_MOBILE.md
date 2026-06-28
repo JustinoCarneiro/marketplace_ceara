@@ -2,7 +2,15 @@
 
 ## Pré-requisitos de sessão
 
-Todo início de sessão de desenvolvimento, execute:
+Todo início de sessão, rode o script único da raiz:
+
+```bash
+./dev.sh
+```
+
+Ele automatiza, em sequência: sobe o backend (compose **homolog**), espelha as portas via `adb reverse` (8080 backend, 8081 Metro) e inicia o Metro. Também exporta `ELECTRON_DISABLE_SANDBOX=1` (ver **Troubleshooting**).
+
+**Fallback manual** (se o `dev.sh` falhar, rode os passos na mão):
 
 ```bash
 # 1. Backend (usar SEMPRE o compose homolog)
@@ -141,6 +149,29 @@ adb logcat | grep -E "Onda|expo|ReactNative"
 # Testar se o backend responde do ponto de vista do celular
 adb shell curl -s http://localhost:8080/actuator/health
 ```
+
+---
+
+## Troubleshooting
+
+### React Native DevTools não instala / crash de sandbox no Metro
+Sintoma no log do Metro:
+```
+ERROR  An unknown error occurred while installing React Native DevTools.
+... chrome-sandbox is owned by ... mode 4755   (ou)   FATAL ... zygote_host ... Invalid argument
+```
+O DevTools é um app **Electron** empacotado via `dotslash` num diretório com **espaço no nome**, e o sandbox SUID do Chromium não lida com isso no Linux. Solução: desligar o sandbox do Electron (seguro — é ferramenta de dev local). O `dev.sh` **já faz isso** (`export ELECTRON_DISABLE_SANDBOX=1`). Se subir o Metro fora do `dev.sh`:
+```bash
+export ELECTRON_DISABLE_SANDBOX=1
+npx expo start --port 8081
+```
+
+### Backend na IDE: enxurrada de avisos `code 1102` ("category 'null' is not analysed")
+**Não é erro de código** — é config do language server Java (redhat.java). O backend usa `@SuppressWarnings("null")` no nível da classe em ~41 arquivos, que exigem a análise de null **ligada**. Garanta em `.vscode/settings.json` (arquivo local, ignorado pelo git):
+```json
+"java.compile.nullAnalysis.mode": "automatic"
+```
+Depois: `Ctrl+Shift+P` → **Java: Clean Java Language Server Workspace** → **Restart and delete**. Pôr como `disabled` reintroduz os avisos. Editar arquivos `.prefs` não adianta — o redhat.java regenera do Maven.
 
 ---
 
