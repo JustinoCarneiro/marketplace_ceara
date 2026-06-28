@@ -89,7 +89,7 @@ export default function AiAssistantScreen() {
               {/* AI badge */}
               <View style={styles.aiBadge}>
                 <Feather name="sun" size={16} color="#fff" />
-                <Text style={styles.aiBadgeText}>Sugestão da IA — você confirma</Text>
+                <Text style={styles.aiBadgeText}>Sugestão da IA: você confirma</Text>
               </View>
 
               {/* Descrição sugerida */}
@@ -144,7 +144,7 @@ export default function AiAssistantScreen() {
                 <Text style={styles.fallbackText}>
                   Se a IA estiver indisponível, é só{' '}
                   <Text style={styles.fallbackBold}>continuar preenchendo manualmente</Text>
-                  {' '}— o pedido não trava.
+                  . O pedido não trava.
                 </Text>
               </View>
             </View>

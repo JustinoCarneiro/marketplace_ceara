@@ -112,7 +112,7 @@ export default function HomeScreen() {
           </View>
 
           <Text style={styles.greeting}>
-            {greeting()}, {firstName}.{'\n'}Do que sua casa precisa hoje?
+            {greeting()}, {firstName}. Do que sua casa precisa hoje?
           </Text>
 
           <TouchableOpacity

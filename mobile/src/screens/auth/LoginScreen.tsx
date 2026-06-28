@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, KeyboardAvoidingView, Platform,
+  TouchableOpacity, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -51,19 +51,16 @@ export default function LoginScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-          {/* Back button */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => nav.goBack()} hitSlop={12}>
-            <Feather name="arrow-left" size={22} color={color.text} />
-          </TouchableOpacity>
-
-          {/* Wave logo */}
-          <View style={styles.logo}>
-            <Text style={styles.logoWave}>∿</Text>
-          </View>
+          {/* Logo */}
+          <Image
+            source={require('../../../assets/logo-symbol.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
 
           {/* Hero text */}
           <View style={styles.headerText}>
-            <Text style={styles.title}>Bom te ver{'\n'}de novo</Text>
+            <Text style={styles.title}>Bom te ver de novo</Text>
             <Text style={styles.subtitle}>Entre com seu e-mail para continuar.</Text>
           </View>
 
@@ -143,23 +140,12 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: space[5], paddingBottom: space[7] },
-  backBtn: { marginTop: 8, marginBottom: space[5] },
+  scroll: { flexGrow: 1, paddingHorizontal: space[5], paddingTop: space[7], paddingBottom: space[7], justifyContent: 'center' },
   logo: {
     width: 60,
     height: 60,
-    borderRadius: 20,
-    backgroundColor: color.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: space[5],
-    shadowColor: color.primary,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 6,
   },
-  logoWave: { fontSize: 28, color: color.textOnAccent },
   headerText: { gap: 8, marginBottom: space[6] },
   title: {
     fontSize: font.size.display,

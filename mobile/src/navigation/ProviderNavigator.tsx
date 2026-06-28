@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color } from '../theme';
 import type { ProviderStackParams } from './types';
 
@@ -15,6 +16,7 @@ import RateScreen from '../screens/shared/RateScreen';
 import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
 import SosActiveScreen from '../screens/shared/SosActiveScreen';
+import LegalScreen from '../screens/legal/LegalScreen';
 
 const Stack = createNativeStackNavigator<ProviderStackParams>();
 
@@ -31,6 +33,7 @@ export default function ProviderNavigator() {
       <Stack.Screen name="RateConfirm" component={RateConfirmScreen} />
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="SosActive" component={SosActiveScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
     </Stack.Navigator>
   );
 }
@@ -47,6 +50,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 }
 
 function ProviderTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -54,7 +58,19 @@ function ProviderTabs() {
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
         tabBarActiveTintColor: color.primary,
         tabBarInactiveTintColor: color.textFaint,
-        tabBarStyle: styles.tabBar,
+        tabBarBackground: () => (
+          <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.line }} />
+            <View style={{ height: insets.bottom, backgroundColor: color.institutional }} />
+          </View>
+        ),
+        tabBarStyle: {
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          height: 64 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
+          elevation: 0,
+        },
         tabBarLabelStyle: styles.tabLabel,
       })}
     >
@@ -66,12 +82,5 @@ function ProviderTabs() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: color.surface,
-    borderTopColor: color.line,
-    borderTopWidth: 1,
-    height: 64,
-    paddingBottom: 8,
-  },
   tabLabel: { fontSize: 11, fontWeight: '600' },
 });

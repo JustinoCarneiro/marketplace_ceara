@@ -1,7 +1,9 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color } from '../theme';
 import type { ClientStackParams, ClientTabParams } from './types';
 
@@ -25,6 +27,7 @@ import RateScreen from '../screens/shared/RateScreen';
 import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
 import SosActiveScreen from '../screens/shared/SosActiveScreen';
+import LegalScreen from '../screens/legal/LegalScreen';
 
 const Tab = createBottomTabNavigator<ClientTabParams>();
 const Stack = createNativeStackNavigator<ClientStackParams>();
@@ -46,6 +49,7 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 function ClientTabs() {
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -61,13 +65,19 @@ function ClientTabs() {
         tabBarLabel: TAB_LABELS[route.name],
         tabBarActiveTintColor: color.primary,
         tabBarInactiveTintColor: color.textFaint,
+        tabBarBackground: () => (
+          <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, backgroundColor: color.surface, borderTopWidth: 1, borderTopColor: color.lineSoft }} />
+            <View style={{ height: insets.bottom, backgroundColor: color.institutional }} />
+          </View>
+        ),
         tabBarStyle: {
-          backgroundColor: color.surface,
-          borderTopColor: color.lineSoft,
-          borderTopWidth: 1,
-          height: 72,
-          paddingBottom: 10,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          height: 72 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
           paddingTop: 6,
+          elevation: 0,
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -105,6 +115,7 @@ export default function ClientNavigator() {
       <Stack.Screen name="RateConfirm" component={RateConfirmScreen} />
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="SosActive" component={SosActiveScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
     </Stack.Navigator>
   );
 }

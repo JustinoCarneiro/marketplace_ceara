@@ -60,7 +60,10 @@ export default function RegisterProviderScreen() {
             <Feather name="chevron-left" size={22} color={color.text} />
           </TouchableOpacity>
 
-          <Text style={styles.title}>Cadastro de prestador</Text>
+          <Text style={styles.title}>
+            Criar conta{' '}
+            <Text style={styles.titleAccent}>prestador</Text>
+          </Text>
 
           <View style={styles.form}>
             {/* Nome */}
@@ -190,9 +193,10 @@ export default function RegisterProviderScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: space[5], paddingBottom: space[4] },
+  scroll: { flexGrow: 1, paddingHorizontal: space[5], paddingTop: space[5], paddingBottom: space[4], justifyContent: 'center' },
 
   back: { paddingVertical: space[3] },
+  titleAccent: { color: color.primary },
   title: {
     fontSize: font.size.h1,
     fontWeight: font.weight.black,

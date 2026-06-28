@@ -122,7 +122,7 @@ export default function PaymentChoiceScreen() {
         <View style={styles.escrowNotice}>
           <Feather name="shield" size={18} color={color.textOnAccent} />
           <Text style={styles.escrowText}>
-            Pagamento <Text style={{ fontWeight: font.weight.black }}>retido com segurança</Text> — só é liberado quando você confirmar o serviço.
+            Pagamento <Text style={{ fontWeight: font.weight.black }}>retido com segurança</Text>. Só é liberado quando você confirmar o serviço.
           </Text>
         </View>
 

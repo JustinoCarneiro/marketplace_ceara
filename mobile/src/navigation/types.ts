@@ -8,6 +8,7 @@ export type AuthStackParams = {
   RegisterClient: undefined;
   RegisterProvider: undefined;
   VerificationPending: { status: 'EM_VERIFICACAO' | 'VERIFICADO' | 'REPROVADO' };
+  Legal: { doc: 'terms' | 'privacy' };
 };
 
 // ─── Client Tabs ─────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export type ClientStackParams = {
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };
   SosActive: { alertId: string };
+  Legal: { doc: 'terms' | 'privacy' };
 };
 
 // ─── Provider Stack ───────────────────────────────────────────────────────────
@@ -52,6 +54,7 @@ export type ProviderStackParams = {
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };
   SosActive: { alertId: string };
+  Legal: { doc: 'terms' | 'privacy' };
 };
 
 // ─── Root Stack ───────────────────────────────────────────────────────────────

@@ -80,7 +80,7 @@ export default function RateScreen() {
               <Text style={styles.avatarText}>{initials}</Text>
             </View>
 
-            <Text style={styles.heroTitle}>Como foi o serviço{'\n'}de {avaliadoNome}?</Text>
+            <Text style={styles.heroTitle}>Como foi o serviço de {avaliadoNome}?</Text>
           </View>
 
           <View style={styles.starsRow}>

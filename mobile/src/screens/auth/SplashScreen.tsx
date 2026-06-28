@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,13 +14,14 @@ export default function SplashScreen() {
       <View style={styles.container}>
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.logo}>
-            <Text style={styles.logoWave}>∿</Text>
-          </View>
+          <Image
+            source={require('../../../assets/logo-onda.png')}
+            style={styles.logoWordmark}
+            resizeMode="contain"
+          />
           <View style={styles.headline}>
-            <Text style={styles.appName}>Onda</Text>
             <Text style={styles.tagline}>
-              Profissionais de confiança para a sua casa —{' '}
+              Profissionais de confiança para a sua casa,{' '}
               <Text style={styles.taglineBold}>com pagamento retido até o serviço terminar.</Text>
             </Text>
           </View>
@@ -65,33 +66,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: space[5],
-    paddingTop: space[7],
-    paddingBottom: space[5],
-    justifyContent: 'space-between',
+    paddingVertical: space[6],
+    justifyContent: 'center',
+    gap: space[8],
   },
   hero: { gap: space[5] },
-  logo: {
-    width: 78,
-    height: 78,
-    borderRadius: 26,
-    backgroundColor: color.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: color.primary,
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.55,
-    shadowRadius: 24,
-    elevation: 8,
+  logoWordmark: {
+    width: 160,
+    height: 56,
   },
-  logoWave: { fontSize: 36, color: color.textOnAccent },
   headline: { gap: space[3] },
-  appName: {
-    fontSize: font.size.display,
-    fontWeight: font.weight.black,
-    color: color.text,
-    letterSpacing: font.tracking.display * font.size.display,
-    lineHeight: font.size.display * font.lineHeight.tight,
-  },
   tagline: {
     fontSize: font.size.h3,
     color: color.textSoft,

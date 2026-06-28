@@ -27,7 +27,7 @@ export default function EscrowConfirmedScreen() {
 
           {/* Heading + body */}
           <View style={styles.textBlock}>
-            <Text style={styles.heading}>Pagamento retido{'\n'}com segurança</Text>
+            <Text style={styles.heading}>Pagamento retido com segurança</Text>
             <Text style={styles.body}>
               Seu dinheiro fica retido na Onda e só é liberado para o profissional quando você{' '}
               <Text style={styles.bodyBold}>confirmar a conclusão</Text> do serviço.
