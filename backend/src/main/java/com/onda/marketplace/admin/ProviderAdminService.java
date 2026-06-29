@@ -13,7 +13,6 @@ import java.util.List;
  * filtrados por {@code statusVerificacao}.
  */
 @Service
-@SuppressWarnings("null")
 public class ProviderAdminService {
 
     private final ProviderProfileRepository providerProfileRepository;

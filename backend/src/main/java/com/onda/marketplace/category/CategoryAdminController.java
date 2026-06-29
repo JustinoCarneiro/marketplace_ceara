@@ -16,7 +16,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/admin/categories")
 @PreAuthorize("hasRole('ADMIN')")
-@SuppressWarnings("null")
 public class CategoryAdminController {
 
     private final CategoryService categoryService;
