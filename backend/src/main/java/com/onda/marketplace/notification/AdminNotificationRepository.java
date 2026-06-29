@@ -1,6 +1,8 @@
 package com.onda.marketplace.notification;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.UUID;
@@ -18,4 +20,9 @@ public interface AdminNotificationRepository extends JpaRepository<AdminNotifica
 
     /** Contagem de não lidas para o badge do painel. */
     long countByLidaFalse();
+
+    /** Marca todas as não lidas como lidas (US30); retorna quantas foram afetadas. */
+    @Modifying
+    @Query("update AdminNotification n set n.lida = true where n.lida = false")
+    int marcarTodasLidas();
 }

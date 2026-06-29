@@ -16,6 +16,13 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);
 
+    // Lista para o painel admin (US25) — fetch join do usuário evita lazy fora da transação
+    @Query("select p from ProviderProfile p join fetch p.user")
+    List<ProviderProfile> findAllWithUser();
+
+    @Query("select p from ProviderProfile p join fetch p.user where p.statusVerificacao = :status")
+    List<ProviderProfile> findByStatusWithUser(@Param("status") ProviderStatus status);
+
     // PostGIS ST_DWithin sobre índice GiST — SLA p95 < 300ms (TS03)
     @Query(nativeQuery = true, value = """
             SELECT pp.id,

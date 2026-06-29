@@ -126,4 +126,16 @@ class NotificationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "NOTIFICATION_NOT_FOUND");
     }
+
+    // ----- marcarTodasLidas -----
+
+    @Test
+    void marcarTodasLidas_delegaAoRepositorio_eRetornaAfetadas() {
+        when(repository.marcarTodasLidas()).thenReturn(3);
+
+        int afetadas = service.marcarTodasLidas();
+
+        assertThat(afetadas).isEqualTo(3);
+        verify(repository).marcarTodasLidas();
+    }
 }

@@ -80,6 +80,16 @@ public class NotificationService {
         repository.save(notif);
     }
 
+    /**
+     * Marca todas as notificações não lidas como lidas (US30).
+     *
+     * @return quantidade de notificações afetadas
+     */
+    @Transactional
+    public int marcarTodasLidas() {
+        return repository.marcarTodasLidas();
+    }
+
     // --- privado ---
 
     private void enviarCanaisExternos(String tipo, UUID refId) {

@@ -65,6 +65,12 @@ public class User {
     public UserRole getRole()      { return role; }
     public boolean  isAtivo()      { return ativo; }
 
+    /** Suspende o acesso do usuário (US26 — gestão pelo admin). */
+    public void suspender() { this.ativo = false; }
+
+    /** Reativa o acesso do usuário (US26). */
+    public void reativar()  { this.ativo = true; }
+
     @PreUpdate
     void onUpdate() { this.updatedAt = Instant.now(); }
 }

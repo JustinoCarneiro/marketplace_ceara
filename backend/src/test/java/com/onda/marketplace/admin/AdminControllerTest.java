@@ -42,6 +42,8 @@ class AdminControllerTest {
     @MockBean AdminReportService  adminReportService;
     @MockBean AdminQueryService   adminQueryService;
     @MockBean NotificationService notificationService;
+    @MockBean UserAdminService     userAdminService;
+    @MockBean ProviderAdminService providerAdminService;
 
     @Test
     void resolverDisputa_retorna200_eDelegaAoServico() throws Exception {
@@ -162,5 +164,68 @@ class AdminControllerTest {
                 .andExpect(status().isAccepted());
 
         verify(adminQueryService).reprocessarOutbox(outboxId);
+    }
+
+    // --- novos endpoints: notificações, usuários e prestadores ---
+
+    @Test
+    void markAllNotificationsRead_retorna200_eDelega() throws Exception {
+        mvc.perform(post("/api/v1/admin/notifications/mark-all-read").with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(notificationService).marcarTodasLidas();
+    }
+
+    @Test
+    void users_retorna200_comLista() throws Exception {
+        when(userAdminService.listar(any())).thenReturn(List.of(
+                new UserAdminDto(UUID.randomUUID(), "Maria", "maria@x.com", "ROLE_CLIENT", "ATIVO")));
+
+        mvc.perform(get("/api/v1/admin/users"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nome").value("Maria"))
+                .andExpect(jsonPath("$[0].status").value("ATIVO"));
+    }
+
+    @Test
+    void suspendUser_retorna200_eDelega() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/users/{id}/suspend", id).with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(userAdminService).suspender(id);
+    }
+
+    @Test
+    void providers_retorna200_comLista() throws Exception {
+        UUID userId = UUID.randomUUID();
+        when(providerAdminService.listar(any())).thenReturn(List.of(
+                new ProviderAdminDto(userId, "João", "eletrica", "VERIFICADO", null)));
+
+        mvc.perform(get("/api/v1/admin/providers"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nome").value("João"))
+                .andExpect(jsonPath("$[0].statusVerificacao").value("VERIFICADO"));
+    }
+
+    @Test
+    void verifyProvider_retorna200_eDelegaAprovar() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/providers/{userId}/verify", userId).with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(moderationService).moderar(userId, ModerationAction.APROVAR);
+    }
+
+    @Test
+    void rejectProvider_retorna200_eDelegaReprovar() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/providers/{userId}/reject", userId).with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(moderationService).moderar(userId, ModerationAction.REPROVAR);
     }
 }

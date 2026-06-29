@@ -197,12 +197,16 @@ Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação ad
 | `POST /api/v1/admin/providers/{id}/verify` | `POST /api/v1/admin/providers/{userId}/moderate` |
 | `POST /api/v1/disputes/{id}/resolve` | `POST /api/v1/admin/disputes/{serviceRequestId}/resolve` |
 
-**Especificados mas NÃO implementados no backend** (apesar de os módulos estarem marcados ✅ — pendência real, não só de doc):
-- `POST /api/v1/services/ai/suggest` (US14/M04) — não há endpoint de IA.
-- `GET /api/v1/transactions/{id}` (US07/M06) — prestador não tem GET público da transação retida.
-- `GET/POST/PATCH /api/v1/admin/categories` (US28/M10) — tabela `service_categories` existe, mas sem CRUD no backend.
-- `GET /api/v1/admin/users` + suspend/reactivate (US26/M10) — sem endpoints de gestão de usuários.
-- `GET /api/v1/admin/audit` + tabela `admin_audit_log` (US22/TS09) — auditoria não implementada (sem tabela/entidade/endpoint).
+**Implementado em 2026-06-29** (fechando parte do drift; rotas reais que o front já consumia):
+- `GET/POST/PATCH /api/v1/admin/categories` (US28) — CRUD do catálogo (`category` pkg).
+- `GET /api/v1/admin/users` + `POST .../{id}/suspend|reactivate` (US26) — admin nunca é suspenso.
+- `GET /api/v1/admin/providers` + `POST .../{userId}/verify|reject` (US25) — lista + atalhos de moderação.
+- `POST /api/v1/admin/notifications/mark-all-read` (US30).
+
+**Pendências de backend ainda em aberto** (detalhe em `docs/PENDENCIAS_BACKEND.md`):
+- `POST /api/v1/services/ai/suggest` (US14/M04) — endpoint de IA com fallback manual obrigatório.
+- `GET /api/v1/transactions/{id}` (US07/M06) — visão da transação retida pelo prestador.
+- `GET /api/v1/admin/audit-logs` + tabela `admin_audit_log` (US22/TS09) — trilha de auditoria.
 
 Alinhados ao projetado: `nearby`, `payments/webhook`, `admin/metrics`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf`.
 

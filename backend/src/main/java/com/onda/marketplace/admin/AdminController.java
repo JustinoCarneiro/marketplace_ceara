@@ -4,6 +4,7 @@ import com.onda.marketplace.notification.AdminNotificationDto;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxStatus;
 import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.provider.ProviderStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,22 +26,28 @@ import java.util.UUID;
 @SuppressWarnings("null")
 public class AdminController {
 
-    private final MediationService   mediationService;
-    private final ModerationService  moderationService;
-    private final AdminReportService adminReportService;
-    private final AdminQueryService  adminQueryService;
+    private final MediationService    mediationService;
+    private final ModerationService   moderationService;
+    private final AdminReportService  adminReportService;
+    private final AdminQueryService   adminQueryService;
     private final NotificationService notificationService;
+    private final UserAdminService    userAdminService;
+    private final ProviderAdminService providerAdminService;
 
     public AdminController(MediationService mediationService,
                            ModerationService moderationService,
                            AdminReportService adminReportService,
                            AdminQueryService adminQueryService,
-                           NotificationService notificationService) {
-        this.mediationService    = mediationService;
-        this.moderationService   = moderationService;
-        this.adminReportService  = adminReportService;
-        this.adminQueryService   = adminQueryService;
-        this.notificationService = notificationService;
+                           NotificationService notificationService,
+                           UserAdminService userAdminService,
+                           ProviderAdminService providerAdminService) {
+        this.mediationService     = mediationService;
+        this.moderationService    = moderationService;
+        this.adminReportService   = adminReportService;
+        this.adminQueryService    = adminQueryService;
+        this.notificationService  = notificationService;
+        this.userAdminService     = userAdminService;
+        this.providerAdminService = providerAdminService;
     }
 
     @PostMapping("/disputes/{serviceRequestId}/resolve")
@@ -142,5 +149,56 @@ public class AdminController {
     public ResponseEntity<Void> reprocessarOutbox(@PathVariable UUID outboxId) {
         adminQueryService.reprocessarOutbox(outboxId);
         return ResponseEntity.accepted().build();
+    }
+
+    /** Marca todas as notificações não lidas como lidas (US30). */
+    @PostMapping("/notifications/mark-all-read")
+    public ResponseEntity<Void> markAllNotificationsRead() {
+        notificationService.marcarTodasLidas();
+        return ResponseEntity.ok().build();
+    }
+
+    // --- M10: gestão de usuários (US26) ---
+
+    /** Lista usuários, com busca opcional por nome/e-mail (US26). */
+    @GetMapping("/users")
+    public ResponseEntity<List<UserAdminDto>> users(
+            @RequestParam(required = false) String q) {
+        return ResponseEntity.ok(userAdminService.listar(q));
+    }
+
+    @PostMapping("/users/{id}/suspend")
+    public ResponseEntity<Void> suspendUser(@PathVariable UUID id) {
+        userAdminService.suspender(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/users/{id}/reactivate")
+    public ResponseEntity<Void> reactivateUser(@PathVariable UUID id) {
+        userAdminService.reativar(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // --- M10: lista e moderação de prestadores (US25) ---
+
+    /** Lista prestadores, com filtro opcional por {@code ?statusVerificacao=} (US25). */
+    @GetMapping("/providers")
+    public ResponseEntity<List<ProviderAdminDto>> providers(
+            @RequestParam(required = false) ProviderStatus statusVerificacao) {
+        return ResponseEntity.ok(providerAdminService.listar(statusVerificacao));
+    }
+
+    /** Aprova a verificação do prestador (US25) — atalho para {@code moderate=APROVAR}. */
+    @PostMapping("/providers/{userId}/verify")
+    public ResponseEntity<Void> verifyProvider(@PathVariable UUID userId) {
+        moderationService.moderar(userId, ModerationAction.APROVAR);
+        return ResponseEntity.ok().build();
+    }
+
+    /** Reprova a verificação do prestador (US25) — atalho para {@code moderate=REPROVAR}. */
+    @PostMapping("/providers/{userId}/reject")
+    public ResponseEntity<Void> rejectProvider(@PathVariable UUID userId) {
+        moderationService.moderar(userId, ModerationAction.REPROVAR);
+        return ResponseEntity.ok().build();
     }
 }
