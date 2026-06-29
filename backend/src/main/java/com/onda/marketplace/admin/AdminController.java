@@ -1,5 +1,6 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.notification.AdminNotificationDto;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -33,6 +34,7 @@ public class AdminController {
     private final NotificationService notificationService;
     private final UserAdminService    userAdminService;
     private final ProviderAdminService providerAdminService;
+    private final AuditService        auditService;
 
     public AdminController(MediationService mediationService,
                            ModerationService moderationService,
@@ -40,7 +42,8 @@ public class AdminController {
                            AdminQueryService adminQueryService,
                            NotificationService notificationService,
                            UserAdminService userAdminService,
-                           ProviderAdminService providerAdminService) {
+                           ProviderAdminService providerAdminService,
+                           AuditService auditService) {
         this.mediationService     = mediationService;
         this.moderationService    = moderationService;
         this.adminReportService   = adminReportService;
@@ -48,6 +51,12 @@ public class AdminController {
         this.notificationService  = notificationService;
         this.userAdminService     = userAdminService;
         this.providerAdminService = providerAdminService;
+        this.auditService         = auditService;
+    }
+
+    /** Extrai o id do admin autenticado (subject do JWT). */
+    private static UUID adminId(Authentication auth) {
+        return auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
     }
 
     @PostMapping("/disputes/{serviceRequestId}/resolve")
@@ -56,17 +65,21 @@ public class AdminController {
             @Valid @RequestBody ResolveDisputeRequest request,
             Authentication auth) {
 
-        UUID adminId = auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
+        UUID adminId = adminId(auth);
         mediationService.resolver(serviceRequestId, adminId, request);
+        auditService.registrar(adminId, "RESOLVER_DISPUTA", "service_request", serviceRequestId, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/providers/{userId}/moderate")
     public ResponseEntity<Void> moderarPrestador(
             @PathVariable UUID userId,
-            @Valid @RequestBody ModerateRequest request) {
+            @Valid @RequestBody ModerateRequest request,
+            Authentication auth) {
 
         moderationService.moderar(userId, request.action());
+        auditService.registrar(adminId(auth), "MODERAR_PRESTADOR", "provider", userId,
+                request.action().name());
         return ResponseEntity.ok().build();
     }
 
@@ -146,8 +159,9 @@ public class AdminController {
     }
 
     @PostMapping("/outbox/{outboxId}/reprocess")
-    public ResponseEntity<Void> reprocessarOutbox(@PathVariable UUID outboxId) {
+    public ResponseEntity<Void> reprocessarOutbox(@PathVariable UUID outboxId, Authentication auth) {
         adminQueryService.reprocessarOutbox(outboxId);
+        auditService.registrar(adminId(auth), "REPROCESSAR_OUTBOX", "outbox_event", outboxId, null);
         return ResponseEntity.accepted().build();
     }
 
@@ -168,14 +182,16 @@ public class AdminController {
     }
 
     @PostMapping("/users/{id}/suspend")
-    public ResponseEntity<Void> suspendUser(@PathVariable UUID id) {
+    public ResponseEntity<Void> suspendUser(@PathVariable UUID id, Authentication auth) {
         userAdminService.suspender(id);
+        auditService.registrar(adminId(auth), "SUSPENDER_USUARIO", "user", id, null);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/users/{id}/reactivate")
-    public ResponseEntity<Void> reactivateUser(@PathVariable UUID id) {
+    public ResponseEntity<Void> reactivateUser(@PathVariable UUID id, Authentication auth) {
         userAdminService.reativar(id);
+        auditService.registrar(adminId(auth), "REATIVAR_USUARIO", "user", id, null);
         return ResponseEntity.ok().build();
     }
 
@@ -190,15 +206,17 @@ public class AdminController {
 
     /** Aprova a verificação do prestador (US25) — atalho para {@code moderate=APROVAR}. */
     @PostMapping("/providers/{userId}/verify")
-    public ResponseEntity<Void> verifyProvider(@PathVariable UUID userId) {
+    public ResponseEntity<Void> verifyProvider(@PathVariable UUID userId, Authentication auth) {
         moderationService.moderar(userId, ModerationAction.APROVAR);
+        auditService.registrar(adminId(auth), "VERIFICAR_PRESTADOR", "provider", userId, null);
         return ResponseEntity.ok().build();
     }
 
     /** Reprova a verificação do prestador (US25) — atalho para {@code moderate=REPROVAR}. */
     @PostMapping("/providers/{userId}/reject")
-    public ResponseEntity<Void> rejectProvider(@PathVariable UUID userId) {
+    public ResponseEntity<Void> rejectProvider(@PathVariable UUID userId, Authentication auth) {
         moderationService.moderar(userId, ModerationAction.REPROVAR);
+        auditService.registrar(adminId(auth), "REPROVAR_PRESTADOR", "provider", userId, null);
         return ResponseEntity.ok().build();
     }
 }

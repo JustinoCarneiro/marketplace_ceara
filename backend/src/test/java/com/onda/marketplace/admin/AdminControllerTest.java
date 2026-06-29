@@ -1,6 +1,7 @@
 package com.onda.marketplace.admin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.shared.TestSecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,7 @@ class AdminControllerTest {
     @MockBean NotificationService notificationService;
     @MockBean UserAdminService     userAdminService;
     @MockBean ProviderAdminService providerAdminService;
+    @MockBean AuditService         auditService;
 
     @Test
     void resolverDisputa_retorna200_eDelegaAoServico() throws Exception {
@@ -195,6 +197,7 @@ class AdminControllerTest {
                 .andExpect(status().isOk());
 
         verify(userAdminService).suspender(id);
+        verify(auditService).registrar(any(), eq("SUSPENDER_USUARIO"), eq("user"), eq(id), any());
     }
 
     @Test
