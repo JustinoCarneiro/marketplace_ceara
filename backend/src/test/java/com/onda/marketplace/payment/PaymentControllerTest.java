@@ -93,8 +93,6 @@ class PaymentControllerTest {
 
     @Test
     void getTransaction_participante_retorna200() throws Exception {
-        var tx = new TransactionDto(UUID.randomUUID(), SR_ID, BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), "PIX", "RETIDO", Instant.now());
         when(requestRepository.isParticipante(any(), any())).thenReturn(true);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(
                 new Transaction(SR_ID, BigDecimal.valueOf(200), BigDecimal.valueOf(30),
