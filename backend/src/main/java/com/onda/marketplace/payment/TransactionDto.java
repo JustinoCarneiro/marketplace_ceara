@@ -8,13 +8,16 @@ public record TransactionDto(
         UUID       id,
         UUID       serviceRequestId,
         BigDecimal valorTotal,
+        BigDecimal valorComissao,
         String     metodo,
         String     statusPagamento,
         Instant    createdAt
 ) {
-    static TransactionDto from(Transaction t) {
+    public static TransactionDto from(Transaction t) {
         return new TransactionDto(
                 t.getId(), t.getServiceRequestId(), t.getValorTotal(),
-                t.getMetodo().name(), t.getStatusPagamento().name(), t.getCreatedAt());
+                t.getValorComissao(), t.getMetodo().name(),
+                t.getStatusPagamento().name(), t.getCreatedAt());
     }
 }
+

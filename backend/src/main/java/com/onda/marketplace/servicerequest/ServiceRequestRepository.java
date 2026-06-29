@@ -19,4 +19,15 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
 
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
+
+    // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
+    @Query("""
+        SELECT CASE WHEN EXISTS(
+            SELECT 1 FROM ServiceRequest s WHERE s.id = :srId AND s.cliente.id = :userId
+        ) OR EXISTS(
+            SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = :srId
+                AND p.prestadorId = :userId AND p.status = 'ACEITA'
+        ) THEN true ELSE false END
+        """)
+    boolean isParticipante(@Param("srId") UUID srId, @Param("userId") UUID userId);
 }

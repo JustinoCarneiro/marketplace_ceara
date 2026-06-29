@@ -9,12 +9,12 @@
 | Fase | Skill | Entregável |
 |---|---|---|
 | 1 · Spec Viva | `onda-spec-viva` | `CLAUDE.md` + `docs/spec.md` ✅ |
-| 2 · Layout | `onda-direcao-visual` (sem identidade) + `onda-layout` | Protótipo aprovado ⏳ |
+| 2 · Layout | `onda-direcao-visual` + `onda-layout` | `design/tokens.css` + `DESIGN.md` + protótipo P0 ✅ |
 | 3 · Blueprint | `onda-blueprint` | **Este ROADMAP + contratos** ✅ |
 | 4 · XP Coding | `onda-xp-tdd` | Módulos testados e commitados ✅ M00–M12 (todos concluídos) |
 | 5 · Homologação | `onda-homologacao` | Deploy em produção |
 
-> **Decisão de prazo (Gate G2):** `design/tokens.css` **não existe** → projeto **sem identidade visual**. A Fase 2 roda **2a (direção visual) + 2b (layout) = 4 dias úteis**.
+> **Decisão de prazo (Gate G2):** Fase 2 concluída — `design/tokens.css` (172 LOC, direção "Maré Clara"), `DESIGN.md`, protótipo P0 normalizados.
 
 ---
 
@@ -197,16 +197,14 @@ Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação ad
 | `POST /api/v1/admin/providers/{id}/verify` | `POST /api/v1/admin/providers/{userId}/moderate` |
 | `POST /api/v1/disputes/{id}/resolve` | `POST /api/v1/admin/disputes/{serviceRequestId}/resolve` |
 
-**Implementado em 2026-06-29** (fechando parte do drift; rotas reais que o front já consumia):
+**Implementado em 2026-06-29** (fechando drift front↔back):
 - `GET/POST/PATCH /api/v1/admin/categories` (US28) — CRUD do catálogo (`category` pkg).
 - `GET /api/v1/admin/users` + `POST .../{id}/suspend|reactivate` (US26) — admin nunca é suspenso.
 - `GET /api/v1/admin/providers` + `POST .../{userId}/verify|reject` (US25) — lista + atalhos de moderação.
 - `POST /api/v1/admin/notifications/mark-all-read` (US30).
-
-**Pendências de backend ainda em aberto** (detalhe em `docs/PENDENCIAS_BACKEND.md`):
+- `GET /api/v1/admin/audit-logs` (US22/TS09) — trilha de auditoria append-only + hooks em 10 mutações admin.
+- `GET /api/v1/transactions/{serviceRequestId}` (US07/M06) — visão da transação para participantes do pedido.
 - `POST /api/v1/services/ai/suggest` (US14/M04) — endpoint de IA com fallback manual obrigatório.
-- `GET /api/v1/transactions/{id}` (US07/M06) — visão da transação retida pelo prestador.
-- `GET /api/v1/admin/audit-logs` + tabela `admin_audit_log` (US22/TS09) — trilha de auditoria.
 
 Alinhados ao projetado: `nearby`, `payments/webhook`, `admin/metrics`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf`.
 

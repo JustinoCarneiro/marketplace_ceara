@@ -1,6 +1,7 @@
 package com.onda.marketplace.payment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.shared.TestSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +30,8 @@ class PaymentControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @MockBean  PaymentService paymentService;
+    @MockBean  TransactionRepository transactionRepository;
+    @MockBean  ServiceRequestRepository requestRepository;
 
     private static final UUID   SR_ID          = UUID.randomUUID();
     private static final UUID   IDEM_ID        = UUID.randomUUID();
@@ -36,7 +40,7 @@ class PaymentControllerTest {
     @Test
     void initiatePayment_validRequest_returns201() throws Exception {
         var dto = new TransactionDto(UUID.randomUUID(), SR_ID, BigDecimal.valueOf(250),
-                "PIX", "PENDENTE", Instant.now());
+                BigDecimal.valueOf(37.50), "PIX", "PENDENTE", Instant.now());
         when(paymentService.initiate(any(), any(), any(), any())).thenReturn(dto);
 
         mvc.perform(post("/api/v1/service-requests/{id}/payment", SR_ID)
@@ -85,5 +89,28 @@ class PaymentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(payload)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getTransaction_participante_retorna200() throws Exception {
+        var tx = new TransactionDto(UUID.randomUUID(), SR_ID, BigDecimal.valueOf(200),
+                BigDecimal.valueOf(30), "PIX", "RETIDO", Instant.now());
+        when(requestRepository.isParticipante(any(), any())).thenReturn(true);
+        when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(
+                new Transaction(SR_ID, BigDecimal.valueOf(200), BigDecimal.valueOf(30),
+                        BigDecimal.valueOf(0.15), PaymentMethod.PIX, "key-1")));
+
+        mvc.perform(get("/api/v1/transactions/{srId}", SR_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusPagamento").value("PENDENTE"))
+                .andExpect(jsonPath("$.valorTotal").value(200));
+    }
+
+    @Test
+    void getTransaction_naoParticipante_retorna422() throws Exception {
+        when(requestRepository.isParticipante(any(), any())).thenReturn(false);
+
+        mvc.perform(get("/api/v1/transactions/{srId}", SR_ID))
+                .andExpect(status().isUnprocessableEntity());
     }
 }
