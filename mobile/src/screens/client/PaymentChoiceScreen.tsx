@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
 
   // Modal de CPF
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,42,51,0.55)' },
+  modalDim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(14,42,51,0.55)' },
   modalSheet: {
     backgroundColor: color.surface,
     borderTopLeftRadius: radius.sheet,
