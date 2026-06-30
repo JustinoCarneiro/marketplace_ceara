@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import { ProviderData } from '../../components/ProviderCard';
 import { API_BASE } from '../../api/config';
+import ScreenState from '../../components/ScreenState';
 
 const CATEGORIES = [
   {
@@ -69,29 +70,31 @@ export default function HomeScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [nearby, setNearby] = useState<ProviderData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nearbyError, setNearbyError] = useState(false);
 
   const firstName = nome?.split(' ')[0] ?? 'você';
   const initStr = nome ? nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() : 'EU';
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(
-          `${API_BASE}/providers/nearby?lat=-3.7319&lng=-38.5267&raioKm=8`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setNearby(Array.isArray(data) ? data.slice(0, 4) : []);
-        }
-      } catch {
-        setNearby([]);
-      } finally {
-        setLoading(false);
-      }
+  async function loadNearby() {
+    setNearbyError(false);
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/providers/nearby?lat=-3.7319&lng=-38.5267&raioKm=8`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) throw new Error('HTTP error');
+      const data = await res.json();
+      setNearby(Array.isArray(data) ? data.slice(0, 4) : []);
+    } catch {
+      setNearbyError(true);
+      setNearby([]);
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, []);
+  }
+
+  useEffect(() => { loadNearby(); }, []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -153,18 +156,17 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.providerList}>
-          {loading ? (
-            <View style={styles.loadingBox}>
-              <ActivityIndicator color={color.primary} />
+          {loading || nearbyError || nearby.length === 0 ? (
+            <View style={styles.stateBox}>
+              <ScreenState
+                state={loading ? 'loading' : nearbyError ? 'error' : 'empty'}
+                icon="map-pin"
+                emptyTitle="Nenhum prestador próximo"
+                emptyBody="Aumente o raio ou crie um pedido para receber propostas."
+                action={{ label: 'Criar pedido', onPress: () => nav.navigate('NewRequest', {}) }}
+                onRetry={loadNearby}
+              />
             </View>
-          ) : nearby.length === 0 ? (
-            <TouchableOpacity
-              style={styles.emptyCard}
-              onPress={() => nav.navigate('NewRequest', {})}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.emptyCardText}>Nenhum prestador encontrado próximo. Toque para criar um pedido.</Text>
-            </TouchableOpacity>
           ) : (
             nearby.map(p => (
               <ProviderCardInline
@@ -309,19 +311,7 @@ const styles = StyleSheet.create({
 
   providerList: { paddingHorizontal: 20, gap: 14, paddingBottom: 24 },
 
-  loadingBox: { height: 80, alignItems: 'center', justifyContent: 'center' },
-
-  emptyCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: color.lineSoft,
-    padding: space[4],
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 80,
-  },
-  emptyCardText: { fontSize: font.size.bodySm, color: color.textSoft, textAlign: 'center' },
+  stateBox: { minHeight: 180 },
 
   card: {
     backgroundColor: color.surface,

@@ -47,6 +47,12 @@ public class ProposalService {
     @Transactional
     public ProposalDto accept(UUID proposalId, UUID clienteId) {
         Proposal proposal = findAtiva(proposalId);
+
+        if (clienteId.equals(proposal.getPrestadorId())) {
+            throw new BusinessException("SELF_HIRE_FORBIDDEN",
+                    "Prestador não pode aceitar o próprio pedido.");
+        }
+
         ServiceRequest sr = proposal.getServiceRequest();
 
         proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA)

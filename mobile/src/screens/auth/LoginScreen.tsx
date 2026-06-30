@@ -101,8 +101,10 @@ export default function LoginScreen() {
                   style={styles.eyeBtn}
                   onPress={() => setShowPass(v => !v)}
                   hitSlop={8}
+                  accessibilityLabel={showPass ? 'Ocultar senha' : 'Mostrar senha'}
+                  accessibilityRole="button"
                 >
-                  <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color={color.textFaint} />
+                  <Feather name={showPass ? 'eye-off' : 'eye'} size={18} color={color.textFaint} accessibilityElementsHidden />
                 </TouchableOpacity>
               </View>
               {error ? (

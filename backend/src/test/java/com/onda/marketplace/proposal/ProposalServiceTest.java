@@ -1,7 +1,5 @@
 package com.onda.marketplace.proposal;
 
-import com.onda.marketplace.auth.User;
-import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -30,9 +28,7 @@ class ProposalServiceTest {
 
     ProposalService service;
 
-    private final User cliente = User.builder()
-            .nome("Ana").email("ana@test.com")
-            .senhaHash("$2a$h").role(UserRole.ROLE_CLIENT).build();
+    private static final UUID CLIENTE_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
@@ -62,7 +58,7 @@ class ProposalServiceTest {
                 .thenReturn(List.of(propAlvo, propOutra));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        ProposalDto dto = service.accept(propAlvo.getId(), cliente.getId());
+        ProposalDto dto = service.accept(propAlvo.getId(), CLIENTE_ID);
 
         assertThat(dto.status()).isEqualTo("ACEITA");
         assertThat(propOutra.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
@@ -76,7 +72,7 @@ class ProposalServiceTest {
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        ProposalDto dto = service.reject(prop.getId(), cliente.getId());
+        ProposalDto dto = service.reject(prop.getId(), CLIENTE_ID);
 
         assertThat(dto.status()).isEqualTo("RECUSADA");
     }

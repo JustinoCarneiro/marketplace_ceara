@@ -2,13 +2,14 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp } from '../../navigation/types';
 import { useAuthStore } from '../../store/auth';
+import ScreenState from '../../components/ScreenState';
 
 interface Request {
   id: string;
@@ -126,16 +127,20 @@ export default function MyRequestsScreen() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [tab, setTab] = useState<'cliente' | 'prestador'>('cliente');
 
   async function load() {
+    setHasError(false);
     try {
       const res = await fetch(`${API_BASE}/service-requests/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error('HTTP error');
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
     } catch {
+      setHasError(true);
       setRequests([]);
     } finally {
       setLoading(false);
@@ -187,16 +192,14 @@ export default function MyRequestsScreen() {
           </View>
         </View>
 
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={COLORS.primary} size="large" />
-          </View>
-        ) : requests.length === 0 ? (
-          <View style={styles.center}>
-            <Feather name="clipboard" size={42} color={COLORS.textFaint} />
-            <Text style={styles.emptyTitle}>Nenhum pedido ainda</Text>
-            <Text style={styles.emptyBody}>Seus chamados aparecerão aqui.</Text>
-          </View>
+        {loading || hasError || requests.length === 0 ? (
+          <ScreenState
+            state={loading ? 'loading' : hasError ? 'error' : 'empty'}
+            icon="clipboard"
+            emptyTitle="Nenhum pedido ainda"
+            emptyBody="Seus chamados aparecerão aqui."
+            onRetry={() => { setLoading(true); load(); }}
+          />
         ) : (
           <View style={styles.groups}>
             {GROUP_ORDER.map(g => {
@@ -279,22 +282,6 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#fff',
     fontWeight: '700',
-  },
-  center: {
-    paddingTop: 60,
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  emptyBody: {
-    fontSize: 14,
-    color: COLORS.textSoft,
-    textAlign: 'center',
   },
   groups: {
     paddingHorizontal: 20,

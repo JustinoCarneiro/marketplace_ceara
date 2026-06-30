@@ -216,7 +216,7 @@ class E2EFluxoPrincipalTest {
                 .then()
                 .statusCode(201)
                 .body("valor",    equalTo(250.0f))
-                .body("status",   equalTo("PENDENTE"))
+                .body("status",   equalTo("ATIVA"))
                 .extract().path("id");
     }
 
@@ -244,12 +244,28 @@ class E2EFluxoPrincipalTest {
                 .put("/api/v1/proposals/{id}/accept", proposalId)
                 .then()
                 .statusCode(200)
-                .body("status", equalTo("ACEITO"));
+                // resposta é o ProposalDto: status da PROPOSTA = ACEITA
+                // (o service_request, por sua vez, transiciona para ACEITO)
+                .body("status", equalTo("ACEITA"));
     }
 
     @Test @Order(9)
     @DisplayName("09 · Cliente inicia pagamento → transação PENDENTE criada")
     void iniciarPagamento() {
+        // Antifraude Camada 2: o cliente confirma identidade (CPF) antes do 1º
+        // pagamento — espelha o modal de CPF do app. Sem isso o pagamento é
+        // bloqueado com IDENTITY_REQUIRED (422). CPF distinto do prestador.
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + tokenCliente)
+                .body("""
+                        { "cpf": "111.444.777-35" }
+                        """)
+                .when()
+                .post("/api/v1/auth/verify-identity")
+                .then()
+                .statusCode(204);
+
         var resp = given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", "Bearer " + tokenCliente)
@@ -314,8 +330,8 @@ class E2EFluxoPrincipalTest {
                 .when()
                 .post("/api/v1/service-requests/{id}/start", requestId)
                 .then()
-                .statusCode(200)
-                .body("status", equalTo("EM_ANDAMENTO"));
+                // endpoint /start retorna 200 sem corpo (ResponseEntity<Void>)
+                .statusCode(200);
     }
 
     @Test @Order(13)
@@ -326,8 +342,8 @@ class E2EFluxoPrincipalTest {
                 .when()
                 .post("/api/v1/service-requests/{id}/confirm-completion", requestId)
                 .then()
-                .statusCode(200)
-                .body("status", equalTo("CONCLUIDO"));
+                // endpoint /confirm-completion retorna 200 sem corpo (ResponseEntity<Void>)
+                .statusCode(200);
     }
 
     // ─── Épico 7 — Avaliação ──────────────────────────────────────────────

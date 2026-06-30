@@ -61,8 +61,9 @@ export default function OpenDisputeScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7}>
-            <Feather name="chevron-left" size={22} color={C.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={C.text} accessibilityElementsHidden />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Abrir disputa</Text>
         </View>

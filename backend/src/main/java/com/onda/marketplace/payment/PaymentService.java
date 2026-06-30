@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
 import com.onda.marketplace.servicerequest.ServiceRequest;
@@ -21,6 +22,7 @@ public class PaymentService {
     private final OutboxEventRepository    outboxRepository;
     private final ServiceRequestRepository requestRepository;
     private final ProposalRepository       proposalRepository;
+    private final UserRepository           userRepository;
     private final BigDecimal               percentualComissao;
 
     public PaymentService(
@@ -28,11 +30,13 @@ public class PaymentService {
             OutboxEventRepository outboxRepository,
             ServiceRequestRepository requestRepository,
             ProposalRepository proposalRepository,
+            UserRepository userRepository,
             @Value("${marketplace.comissao:0.15}") BigDecimal percentualComissao) {
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
         this.requestRepository     = requestRepository;
         this.proposalRepository    = proposalRepository;
+        this.userRepository        = userRepository;
         this.percentualComissao    = percentualComissao;
     }
 
@@ -45,6 +49,12 @@ public class PaymentService {
     @Transactional
     public TransactionDto initiate(UUID serviceRequestId, InitiatePaymentRequest req,
                                    String idempotencyKey, UUID clienteId) {
+        userRepository.findById(clienteId).ifPresent(user -> {
+            if (user.getCpfHash() == null) {
+                throw new BusinessException("IDENTITY_REQUIRED",
+                        "Confirme sua identidade antes de pagar.");
+            }
+        });
         return transactionRepository.findByIdempotencyKey(idempotencyKey)
                 .map(TransactionDto::from)
                 .orElseGet(() -> criar(serviceRequestId, req, idempotencyKey, clienteId));

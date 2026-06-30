@@ -66,8 +66,9 @@ export default function RateScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backBtn}>
-            <Feather name="chevron-left" size={22} color={COLORS.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backBtn}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
 
           <View style={styles.hero}>
@@ -83,9 +84,12 @@ export default function RateScreen() {
             <Text style={styles.heroTitle}>Como foi o serviço de {avaliadoNome}?</Text>
           </View>
 
-          <View style={styles.starsRow}>
+          <View style={styles.starsRow} accessibilityRole="radiogroup" accessibilityLabel="Nota de 1 a 5 estrelas">
             {[1, 2, 3, 4, 5].map(i => (
-              <TouchableOpacity key={i} onPress={() => setNota(i)} hitSlop={6} activeOpacity={0.7}>
+              <TouchableOpacity key={i} onPress={() => setNota(i)} hitSlop={6} activeOpacity={0.7}
+                accessibilityRole="radio"
+                accessibilityLabel={`${i} estrela${i > 1 ? 's' : ''}`}
+                accessibilityState={{ checked: nota === i }}>
                 <Text style={[styles.star, { color: i <= nota ? COLORS.warmSun : COLORS.line }]}>★</Text>
               </TouchableOpacity>
             ))}

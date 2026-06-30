@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator,
+  ActivityIndicator, TextInput, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -27,22 +27,75 @@ export default function PaymentChoiceScreen() {
   const [method, setMethod] = useState<Method>('pix');
   const [loading, setLoading] = useState(false);
 
-  async function pay() {
-    setLoading(true);
+  // Coleta de CPF no primeiro pagamento (antifraude Camada 2)
+  const [showCpfModal, setShowCpfModal] = useState(false);
+  const [cpf, setCpf] = useState('');
+  const [cpfLoading, setCpfLoading] = useState(false);
+  const [cpfError, setCpfError] = useState('');
+
+  function formatCpf(raw: string) {
+    const digits = raw.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  }
+
+  async function submitCpf() {
+    const digits = cpf.replace(/\D/g, '');
+    if (digits.length !== 11) { setCpfError('CPF inválido'); return; }
+    setCpfLoading(true);
+    setCpfError('');
     try {
-      await fetch(`${API_BASE}/payments/initiate`, {
+      const res = await fetch(`${API_BASE}/auth/verify-identity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ requestId, method }),
+        body: JSON.stringify({ cpf: digits }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCpfError(data.message ?? 'Erro ao verificar CPF.');
+        return;
+      }
+      setShowCpfModal(false);
+      await doPay();
+    } finally {
+      setCpfLoading(false);
+    }
+  }
+
+  async function doPay() {
+    setLoading(true);
+    try {
+      const idempotencyKey = `${requestId}-${Date.now()}`;
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}/payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({ metodo: method === 'pix' ? 'PIX' : 'CARTAO' }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.code === 'IDENTITY_REQUIRED') {
+          setShowCpfModal(true);
+          return;
+        }
+      }
       if (method === 'pix') {
         nav.replace('PaymentPix', { requestId, valor: total });
       } else {
         nav.replace('PaymentCard', { requestId, valor: total });
       }
-    } catch {
+    } finally {
       setLoading(false);
     }
+  }
+
+  async function pay() {
+    await doPay();
   }
 
   return (
@@ -135,6 +188,56 @@ export default function PaymentChoiceScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Modal de verificação de identidade (primeiro pagamento) */}
+      <Modal visible={showCpfModal} transparent animationType="slide" onRequestClose={() => setShowCpfModal(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity style={styles.modalDim} onPress={() => setShowCpfModal(false)} activeOpacity={1} />
+          <View style={styles.modalSheet}>
+            <View style={styles.handle} />
+            <View style={styles.modalIcon}>
+              <Feather name="shield" size={28} color={color.primary} />
+            </View>
+            <Text style={styles.modalTitle}>Confirme sua identidade</Text>
+            <Text style={styles.modalBody}>
+              Para sua segurança, precisamos do seu CPF no primeiro pagamento. Ele não é armazenado — só um código de verificação.
+            </Text>
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>CPF</Text>
+              <TextInput
+                style={[styles.field, !!cpfError && styles.fieldError]}
+                value={cpf}
+                onChangeText={t => { setCpf(formatCpf(t)); setCpfError(''); }}
+                placeholder="000.000.000-00"
+                placeholderTextColor={color.textFaint}
+                keyboardType="numeric"
+                maxLength={14}
+                accessibilityLabel="Campo CPF"
+              />
+              {!!cpfError && (
+                <View style={styles.errorRow}>
+                  <Feather name="alert-circle" size={13} color={color.danger} />
+                  <Text style={styles.errorText}>{cpfError}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[styles.cta, cpfLoading && { opacity: 0.7 }]}
+              onPress={submitCpf}
+              disabled={cpfLoading}
+              activeOpacity={0.85}
+            >
+              {cpfLoading
+                ? <ActivityIndicator color={color.textOnAccent} />
+                : <Text style={styles.ctaText}>Confirmar e pagar</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -250,4 +353,61 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
+
+  // Modal de CPF
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(14,42,51,0.55)' },
+  modalSheet: {
+    backgroundColor: color.surface,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingHorizontal: space[5],
+    paddingBottom: space[5] + 8,
+    paddingTop: space[3],
+    gap: 14,
+  },
+  modalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E2EEF2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: font.weight.black,
+    color: color.text,
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
+  modalBody: {
+    fontSize: font.size.bodySm,
+    color: color.textSoft,
+    textAlign: 'center',
+    lineHeight: font.size.bodySm * 1.5,
+  },
+  fieldGroup: { gap: 7 },
+  fieldLabel: {
+    fontSize: font.size.eyebrow,
+    fontWeight: font.weight.semibold,
+    color: color.institutional2,
+    letterSpacing: 0.1,
+    textTransform: 'uppercase',
+  },
+  field: {
+    height: 52,
+    backgroundColor: color.bg,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    paddingHorizontal: 16,
+    fontSize: font.size.body,
+    color: color.text,
+  },
+  fieldError: { borderColor: color.danger, borderWidth: 1.5 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  errorText: { fontSize: font.size.caption, color: color.danger, flex: 1 },
 });

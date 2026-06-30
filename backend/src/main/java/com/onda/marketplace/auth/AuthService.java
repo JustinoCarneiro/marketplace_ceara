@@ -22,6 +22,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService            jwtService;
     private final PasswordEncoder       passwordEncoder;
+    private final CpfHashService        cpfHashService;
     private final long                  refreshTokenDays;
 
     public AuthService(
@@ -29,12 +30,34 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             JwtService jwtService,
             PasswordEncoder passwordEncoder,
+            CpfHashService cpfHashService,
             @Value("${jwt.refresh-token-days:30}") long refreshTokenDays) {
-        this.userRepository        = userRepository;
+        this.userRepository         = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
-        this.jwtService            = jwtService;
-        this.passwordEncoder       = passwordEncoder;
-        this.refreshTokenDays      = refreshTokenDays;
+        this.jwtService             = jwtService;
+        this.passwordEncoder        = passwordEncoder;
+        this.cpfHashService         = cpfHashService;
+        this.refreshTokenDays       = refreshTokenDays;
+    }
+
+    /**
+     * Registra o CPF do cliente como hash determinístico (HMAC-SHA256) no primeiro pagamento.
+     * Garante unicidade de pessoa na plataforma sem armazenar o CPF em claro (LGPD).
+     */
+    @Transactional
+    public void verifyIdentity(String cpf, UUID userId) {
+        String hash = cpfHashService.hash(cpf);
+        if (userRepository.existsByCpfHash(hash)) {
+            throw new BusinessException("CPF_ALREADY_REGISTERED",
+                    "Este CPF já está vinculado a outra conta.");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
+        if (user.getCpfHash() != null) {
+            return; // idempotente — já verificado
+        }
+        user.setCpfHash(hash);
+        userRepository.save(user);
     }
 
     @Transactional

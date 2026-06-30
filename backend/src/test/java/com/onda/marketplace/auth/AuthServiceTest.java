@@ -23,12 +23,15 @@ class AuthServiceTest {
     @Mock RefreshTokenRepository refreshTokenRepository;
     @Mock JwtService            jwtService;
     @Mock PasswordEncoder       passwordEncoder;
+    @Mock CpfHashService        cpfHashService;
 
     AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, refreshTokenRepository, jwtService, passwordEncoder, 30L);
+        authService = new AuthService(
+                userRepository, refreshTokenRepository, jwtService,
+                passwordEncoder, cpfHashService, 30L);
     }
 
     @Test

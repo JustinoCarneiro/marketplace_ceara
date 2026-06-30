@@ -87,6 +87,181 @@ function statusDotColor(st: string): string {
   return COLORS.textFaint;
 }
 
+type EscrowStep = { label: string; sublabel: string; state: 'done' | 'active' | 'pending' };
+
+function buildEscrowSteps(
+  status: string,
+  transacao?: { statusPagamento: string; valorTotal: number },
+): EscrowStep[] {
+  const paid   = !!transacao;
+  const held   = paid && transacao!.statusPagamento !== 'PENDENTE';
+  const done   = status === 'CONCLUIDO';
+  const disputa = status === 'EM_DISPUTA';
+  const cancelado = status === 'CANCELADO';
+
+  return [
+    {
+      label: 'Cliente paga',
+      sublabel: paid ? `R$ ${transacao!.valorTotal.toFixed(2).replace('.', ',')}` : 'aguardando pagamento',
+      state: paid ? 'done' : 'active',
+    },
+    {
+      label: 'Retido na Onda',
+      sublabel: disputa ? 'Em disputa' : cancelado ? 'Cancelado' : held ? 'Valor seguro' : 'após confirmação',
+      state: held ? (disputa || cancelado ? 'active' : 'done') : paid ? 'active' : 'pending',
+    },
+    {
+      label: 'Serviço concluído',
+      sublabel: done ? 'Confirmado pelo cliente' : 'aguardando conclusão',
+      state: done ? 'done' : (held && !disputa && !cancelado) ? 'active' : 'pending',
+    },
+    {
+      label: 'Prestador recebe',
+      sublabel: done ? 'Repasse liberado' : 'após conclusão',
+      state: done ? 'done' : 'pending',
+    },
+  ];
+}
+
+function EscrowStepper({
+  status,
+  transacao,
+}: {
+  status: string;
+  transacao?: { statusPagamento: string; valorTotal: number };
+}) {
+  const steps = buildEscrowSteps(status, transacao);
+  return (
+    <View style={escrowStyles.card}>
+      <View style={escrowStyles.header}>
+        <Feather name="shield" size={14} color={COLORS.escrowText} />
+        <Text style={escrowStyles.headerText}>Fluxo do pagamento seguro</Text>
+      </View>
+      <View style={escrowStyles.steps}>
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1;
+          const done   = step.state === 'done';
+          const active = step.state === 'active';
+          return (
+            <View key={i} style={escrowStyles.stepRow}>
+              <View style={escrowStyles.stepLeft}>
+                <View style={[
+                  escrowStyles.dot,
+                  done   && escrowStyles.dotDone,
+                  active && escrowStyles.dotActive,
+                ]}>
+                  {done && <Feather name="check" size={10} color="#fff" />}
+                  {active && <View style={escrowStyles.dotPulse} />}
+                </View>
+                {!isLast && (
+                  <View style={[escrowStyles.connector, done && escrowStyles.connectorDone]} />
+                )}
+              </View>
+              <View style={[escrowStyles.stepContent, isLast && { paddingBottom: 0 }]}>
+                <Text style={[escrowStyles.stepLabel, (done || active) && escrowStyles.stepLabelActive]}>
+                  {step.label}
+                </Text>
+                <Text style={[escrowStyles.stepSub, active && escrowStyles.stepSubActive]}>
+                  {step.sublabel}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const escrowStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: COLORS.escrowBg,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#C8DDE4',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 14,
+  },
+  headerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.escrowText,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  steps: {},
+  stepRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  stepLeft: {
+    alignItems: 'center',
+    width: 20,
+  },
+  dot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#A8C8D4',
+    backgroundColor: COLORS.escrowBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotDone: {
+    borderColor: COLORS.primaryDark,
+    backgroundColor: COLORS.primaryDark,
+  },
+  dotActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  dotPulse: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  connector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#A8C8D4',
+    minHeight: 20,
+  },
+  connectorDone: {
+    backgroundColor: COLORS.primaryDark,
+  },
+  stepContent: {
+    paddingBottom: 14,
+    flex: 1,
+  },
+  stepLabel: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#7A9BA8',
+  },
+  stepLabelActive: {
+    color: COLORS.escrowText,
+    fontWeight: '700',
+  },
+  stepSub: {
+    fontSize: 12,
+    color: '#7A9BA8',
+    marginTop: 1,
+  },
+  stepSubActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+});
+
 export default function RequestDetailScreen() {
   const nav = useNavigation<any>();
   const route = useRoute<any>();
@@ -182,8 +357,9 @@ export default function RequestDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}>
-            <Feather name="chevron-left" size={22} color={COLORS.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
@@ -197,8 +373,9 @@ export default function RequestDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}>
-            <Feather name="chevron-left" size={22} color={COLORS.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
@@ -218,7 +395,8 @@ export default function RequestDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backRow}>
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backRow}
+            accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={COLORS.text} />
             <View style={{ marginLeft: 12 }}>
               <Text style={styles.headerTitle}>Chamado #{request.id.slice(-4)}</Text>
@@ -239,6 +417,8 @@ export default function RequestDetailScreen() {
             </View>
           )}
         </View>
+
+        <EscrowStepper status={st} transacao={request.transacao} />
 
         <View style={styles.timeline}>
           {TIMELINE_STEPS.map((step, i) => {
@@ -329,8 +509,10 @@ export default function RequestDetailScreen() {
               style={styles.btnSos}
               onPress={() => nav.navigate('Sos', { requestId })}
               activeOpacity={0.85}
+              accessibilityLabel="Acionar SOS de emergência"
+              accessibilityRole="button"
             >
-              <Feather name="alert-triangle" size={17} color="#fff" />
+              <Feather name="alert-triangle" size={17} color="#fff" accessibilityElementsHidden />
               <Text style={styles.btnSosText}>SOS</Text>
             </TouchableOpacity>
           )}

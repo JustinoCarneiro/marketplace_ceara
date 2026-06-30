@@ -3,7 +3,12 @@
 # são overrides para que o contexto Spring suba sem variáveis de produção.
 
 spring:
+  # Sobrepõe o H2 do application.yml base de teste: o E2E usa Postgres real
+  # (Testcontainers injeta url/username/password via @DynamicPropertySource).
+  datasource:
+    driver-class-name: org.postgresql.Driver
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: validate       # Flyway cuida do schema
   flyway:

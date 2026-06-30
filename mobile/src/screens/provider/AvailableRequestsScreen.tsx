@@ -10,6 +10,7 @@ import { Feather } from '@expo/vector-icons';
 import type { ProviderNavProp } from '../../navigation/types';
 import { color, font, space, radius, shadow } from '../../theme';
 import { useAuthStore } from '../../store/auth';
+import ScreenState from '../../components/ScreenState';
 
 interface ServiceRequest {
   id: string;
@@ -57,15 +58,19 @@ export default function AvailableRequestsScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const load = useCallback(async () => {
+    setHasError(false);
     try {
       const res = await fetch(`${API_BASE}/providers/available-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error('HTTP error');
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
     } catch {
+      setHasError(true);
       setRequests([]);
     } finally {
       setLoading(false);
@@ -99,15 +104,17 @@ export default function AvailableRequestsScreen() {
           <Text style={styles.headerTitle}>Pedidos disponíveis</Text>
           <Text style={styles.headerSub}>Elétrica · até 10 km</Text>
         </View>
-        <TouchableOpacity style={styles.filterBtn} hitSlop={8}>
-          <Feather name="sliders" size={20} color={color.text} />
+        <TouchableOpacity style={styles.filterBtn} hitSlop={8}
+          accessibilityLabel="Filtros" accessibilityRole="button">
+          <Feather name="sliders" size={20} color={color.text} accessibilityElementsHidden />
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={color.primary} size="large" />
-        </View>
+      {loading || hasError ? (
+        <ScreenState
+          state={loading ? 'loading' : 'error'}
+          onRetry={() => { setLoading(true); load(); }}
+        />
       ) : (
         <FlatList
           data={requests}
@@ -116,11 +123,12 @@ export default function AvailableRequestsScreen() {
           ItemSeparatorComponent={() => <View style={{ height: space[3] + 2 }} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={color.primary} />}
           ListEmptyComponent={
-            <View style={styles.center}>
-              <Feather name="inbox" size={40} color={color.textFaint} />
-              <Text style={styles.emptyTitle}>Nenhum pedido no momento</Text>
-              <Text style={styles.emptySub}>Novos pedidos aparecem aqui em tempo real.</Text>
-            </View>
+            <ScreenState
+              state="empty"
+              icon="inbox"
+              emptyTitle="Nenhum pedido no momento"
+              emptyBody="Novos pedidos aparecem aqui em tempo real."
+            />
           }
           renderItem={({ item: r }) => {
             const ck = catKey(r);
@@ -174,10 +182,6 @@ export default function AvailableRequestsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space[3], padding: space[5] },
-  emptyTitle: { fontSize: font.size.h3, fontWeight: font.weight.bold, color: color.text },
-  emptySub: { fontSize: font.size.caption, color: color.textSoft, textAlign: 'center' },
-
   header: {
     flexDirection: 'row',
     alignItems: 'center',

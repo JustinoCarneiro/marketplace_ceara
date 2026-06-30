@@ -25,6 +25,10 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    // HMAC-SHA256 do CPF — indexado para unique constraint (LGPD: CPF em claro nunca armazenado)
+    @Column(name = "cpf_hash", unique = true)
+    private String cpfHash;
+
     @Column(nullable = false)
     private boolean ativo = true;
 
@@ -64,6 +68,9 @@ public class User {
     public String   getSenhaHash() { return senhaHash; }
     public UserRole getRole()      { return role; }
     public boolean  isAtivo()      { return ativo; }
+    public String   getCpfHash()   { return cpfHash; }
+
+    public void setCpfHash(String hash) { this.cpfHash = hash; }
 
     /** Suspende o acesso do usuário (US26 — gestão pelo admin). */
     public void suspender() { this.ativo = false; }

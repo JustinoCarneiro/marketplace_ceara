@@ -1,5 +1,6 @@
 package com.onda.marketplace.config;
 
+import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.provider.CpfEncryptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,5 +21,10 @@ public class AppConfig {
     @Bean
     CpfEncryptor cpfEncryptor(@Value("${cpf.encryption-key}") String key) {
         return new CpfEncryptor(key);
+    }
+
+    @Bean
+    CpfHashService cpfHashService(@Value("${cpf.encryption-key}") String key) {
+        return new CpfHashService(key);
     }
 }

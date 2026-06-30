@@ -11,6 +11,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
+import ScreenState from '../../components/ScreenState';
 
 type RouteProps = RouteProp<ClientStackParams, 'Results'>;
 
@@ -58,8 +59,11 @@ export default function ResultsScreen() {
     load();
   }, [categoria, raio]);
 
+  const [hasError, setHasError] = useState(false);
+
   async function load() {
     setLoading(true);
+    setHasError(false);
     try {
       const params = new URLSearchParams({
         lat: '-3.7319', lng: '-38.5267',
@@ -69,9 +73,11 @@ export default function ResultsScreen() {
       const res = await fetch(`${API_BASE}/providers/nearby?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error('HTTP error');
       const data = await res.json();
       setProviders(Array.isArray(data) ? data : []);
     } catch {
+      setHasError(true);
       setProviders([]);
     } finally {
       setLoading(false);
@@ -98,8 +104,9 @@ export default function ResultsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.stickyHeader}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.backBtn}>
-            <Feather name="chevron-left" size={22} color={color.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.backBtn}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <Text style={styles.headerTitle}>{titulo}</Text>
@@ -113,8 +120,10 @@ export default function ResultsScreen() {
             style={styles.filterBtn}
             onPress={() => nav.navigate('Filters')}
             hitSlop={8}
+            accessibilityLabel="Filtros"
+            accessibilityRole="button"
           >
-            <Feather name="sliders" size={20} color={color.text} />
+            <Feather name="sliders" size={20} color={color.text} accessibilityElementsHidden />
           </TouchableOpacity>
         </View>
 
@@ -143,17 +152,14 @@ export default function ResultsScreen() {
         </View>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={color.primary} size="large" />
-          <Text style={styles.loadingText}>Buscando na sua região…</Text>
-        </View>
-      ) : filtered.length === 0 ? (
-        <View style={styles.center}>
-          <Feather name="search" size={48} color={color.textFaint} />
-          <Text style={styles.emptyTitle}>Nenhum profissional no seu raio</Text>
-          <Text style={styles.emptyBody}>Tente ampliar o raio ou mudar os filtros.</Text>
-        </View>
+      {loading || hasError || filtered.length === 0 ? (
+        <ScreenState
+          state={loading ? 'loading' : hasError ? 'error' : 'empty'}
+          icon="search"
+          emptyTitle="Nenhum profissional no seu raio"
+          emptyBody="Tente ampliar o raio ou mudar os filtros."
+          onRetry={load}
+        />
       ) : (
         <FlatList
           data={filtered}

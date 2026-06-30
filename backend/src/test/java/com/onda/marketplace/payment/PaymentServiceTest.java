@@ -1,5 +1,8 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
+import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
@@ -32,6 +35,7 @@ class PaymentServiceTest {
     @Mock OutboxEventRepository    outboxRepository;
     @Mock ServiceRequestRepository requestRepository;
     @Mock ProposalRepository       proposalRepository;
+    @Mock UserRepository           userRepository;
 
     PaymentService service;
 
@@ -42,11 +46,20 @@ class PaymentServiceTest {
         service = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                BigDecimal.valueOf(0.15));
+                userRepository, BigDecimal.valueOf(0.15));
+    }
+
+    /** Retorna um usuário com CPF hash registrado (identidade verificada). */
+    private User clienteVerificado() {
+        User u = User.builder().nome("Cliente").email("c@test.com")
+                .senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        u.setCpfHash("abc123hashfake");
+        return u;
     }
 
     @Test
     void initiate_criaTransacaoEOutboxAtomicamente() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
@@ -63,6 +76,7 @@ class PaymentServiceTest {
 
     @Test
     void initiate_outboxTipoEStatusCorretos() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
@@ -81,6 +95,7 @@ class PaymentServiceTest {
 
     @Test
     void initiate_idempotente_retornaExistente() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var existing = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(250),
                 BigDecimal.valueOf(37.5), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-dup");
         when(transactionRepository.findByIdempotencyKey("idem-dup")).thenReturn(Optional.of(existing));
@@ -93,6 +108,7 @@ class PaymentServiceTest {
 
     @Test
     void initiate_pedidoNaoAceito_lancaBusinessException() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
@@ -105,6 +121,7 @@ class PaymentServiceTest {
 
     @Test
     void initiate_clienteErrado_retornaNotFound() {
+        when(userRepository.findById(any())).thenReturn(Optional.of(clienteVerificado()));
         when(transactionRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
         when(requestRepository.findByIdAndCliente_Id(any(), any())).thenReturn(Optional.empty());
 

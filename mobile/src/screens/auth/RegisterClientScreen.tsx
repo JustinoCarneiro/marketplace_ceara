@@ -77,8 +77,9 @@ export default function RegisterClientScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Back */}
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.back}>
-            <Feather name="chevron-left" size={22} color={color.text} />
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.back}
+            accessibilityLabel="Voltar" accessibilityRole="button">
+            <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
           </TouchableOpacity>
 
           <View style={styles.formWrapper}>
@@ -146,8 +147,10 @@ export default function RegisterClientScreen() {
                   onChangeText={setSenha}
                   secureTextEntry={!showSenha}
                 />
-                <TouchableOpacity onPress={() => setShowSenha(s => !s)} hitSlop={8}>
-                  <Feather name={showSenha ? 'eye-off' : 'eye'} size={20} color={color.textFaint} />
+                <TouchableOpacity onPress={() => setShowSenha(s => !s)} hitSlop={8}
+                  accessibilityLabel={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  accessibilityRole="button">
+                  <Feather name={showSenha ? 'eye-off' : 'eye'} size={20} color={color.textFaint} accessibilityElementsHidden />
                 </TouchableOpacity>
               </View>
               {senha.length > 0 && (
