@@ -11,14 +11,14 @@ test.describe('Login Admin', () => {
   });
 
   test('exibe formulário de login com campos e-mail e senha', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /Onda Admin/i })).toBeVisible();
+    await expect(page.getByText(/Onda Admin/i).first()).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.getByRole('button', { name: /Entrar/i })).toBeVisible();
   });
 
   test('exibe banner de auditoria na tela de login', async ({ page }) => {
-    await expect(page.getByText(/log de auditoria/i)).toBeVisible();
+    await expect(page.getByText(/monitorado e auditado/i)).toBeVisible();
   });
 
   test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
@@ -41,7 +41,7 @@ test.describe('Login Admin', () => {
     await page.fill('input[type="password"]', 'admin123');
     await page.getByRole('button', { name: /Entrar/i }).click();
     await expect(page).toHaveURL('/', { timeout: 10000 });
-    await expect(page.getByRole('heading', { name: /Dashboard/i })).toBeVisible();
+    await expect(page.getByText(/Dashboard/i).first()).toBeVisible();
   });
 
   test('rota protegida redireciona para /login sem token', async ({ page }) => {

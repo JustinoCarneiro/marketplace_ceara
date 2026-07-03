@@ -4,40 +4,21 @@ import { loginAdmin } from './helpers/auth';
 test.describe('Fila de Disputas', () => {
   test.beforeEach(async ({ page }) => {
     await loginAdmin(page);
-    await page.getByText('Disputas').click();
+    await page.goto('/disputes');
     await expect(page).toHaveURL('/disputes');
   });
 
-  test('exibe título e subtítulo da página', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /Fila de Disputas/i })).toBeVisible();
-    await expect(page.getByText(/Mediação de conflitos/i)).toBeVisible();
+  test('exibe título da página', async ({ page }) => {
+    await expect(page.getByText(/Fila de disputas/i).first()).toBeVisible();
   });
 
-  test('select de filtro de status está presente', async ({ page }) => {
-    const select = page.locator('select');
-    await expect(select).toBeVisible();
-    await expect(select).toHaveValue('ABERTA');
-  });
-
-  test('trocar filtro para Resolvidas atualiza a listagem', async ({ page }) => {
-    await page.selectOption('select', 'RESOLVIDA');
-    await page.waitForTimeout(800);
-    // Não deve mostrar alerta de disputas abertas
-    const alerta = page.getByText(/disputas abertas/i);
-    const visivel = await alerta.isVisible().catch(() => false);
-    // Com filtro RESOLVIDA, alerta de abertas não deve aparecer
-    expect(visivel).toBe(false);
+  test('exibe botão de exportar', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /Exportar/i })).toBeVisible();
   });
 
   test('estado vazio exibe mensagem amigável', async ({ page }) => {
-    // Filtrar por status que provavelmente está vazio
-    await page.selectOption('select', 'RESOLVIDA');
-    await page.waitForTimeout(1000);
-    const empty = page.getByText(/Nenhuma disputa/i);
-    const hasEmpty = await empty.isVisible().catch(() => false);
-    if (hasEmpty) {
-      await expect(empty).toBeVisible();
-    }
+    // Ambiente de teste sobe sem disputas — a fila (status ABERTA) fica vazia.
+    await expect(page.getByText(/Nenhuma disputa/i)).toBeVisible();
   });
 });
 

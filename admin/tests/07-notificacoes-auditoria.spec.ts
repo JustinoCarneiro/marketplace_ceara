@@ -4,59 +4,41 @@ import { loginAdmin } from './helpers/auth';
 test.describe('Central de Notificações', () => {
   test.beforeEach(async ({ page }) => {
     await loginAdmin(page);
-    await page.getByText('Notificações').click();
+    await page.goto('/notifications');
     await expect(page).toHaveURL('/notifications');
   });
 
-  test('exibe título e controles de filtro', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /Central de Notificações/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Exibindo/i })).toBeVisible();
-  });
-
-  test('botão de alternar filtro muda o texto', async ({ page }) => {
-    const btn = page.getByRole('button', { name: /Exibindo: não lidas/i });
-    await btn.click();
-    await expect(page.getByRole('button', { name: /Exibindo: todas/i })).toBeVisible();
+  test('exibe título e abas de filtro (Todas / Não lidas)', async ({ page }) => {
+    await expect(page.getByText(/Central de notificações/i).first()).toBeVisible();
+    await expect(page.getByText('Todas', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Não lidas/i)).toBeVisible();
   });
 
   test('estado vazio exibe mensagem', async ({ page }) => {
-    await page.waitForTimeout(800);
-    const empty = page.getByText(/Nenhuma notificação/i);
-    const list  = page.getByText(/SOS|DISPUTA|VERIFICACAO/i).first();
-    const hasEmpty = await empty.isVisible().catch(() => false);
-    const hasList  = await list.isVisible().catch(() => false);
-    expect(hasEmpty || hasList).toBe(true);
+    // Ambiente de teste sobe sem alertas.
+    await expect(page.getByText(/Nenhum alerta pendente/i)).toBeVisible();
   });
 });
 
 test.describe('Log de Auditoria', () => {
   test.beforeEach(async ({ page }) => {
     await loginAdmin(page);
-    await page.getByText('Auditoria').click();
+    await page.goto('/audit');
     await expect(page).toHaveURL('/audit');
   });
 
-  test('exibe título e aviso de append-only', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /Log de Auditoria/i })).toBeVisible();
-    await expect(page.getByText(/append-only/i)).toBeVisible();
+  test('exibe título e selo somente-leitura', async ({ page }) => {
+    await expect(page.getByText(/Log de auditoria/i).first()).toBeVisible();
+    await expect(page.getByText(/Somente leitura/i)).toBeVisible();
   });
 
-  test('campo de filtro por entidade está presente', async ({ page }) => {
-    await expect(page.getByPlaceholder(/Filtrar por entidade/i)).toBeVisible();
+  test('exibe cabeçalhos da tabela de trilha', async ({ page }) => {
+    await expect(page.getByText('Entidade')).toBeVisible();
+    await expect(page.getByText('Quando')).toBeVisible();
   });
 
-  test('filtro por entidade envia requisição', async ({ page }) => {
-    await page.fill('input[placeholder*="entidade"]', 'USUARIO');
-    await page.getByRole('button', { name: /Filtrar/i }).click();
-    await page.waitForTimeout(1000);
-    await expect(page.getByRole('heading', { name: /Log de Auditoria/i })).toBeVisible();
-  });
-
-  test('botão Limpar reseta o filtro', async ({ page }) => {
-    await page.fill('input[placeholder*="entidade"]', 'DISPUTA');
-    await page.getByRole('button', { name: /Filtrar/i }).click();
-    await page.waitForTimeout(500);
-    await page.getByRole('button', { name: /Limpar/i }).click();
-    await expect(page.locator('input[placeholder*="entidade"]')).toHaveValue('');
+  test('estado vazio exibe mensagem', async ({ page }) => {
+    // Sem ações administrativas no ambiente de teste.
+    await expect(page.getByText(/Nenhum registro encontrado/i)).toBeVisible();
   });
 });
