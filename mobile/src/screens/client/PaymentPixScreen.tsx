@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
     opacity: 0.92,
     borderRadius: 4,
     backgroundColor: '#fff',
-    backgroundImage: undefined,
   },
   qrCornerTL: {
     position: 'absolute',
