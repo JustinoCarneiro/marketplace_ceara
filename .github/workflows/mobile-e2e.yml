@@ -145,45 +145,10 @@ jobs:
           profile: pixel_3a
           emulator-options: -no-window -no-audio -no-snapshot -no-boot-anim -memory 3072
           disable-animations: true
-          script: |
-            # dash (o /bin/sh do runner) não suporta 'pipefail' — usar só -eu
-            set -eu
-
-            # Desativar animações e popup de stylus (quebra taps do Maestro)
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-            adb shell settings put secure stylus_handwriting_enabled 0
-
-            # Rota redundante de segurança (10.0.2.2 já faz isso, mas garante)
-            adb reverse tcp:8080 tcp:8080
-
-            # Instalar APK
-            adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
-            sleep 3
-
-            # Helper: roda teste e exibe resultado; 'known-fail' não falha a suite
-            run_test() {
-              local f="$1" expected="${2:-required}"
-              echo ""
-              echo "▶ $(basename "$f")"
-              if maestro test "$f"; then
-                echo "✓ PASS: $(basename "$f")"
-              elif [ "$expected" = "known-fail" ]; then
-                echo "⚠  KNOWN FAIL: $(basename "$f") — ver comentário no workflow"
-              else
-                echo "✗ FAIL: $(basename "$f")"
-                return 1
-              fi
-            }
-
-            run_test mobile/e2e/01_cadastro_cliente.yaml
-            run_test mobile/e2e/03_cadastro_prestador.yaml
-            run_test mobile/e2e/04_criar_pedido.yaml
-            run_test mobile/e2e/05_enviar_proposta.yaml
-            run_test mobile/e2e/06_aceitar_proposta.yaml known-fail
-            run_test mobile/e2e/07_concluir_e_avaliar.yaml known-fail
-            run_test mobile/e2e/02_login_cliente.yaml
+          # A action executa o script linha a linha via `sh -c`, o que quebra
+          # funções/loops multi-linha. Toda a lógica fica em run-maestro.sh,
+          # chamado como um único comando (bash roda o arquivo inteiro).
+          script: bash mobile/e2e/run-maestro.sh
 
       # ─── Artefatos ────────────────────────────────────────────────────────
       - name: Publicar relatórios Maestro
