@@ -17,8 +17,8 @@ adb shell settings put secure stylus_handwriting_enabled 0
 # Rota redundante (10.0.2.2 já cobre, mas garante o backend em :8080)
 adb reverse tcp:8080 tcp:8080
 
-# Instalar o APK debug
-adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+# Instalar o APK release (standalone, com o bundle JS embutido)
+adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
 sleep 3
 
 # Roda um fluxo; 'known-fail' não derruba a suíte.

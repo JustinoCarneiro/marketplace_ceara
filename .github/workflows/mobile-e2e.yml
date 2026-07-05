@@ -104,12 +104,16 @@ jobs:
           CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
           MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
 
-      # ─── APK debug ────────────────────────────────────────────────────────
+      # ─── APK release (standalone) ─────────────────────────────────────────
+      # IMPORTANTE: assembleDebug gera o Expo dev client (precisa de Metro) e no
+      # CI mostra só a tela "Development Build" → o app nunca carrega. O release
+      # embute o bundle JS e roda sozinho. O Expo prebuild assina o release com
+      # a keystore de debug por padrão, então não precisa de keystore próprio.
       # 10.0.2.2 é o IP padrão do emulador Android para o host → não precisa adb reverse
-      - name: Build APK debug
+      - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-          cd android && ./gradlew assembleDebug --no-daemon -q
+          cd android && ./gradlew assembleRelease --no-daemon -q
         working-directory: mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
