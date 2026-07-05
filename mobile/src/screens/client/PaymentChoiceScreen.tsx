@@ -180,7 +180,7 @@ export default function PaymentChoiceScreen() {
         </View>
 
         {/* CTA */}
-        <TouchableOpacity style={styles.cta} onPress={pay} activeOpacity={0.85} disabled={loading}>
+        <TouchableOpacity testID="btn-pagar" style={styles.cta} onPress={pay} activeOpacity={0.85} disabled={loading}>
           {loading ? (
             <ActivityIndicator color={color.textOnAccent} />
           ) : (
@@ -208,6 +208,7 @@ export default function PaymentChoiceScreen() {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>CPF</Text>
               <TextInput
+                testID="input-cpf"
                 style={[styles.field, !!cpfError && styles.fieldError]}
                 value={cpf}
                 onChangeText={t => { setCpf(formatCpf(t)); setCpfError(''); }}
@@ -225,6 +226,7 @@ export default function PaymentChoiceScreen() {
               )}
             </View>
             <TouchableOpacity
+              testID="btn-confirmar-cpf"
               style={[styles.cta, cpfLoading && { opacity: 0.7 }]}
               onPress={submitCpf}
               disabled={cpfLoading}

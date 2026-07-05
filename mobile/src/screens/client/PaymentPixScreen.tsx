@@ -84,6 +84,7 @@ export default function PaymentPixScreen() {
 
         <View style={styles.footer}>
           <TouchableOpacity
+            testID="btn-paguei"
             style={styles.btnPrimary}
             onPress={() => nav.navigate('EscrowConfirmed', { requestId: route.params.requestId })}
             activeOpacity={0.85}

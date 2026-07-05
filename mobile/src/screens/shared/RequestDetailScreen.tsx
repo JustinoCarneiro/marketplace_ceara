@@ -385,6 +385,7 @@ export default function RequestDetailScreen() {
     );
   }
 
+  const showViewProposals = isClient && st === 'PROPOSTO';
   const showConfirmCompletion = isClient && st === 'EM_ANDAMENTO';
   const showStartService = isProvider && st === 'ACEITO';
   const showRate = st === 'CONCLUIDO';
@@ -458,6 +459,17 @@ export default function RequestDetailScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {showViewProposals && (
+          <TouchableOpacity
+            testID="btn-ver-propostas"
+            style={styles.btnPrimary}
+            onPress={() => nav.navigate('CompareProposals', { requestId })}
+            activeOpacity={0.85}
+          >
+            <Feather name="inbox" size={18} color="#fff" />
+            <Text style={styles.btnPrimaryText}>Ver propostas recebidas</Text>
+          </TouchableOpacity>
+        )}
         {showConfirmCompletion && (
           <TouchableOpacity
             style={[styles.btnPrimary, actionLoading && { opacity: 0.6 }]}

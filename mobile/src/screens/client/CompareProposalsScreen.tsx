@@ -133,6 +133,7 @@ export default function CompareProposalsScreen() {
 
                   {/* CTA */}
                   <TouchableOpacity
+                    testID="btn-aceitar-proposta"
                     style={isBest ? styles.acceptBtnFilled : styles.acceptBtnOutline}
                     onPress={() => accept(p)}
                     activeOpacity={0.85}

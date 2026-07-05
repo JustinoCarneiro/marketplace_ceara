@@ -211,6 +211,7 @@ export default function MyRequestsScreen() {
                   {items.map(item => (
                     <TouchableOpacity
                       key={item.id}
+                      testID="meu-pedido-card"
                       style={styles.card}
                       onPress={() => nav.navigate('RequestDetail', { requestId: item.id })}
                       activeOpacity={0.85}

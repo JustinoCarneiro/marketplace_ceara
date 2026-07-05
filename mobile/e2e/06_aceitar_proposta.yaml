@@ -2,6 +2,7 @@ appId: com.onda.marketplace
 env:
   EMAIL_CLIENTE: "lucia.teste@onda.dev"
   SENHA: "senha1234"
+  CPF_CLIENTE: "111.444.777-35"
 ---
 - launchApp:
     clearState: true
@@ -11,12 +12,27 @@ env:
 - runFlow: subflows/login_cliente.yaml
 - tapOn: "Meus pedidos"
 - tapOn:
-    text: "Ver detalhes"
+    id: "meu-pedido-card"
     index: 0
 - assertVisible: "PROPOSTO"
-- tapOn: "Aceitar proposta"
-- assertVisible: "Pagar com Pix"
-- tapOn: "Pagar com Pix"
+# Entrada para as propostas no RequestDetail (novo)
+- tapOn:
+    id: "btn-ver-propostas"
+- assertVisible: "Aceitar proposta"
+- tapOn:
+    id: "btn-aceitar-proposta"
+    index: 0
+# PaymentChoice → o botão de pagar dispara o modal de CPF (1º pagamento)
+- tapOn:
+    id: "btn-pagar"
+- assertVisible: "Confirme sua identidade"
+- tapOn:
+    id: "input-cpf"
+- inputText: ${CPF_CLIENTE}
+- tapOn:
+    id: "btn-confirmar-cpf"
+# Após confirmar o CPF, segue para o Pix simulado
 - assertVisible: "Paguei"
-- tapOn: "Paguei"
+- tapOn:
+    id: "btn-paguei"
 - assertVisible: "ACEITO"
