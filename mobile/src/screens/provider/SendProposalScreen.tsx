@@ -73,6 +73,7 @@ export default function SendProposalScreen() {
             <View style={styles.valorInput}>
               <Text style={styles.valorPrefix}>R$</Text>
               <TextInput
+                testID="input-valor"
                 style={styles.valorField}
                 placeholder="0,00"
                 placeholderTextColor={color.textFaint}
@@ -112,6 +113,7 @@ export default function SendProposalScreen() {
 
           {/* CTA */}
           <TouchableOpacity
+            testID="btn-enviar-proposta"
             style={[styles.cta, loading && { opacity: 0.7 }]}
             onPress={send}
             disabled={loading}

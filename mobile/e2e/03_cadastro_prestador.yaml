@@ -11,7 +11,7 @@ env:
     visible: "Sou Prestador"
     timeout: 10000
 - tapOn: "Sou Prestador"
-- assertVisible: "Cadastro de prestador"
+- assertVisible: "Criar conta"
 - tapOn:
     text: "José Wagner Ferreira"
 - inputText: ${NOME}

@@ -10,17 +10,16 @@ env:
     timeout: 10000
 - runFlow: subflows/login_prestador.yaml
 - assertVisible: "Pedidos disponíveis"
+# O card do pedido já traz o botão "Enviar proposta" (abre a folha de proposta)
 - tapOn:
-    text: "Ver detalhes"
+    id: "btn-propor"
     index: 0
-- assertVisible: "Enviar proposta"
-- tapOn: "Enviar proposta"
+- assertVisible: "SEU VALOR"
 - tapOn:
-    text: "0,00"
+    id: "input-valor"
 - inputText: "150"
+# prazo já vem preenchido com "2" por padrão
 - tapOn:
-    text: "dias"
-- eraseText: 10
-- inputText: "2"
-- tapOn: "Enviar proposta"
-- assertVisible: "Proposta enviada"
+    id: "btn-enviar-proposta"
+# Ao enviar, a folha fecha (goBack) e volta para a lista
+- assertVisible: "Pedidos disponíveis"

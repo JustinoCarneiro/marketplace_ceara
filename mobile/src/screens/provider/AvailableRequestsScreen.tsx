@@ -164,6 +164,7 @@ export default function AvailableRequestsScreen() {
                 <View style={styles.cardFooter}>
                   {preco(r) && <Text style={styles.cardPreco}>{preco(r)}</Text>}
                   <TouchableOpacity
+                    testID="btn-propor"
                     style={styles.proposalBtn}
                     onPress={() => nav.navigate('SendProposal', { requestId: r.id })}
                     activeOpacity={0.85}
