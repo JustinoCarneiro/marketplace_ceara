@@ -55,8 +55,9 @@ cliente e para o negócio.
 | `CLAUDE.md` + `spec.md` | Fase 1 | Fonte única da verdade: épicos, histórias de usuário, stack e arquitetura. |
 | `tokens.css` + `DESIGN.md` | Fase 2 | Identidade visual **do projeto** — do cliente, nunca a da Onda. |
 | Protótipo estático | Fase 2 | Interface aprovável, com dados fictícios. |
-| `ROADMAP.md` + contratos | Fase 3 | Planta técnica: módulos, pesos e contratos Request/Response. |
+| `ROADMAP.md` + contratos | Fase 3 | Planta técnica: módulos, pesos e contratos Request/Response. Também é o quadro Kanban do projeto — ver seção 12. |
 | Commits / Small Releases | Fase 4 | Código testado e pronto para produção. |
+| `memoria-tecnica/` | Fase 4 (nasce vazia na Fase 0) | Memória técnica viva: bugs cabeludos e decisões tomadas fora da spec — ver seção 11. |
 | Deploy | Fase 5 | Software em produção. |
 
 ---
@@ -117,6 +118,7 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
   3. Pesagem de cada módulo (Complexidade + Risco).
   4. Definição dos **contratos de API** (Request/Response) — antes de qualquer código.
   5. Rastreabilidade história ↔ módulo (relação N:1).
+  6. Cada módulo nasce com `**Status:** ⬜ Pendente` — é o quadro Kanban do projeto (ver seção 12).
 - **Saída:** `ROADMAP.md` + contratos + **prazo técnico calculado**.
 - **Ator:** Humano decide arquitetura · IA gera o roteiro.
 
@@ -130,6 +132,8 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
   - **Refactor:** aplica DRY e otimiza sem quebrar os testes.
   - **Segurança:** agente `revisor-seguranca` nos módulos de risco.
   - **Commit limpo** (Small Release).
+  - **Atualiza o status do módulo no `ROADMAP.md`** de `⬜ Pendente` para `✅ Concluído (data)` assim que os testes fecham verdes e o commit é feito — é isso que faz do `ROADMAP.md` o quadro Kanban vivo do projeto (seção 12), não um board externo.
+- **Memória técnica:** antes de investigar um bug ou decidir algo fora da spec, consultar `memoria-tecnica/`; ao resolver algo não-trivial, registrar lá (ver seção 11 — critério de quando vale a pena).
 - **Decisões:**
   - **G4 — Testes verdes?** Não → volta ao TDD.
   - **G5 — Pedido de mudança?** Sim → **retorno à Fase 1**.
@@ -149,6 +153,7 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
   1. Smoke test local: subir o ambiente via Docker e rodar toda a esteira de testes.
   2. Validação humana de ponta a ponta.
   3. Revisão final de segurança.
+  4. Revisão manual da `memoria-tecnica/`: checar se ficou desatualizada e podar notas triviais (a IA popula por conta própria em melhor esforço, não é garantido — não assumir que está completa sem olhar).
 - **Decisão — G7:** *Smoke test + validação OK?* Não → **retorno à Fase 4**. Sim → avança.
 - **Saída:** **Deploy via CI/CD** → software em produção.
 - **Ator:** Humano valida · IA executa · Cliente recebe.
@@ -316,6 +321,156 @@ cp setup/claude/agents/*.md ~/.claude/agents/
 ```
 
 > **Regra:** `setup/claude/` é a fonte única da verdade para o ecossistema de skills. Toda nova skill ou agente deve ser adicionada lá antes de ser copiada para `~/.claude/`.
+
+---
+
+## 11. Memória Técnica Viva — padrão Obsidian
+
+*Piloto validado no projeto Sistema Melvin (jul/2026) antes de virar padrão.*
+
+### O que é e por quê
+
+`CLAUDE.md` e `ROADMAP.md` cobrem o que foi planejado. Mas todo projeto acumula, ao vivo, conhecimento
+que não estava na spec: um bug que exigiu investigação de causa raiz, uma decisão técnica tomada no
+meio da Fase 4 por um motivo que não é óbvio olhando só o código. Hoje esse conhecimento cai na memória
+do próprio agente — que é isolada por projeto, não versionada, e não sobrevive a uma troca de máquina
+ou ferramenta.
+
+`memoria-tecnica/` resolve isso como uma pasta comum dentro do repositório (não uma ferramenta externa):
+markdown puro, sem lock-in, que o Obsidian sabe abrir como *vault* pra navegação em grafo — mas que o
+Claude Code lê e escreve normalmente com ou sem o Obsidian aberto.
+
+### Estrutura
+
+```
+memoria-tecnica/
+├── _index.md         ← painel de entrada, lista bugs e decisões
+├── bugs/              ← causa raiz de bugs não-triviais já resolvidos
+├── decisoes/          ← decisões técnicas tomadas fora da spec original
+└── templates/         ← modelo de nota (bug.md, decisao.md)
+```
+
+Nasce vazia na Fase 0 (scaffolding) — não é um problema ela não ter nada útil ainda nos primeiros
+módulos; o valor se acumula com o tempo de vida do projeto, igual acontece com o Changelog de Escopo
+do `CLAUDE.md`.
+
+### Critério de quando criar uma nota
+
+Documentar só quando pelo menos um destes for verdade — evitar isso vira ruído e destrói o valor do
+padrão:
+- Exigiu investigação real (a causa não era óbvia a partir do stack trace ou do código).
+- A causa está fora do código-fonte visível (config de infra, comportamento de dependência externa, nginx, etc.).
+- É uma decisão que contradiz ou refina algo que já foi decidido antes — e alguém (humano ou IA) vai
+  precisar saber disso antes de mexer ali de novo.
+
+Não criar nota se o fato já tem um lar melhor e visível (ex.: já é critério de aceite no `CLAUDE.md`,
+ou já tem um aviso dedicado num checklist) — isso duplicaria a fonte de verdade em vez de complementá-la.
+
+### Ressalvas
+
+- **Não é automático.** A IA populando a `memoria-tecnica/` sozinha é melhor esforço, seguindo a
+  instrução do `CLAUDE.md` — não uma garantia de sistema. Por isso a Fase 5 tem um passo de revisão
+  manual (ver seção anterior).
+- **Escreva para humano ler primeiro.** O ganho de ser indexável por IA é consequência do formato
+  (markdown + links), não o objetivo — uma nota que só um agente entende não serve pro humano que
+  vai reler meses depois.
+- **Um vault por projeto, nunca um vault único pra todos os projetos da Onda.** Cada projeto é de um
+  cliente diferente — misturar bugs/decisões de clientes distintos num grafo só vaza contexto entre
+  eles. Padrões técnicos genuinamente reaproveitáveis entre projetos (se/quando surgirem) vivem em
+  outro lugar, nunca dentro da `memoria-tecnica/` de um cliente específico.
+
+---
+
+## 12. Rastreio de Progresso — Status por Módulo no ROADMAP.md
+
+*Formalizado em 30/07/2026 — o padrão estrutural (status por módulo dentro do `ROADMAP.md`) já
+existia organicamente em mais de um projeto da Onda antes de virar regra escrita — só que cada um
+com um vocabulário próprio (ver "Padronização de vocabulário" abaixo).*
+
+### O que é e por quê
+
+A seção 4 sempre falou em "fluxo Kanban" na Fase 4, mas nunca disse **onde** esse Kanban mora.
+Este é o padrão oficial: **o quadro Kanban não é uma ferramenta externa (Trello, Jira) — é o
+próprio `ROADMAP.md`.**
+
+### Convenção — vocabulário único, sem variações
+
+Cada módulo, ao nascer na Fase 3 (Blueprint), recebe:
+```
+**Status:** ⬜ Pendente
+```
+Ao ser concluído na Fase 4 (testes verdes, commitado), atualiza pra:
+```
+**Status:** ✅ Concluído (2026-07-09) — backend (137/137 testes...)
+```
+Um resumo curto do que foi coberto (contagem de testes, achado relevante) é bem-vindo, mas
+opcional. Um estado intermediário `🔄 Em andamento` pode ser usado se o módulo estiver em
+progresso há mais de uma sessão.
+
+**São exatamente estes 3 marcadores, sempre com esse texto exato — `⬜ Pendente`, `🔄 Em
+andamento`, `✅ Concluído` — em todos os projetos da Onda.** Não usar variações como `COMPLETO`,
+`DONE`, `Feito`, `Finalizado` etc., mesmo que pareçam sinônimos óbvios — o valor do padrão é
+poder olhar o `ROADMAP.md` de qualquer projeto da Onda e reconhecer o status sem reaprender o
+vocabulário daquele projeto específico. (Achado nesta mesma formalização: Sistema Melvin e SAW
+Hub já tinham convergido pra essa estrutura de forma independente, mas com palavras diferentes
+entre si — `COMPLETO` vs `concluído` — corrigido pra um só termo em todos.)
+
+### Distinção do Changelog de Escopo
+
+Isso **não substitui** o Changelog de Escopo (tabela usada no `CLAUDE.md` de outros projetos,
+como o Sistema Melvin) — são artefatos com propósitos diferentes:
+- **Status por módulo (`ROADMAP.md`)** — progresso: o que já foi construído, módulo a módulo.
+- **Changelog de Escopo (`CLAUDE.md`)** — histórico: mudanças de escopo e decisões que alteraram
+  o que estava planejado, com data e impacto.
+
+Um projeto pode (e frequentemente deve) ter os dois — não são concorrentes.
+
+---
+
+## 13. Padrão de Gestão Visual (Kanban 9 Colunas)
+
+O Trello da Onda não é uma ferramenta separada da documentação técnica; ele é o seu espelho visual. **Regra de Ouro da Sincronização:** Toda e qualquer especificação funcional criada, alterada ou deletada (nos arquivos `CLAUDE.md`, `ROADMAP.md` ou `spec.md`) deve obrigatoriamente engatilhar o utilitário local `./scripts/trello_sync.py` para sincronizar o quadro do projeto correspondente. A documentação e o Trello são a mesma entidade.
+
+Para comportar o fluxo das 5 Fases da Onda (do Design ao Deploy), o quadro oficial de Kanban no Trello deve ter *exatamente* e *apenas* as seguintes **9 listas (colunas)** na ordem especificada:
+
+1. **📚 Base de Conhecimento (Docs / Memória Técnica):**
+   - Usado para abrigar links para documentações oficiais e notas de memória técnica rápidas (ex: resoluções de problemas recorrentes e causas raiz, vivendo diretamente no board).
+2. **❄️ Icebox (Banco de Ideias):**
+   - Ideias, sugestões e pedidos de melhoria que ainda não foram priorizados ou detalhados. Separa claramente o que "talvez aconteça" do backlog real de trabalho.
+3. **📋 Backlog (Especificações e Épicos):**
+   - Tarefas e épicos aprovados e detalhados.
+   - **Regra de Ouro (Regra 2a):** *Documentação antes da codificação*. Os cards aqui devem ser "spec-driven", contendo a especificação da feature ou o link para o `spec.md`, antes de irem para desenvolvimento.
+4. **🏗️ Requisitos Não-Funcionais & Arquitetura:**
+   - Coluna dedicada exclusivamente para débitos técnicos, tarefas de segurança, performance, LGPD, decisões de infraestrutura e arquitetura/design. Preenche a lacuna de não misturar melhorias estruturais com entregas funcionais (épicos/histórias) do negócio.
+5. **🎯 A Fazer (To Do / Ready):**
+   - Cards do backlog que estão priorizados, refinados, e prontos para serem puxados pela equipe no ciclo atual.
+6. **⚙️ Em Execução (Doing / In Progress):**
+   - O que está sendo ativamente codificado ou configurado neste exato momento.
+7. **🔍 Code Review / Testes:**
+   - Revisão de código, testes unitários, testes E2E e validação técnica interna antes de ir para o ambiente do cliente.
+8. **🧪 UAT (Homologação / Validação do Cliente):**
+   - Validação da entrega (Aceitação do Usuário) junto ao cliente ou key user. Alinha-se diretamente com a **Fase 5** da metodologia Onda.
+9. **✅ Concluído (Done 🎉):**
+   - Tudo que já foi testado, aprovado pelo cliente, homologado e entregue em produção.
+
+### 13.1 Padrão de Escrita dos Cartões (Spec-Driven & Checklists)
+
+Para que o board funcione como uma ferramenta ágil real (inspirada no Scrum) e não apenas um amontoado de lembretes, a escrita interna dos cartões deve seguir regras rígidas:
+
+- **Clareza de Épicos e Histórias de Usuário:** O título e a descrição devem comunicar claramente o valor de negócio (ex: "Como usuário, quero X para poder Y"). O contexto do requisito ou o link para o `spec.md` deve estar explícito.
+- **Checklists Contextuais ("Critérios de Aceite"):** É terminantemente proibido o uso de listas genéricas (boilerplates). Todo cartão refinado (movido para "A Fazer") deve conter uma lista nativa nomeada exclusivamente como `"Critérios de Aceite"`.
+- **Granularidade Técnica:** Os itens desse checklist devem traduzir a regra de negócio em entregas técnicas tangíveis (ex: *Criar índice PostGIS, Construir endpoint GET /search, Validar regra de no-show*). O cartão só atinge 100% de conclusão quando todos esses critérios técnicos específicos são validados.
+
+### 13.2 Padrão de Etiquetas (Tags)
+
+Para garantir rastreabilidade de responsabilidades e filtragem visual rápida, os quadros utilizam **apenas 6 etiquetas oficiais**, abolindo a criação de tags ad-hoc (ex: "Database", "Integração"). Todo cartão de requisito deve ter pelo menos uma destas alçadas associadas:
+
+- 🔵 **Frontend (UI/UX):** Telas, layouts, SPA, mobile, responsividade.
+- 🟢 **Backend (Regras & APIs):** Serviços, banco de dados, regras de negócio, endpoints.
+- 🟡 **Arquitetura / Segurança:** Decisões de modelagem estrutural, autenticação, permissões e LGPD.
+- 🟠 **Infraestrutura / Cloud:** DevOps, pipelines CI/CD, buckets (S3), Docker, deploys.
+- 🟣 **Design / Documentação:** Pesquisa visual, criação de tokens, prototipagem (Figma) e documentação técnica.
+- 🔴 **Bug / Débito Técnico:** Correções de defeitos ou refatorações emergenciais de performance.
 
 ---
 
