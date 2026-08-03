@@ -121,11 +121,11 @@ export default function RegisterClientScreen() {
                   autoCapitalize="none"
                   autoComplete="email"
                 />
-                {error && error.toLowerCase().includes('email') && (
+                {!!error && error.toLowerCase().includes('email') && (
                   <Feather name="alert-circle" size={18} color={color.danger} />
                 )}
               </View>
-              {error && error.toLowerCase().includes('email') && (
+              {!!error && error.toLowerCase().includes('email') && (
                 <View style={styles.errorRow}>
                   <Text style={styles.errorText}>{error} </Text>
                   <TouchableOpacity onPress={() => nav.navigate('Login')}>
@@ -200,7 +200,7 @@ export default function RegisterClientScreen() {
           </View>
 
             {/* Generic error */}
-            {error && !error.toLowerCase().includes('email') && (
+            {!!error && !error.toLowerCase().includes('email') && (
               <Text style={styles.genericError}>{error}</Text>
             )}
           </View>
