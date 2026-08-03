@@ -1,19 +1,29 @@
 import { useState } from 'react';
+import { downloadFile } from '../api/client';
 
 export default function ReportsPage() {
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
+  const [err, setErr] = useState('');
 
-  function generate() {
-    setGenerating(true); setProgress(0); setDone(false);
-    const iv = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) { clearInterval(iv); setGenerating(false); setDone(true); return 100; }
-        return p + Math.random() * 18;
-      });
-    }, 300);
+  async function generate() {
+    setGenerating(true); setProgress(0); setDone(false); setErr('');
+    const iv = setInterval(() => setProgress(p => Math.min(p + Math.random() * 18, 90)), 300);
+    try {
+      // CSV só tem "requests"/"transactions" no backend — "requests" cobre
+      // pedidos e disputas (disputa = pedido com status EM_DISPUTA).
+      if (format === 'csv') await downloadFile('/admin/reports/requests.csv', 'pedidos.csv');
+      else await downloadFile('/admin/reports/metrics.pdf', 'metrics.pdf');
+      setProgress(100);
+      setDone(true);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : 'Erro ao gerar relatório');
+    } finally {
+      clearInterval(iv);
+      setGenerating(false);
+    }
   }
 
   return (
@@ -81,6 +91,7 @@ export default function ReportsPage() {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8A989B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
                 <span style={{ fontSize: 12, lineHeight: 1.45, color: '#8A989B' }}>Os relatórios não incluem dados pessoais sensíveis (CPF).</span>
               </div>
+              {err && <span style={{ fontSize: 13, color: '#C0392B' }}>{err}</span>}
               <button onClick={generate} style={{ width: '100%', height: 48, border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>Gerar relatório</button>
             </>
           )}
