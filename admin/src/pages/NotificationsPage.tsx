@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 
-interface Notification { id: string; tipo: string; titulo: string; descricao: string; lida: boolean; criadaEm: string; link?: string; }
+// Contrato real do backend (AdminNotificationDto): id, tipo, refId, criadoEm, lida.
+// Não há titulo/descricao persistidos — derivamos do tipo no cliente.
+interface Notification { id: string; tipo: string; refId: string; criadoEm: string; lida: boolean; }
+
+const LABELS: Record<string, { titulo: string; descricao: string }> = {
+  SOS: { titulo: 'Emergência SOS acionada', descricao: 'Botão SOS acionado durante um atendimento — verificar imediatamente.' },
+  DISPUTA: { titulo: 'Disputa aberta', descricao: 'Uma disputa foi aberta e aguarda mediação.' },
+  VERIFICACAO: { titulo: 'Verificação de prestador pendente', descricao: 'Cadastro de prestador reprovado ou inconclusivo — revisar documentação.' },
+};
+function labelFor(tipo: string) {
+  return LABELS[tipo] ?? { titulo: 'Alerta operacional', descricao: `Evento do tipo ${tipo}.` };
+}
 
 function iconFor(tipo: string) {
   if (tipo === 'SOS') return { bg: '#C0392B', el: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> };
@@ -71,6 +82,7 @@ export default function NotificationsPage() {
         ) : filtered.map(n => {
           const icon = iconFor(n.tipo);
           const isSOS = n.tipo === 'SOS';
+          const { titulo, descricao } = labelFor(n.tipo);
           return (
             <div key={n.id} style={{ background: isSOS ? '#FBE6E2' : 'var(--surface)', border: isSOS ? '1.5px solid #C0392B' : '1px solid var(--line-soft)', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16, opacity: n.lida && !isSOS ? 0.6 : 1, boxShadow: isSOS ? '0 14px 30px -22px rgba(192,57,43,.6)' : 'none' }}>
               {!n.lida && <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#14A8A0', flexShrink: 0 }} />}
@@ -79,11 +91,11 @@ export default function NotificationsPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {isSOS && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#C0392B', color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', padding: '3px 9px', borderRadius: 100 }}>SOS</span>}
-                  <span style={{ fontSize: isSOS ? 16 : 15.5, fontWeight: 800, color: '#0E2A33' }}>{n.titulo}</span>
+                  <span style={{ fontSize: isSOS ? 16 : 15.5, fontWeight: 800, color: '#0E2A33' }}>{titulo}</span>
                 </div>
-                <div style={{ fontSize: 13.5, color: isSOS ? '#9A2820' : '#4C636A', marginTop: 3 }}>{n.descricao}</div>
+                <div style={{ fontSize: 13.5, color: isSOS ? '#9A2820' : '#4C636A', marginTop: 3 }}>{descricao}</div>
               </div>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: isSOS ? '#9A2820' : '#8A989B', flexShrink: 0 }}>{timeAgo(n.criadaEm)}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: isSOS ? '#9A2820' : '#8A989B', flexShrink: 0 }}>{timeAgo(n.criadoEm)}</span>
               {isSOS ? (
                 <button style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
               ) : (

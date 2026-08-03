@@ -14,21 +14,24 @@ const AVATAR_COLORS = ['#15596E', '#3C7A4E', '#DA6A32', '#C0392B', '#1B8C84', '#
 function avatarBg(nome: string) { return AVATAR_COLORS[nome.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(nome: string) { return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase(); }
 
+// Enum real do backend (ProviderStatus): EM_VERIFICACAO, VERIFICADO, REPROVADO, SUSPENSO.
+// Não existe INCONCLUSIVO/PENDENTE — usar esses nomes aqui escondia os botões de moderação
+// pra todo prestador recém-cadastrado (o isPending abaixo nunca batia com dado real).
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    INCONCLUSIVO: { bg: '#F2B015', color: '#0E2A33', label: 'INCONCLUSIVO' },
+    EM_VERIFICACAO: { bg: '#F2B015', color: '#0E2A33', label: 'EM VERIFICAÇÃO' },
     VERIFICADO: { bg: '#0E3F52', color: '#fff', label: 'VERIFICADO' },
     REPROVADO: { bg: '#FBE6E2', color: '#C0392B', label: 'REPROVADO' },
-    PENDENTE: { bg: '#FDF3D6', color: '#B5810A', label: 'PENDENTE' },
+    SUSPENSO: { bg: '#EAE0CB', color: '#4C636A', label: 'SUSPENSO' },
   };
-  const s = map[status] || map.PENDENTE;
+  const s = map[status] || map.EM_VERIFICACAO;
   return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: s.bg, color: s.color, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '5px 11px', borderRadius: 100, flexShrink: 0 }}>{s.label}</span>;
 }
 
 export default function ProvidersPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'INCONCLUSIVO' | ''>('INCONCLUSIVO');
+  const [filter, setFilter] = useState<'EM_VERIFICACAO' | ''>('EM_VERIFICACAO');
 
   async function load() {
     setLoading(true);
@@ -49,14 +52,14 @@ export default function ProvidersPage() {
   }
 
   const filtered = filter ? providers.filter(p => p.statusVerificacao === filter) : providers;
-  const pendingCount = providers.filter(p => ['INCONCLUSIVO', 'PENDENTE'].includes(p.statusVerificacao)).length;
+  const pendingCount = providers.filter(p => p.statusVerificacao === 'EM_VERIFICACAO').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
         <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Moderação de prestadores</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span onClick={() => setFilter('INCONCLUSIVO')} style={{ fontSize: 12.5, fontWeight: 700, color: filter === 'INCONCLUSIVO' ? '#0E2A33' : '#4C636A', background: filter === 'INCONCLUSIVO' ? '#FDF3D6' : '#F3ECDC', border: `1px solid ${filter === 'INCONCLUSIVO' ? '#F2B015' : '#E6DDC9'}`, padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Inconclusivos · {pendingCount}</span>
+          <span onClick={() => setFilter('EM_VERIFICACAO')} style={{ fontSize: 12.5, fontWeight: 700, color: filter === 'EM_VERIFICACAO' ? '#0E2A33' : '#4C636A', background: filter === 'EM_VERIFICACAO' ? '#FDF3D6' : '#F3ECDC', border: `1px solid ${filter === 'EM_VERIFICACAO' ? '#F2B015' : '#E6DDC9'}`, padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Em verificação · {pendingCount}</span>
           <span onClick={() => setFilter('')} style={{ fontSize: 12.5, fontWeight: 600, color: '#4C636A', background: '#F3ECDC', border: '1px solid #E6DDC9', padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Todos</span>
         </div>
       </div>
@@ -64,7 +67,7 @@ export default function ProvidersPage() {
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><div className="spinner" /></div> :
          filtered.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-soft)' }}>Nenhum prestador encontrado.</div> :
          filtered.map(p => {
-          const isPending = ['INCONCLUSIVO', 'PENDENTE'].includes(p.statusVerificacao);
+          const isPending = p.statusVerificacao === 'EM_VERIFICACAO';
           const cardBg = isPending ? '#FDF3D6' : 'var(--surface)';
           const cardBorder = isPending ? '1.5px solid #F2B015' : '1px solid var(--line-soft)';
           const opacity = p.statusVerificacao === 'REPROVADO' ? 0.7 : 1;

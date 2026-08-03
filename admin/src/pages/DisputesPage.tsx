@@ -2,16 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
+// Contrato real do backend (DisputaAdminDto): serviceRequestId, categoria, valorRetido, criadoEm.
+// Não há id próprio, nem partes/motivo — a "fila" é o próprio service_request em EM_DISPUTA.
 interface Dispute {
-  id: string;
   serviceRequestId: string;
-  abertaPor: string;
-  motivo: string;
+  categoria: string;
   valorRetido: number;
-  status: string;
-  criadaEm: string;
-  parteCliente?: { nome: string };
-  partePrestador?: { nome: string };
+  criadoEm: string;
 }
 
 export default function DisputesPage() {
@@ -91,29 +88,28 @@ export default function DisputesPage() {
             {/* Header */}
             <div style={S.tableHeader}>
               <span style={S.th}>Pedido</span>
-              <span style={S.th}>Partes</span>
+              <span style={S.th}>Categoria</span>
               <span style={S.th}>Valor retido</span>
               <span style={S.th}>Idade</span>
               <span />
             </div>
             {/* Rows */}
-            {disputes.map(d => {
-              const ageStr = age(d.criadaEm);
-              const ageH = Math.floor((Date.now() - new Date(d.criadaEm).getTime()) / 3600000);
+    {disputes.map(d => {
+              const ageStr = age(d.criadoEm);
+              const ageH = Math.floor((Date.now() - new Date(d.criadoEm).getTime()) / 3600000);
               const ageColor = ageH > 48 ? 'var(--danger)' : ageH > 24 ? 'var(--warm-terra)' : 'var(--text-soft)';
-              const partes = [d.parteCliente?.nome, d.partePrestador?.nome].filter(Boolean).join(' × ') || d.abertaPor;
               return (
-                <div key={d.id} style={S.tableRow}>
+                <div key={d.serviceRequestId} style={S.tableRow}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>#{d.serviceRequestId?.slice(-4) || d.id.slice(-4)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>#{d.serviceRequestId.slice(-4)}</div>
                     <span style={S.disputeBadge}>EM DISPUTA</span>
                   </div>
-                  <span style={{ fontSize: 13.5, color: 'var(--text-soft)' }}>{partes}</span>
+                  <span style={{ fontSize: 13.5, color: 'var(--text-soft)' }}>{d.categoria}</span>
                   <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--institutional-2)' }}>{fmt(d.valorRetido)}</span>
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: ageColor }}>{ageStr}</span>
                   <span
                     style={S.openLink}
-                    onClick={() => navigate(`/disputes/${d.id}`)}
+                    onClick={() => navigate(`/disputes/${d.serviceRequestId}`)}
                   >Abrir →</span>
                 </div>
               );
