@@ -23,6 +23,35 @@ test.describe('Exportar Relatórios', () => {
   });
 });
 
+test.describe('Exportar Relatórios (download real)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAdmin(page);
+    await page.goto('/reports');
+  });
+
+  test('gerar CSV baixa um arquivo de verdade (GET /admin/reports/requests.csv)', async ({ page }) => {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /Gerar relatório/i }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('pedidos.csv');
+    const path = await download.path();
+    expect(path).toBeTruthy();
+    await expect(page.getByText(/Relatório pronto/i)).toBeVisible();
+  });
+
+  test('gerar PDF baixa um arquivo de verdade (GET /admin/reports/metrics.pdf)', async ({ page }) => {
+    await page.getByText('PDF', { exact: true }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /Gerar relatório/i }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('metrics.pdf');
+    const path = await download.path();
+    expect(path).toBeTruthy();
+  });
+});
+
 test.describe('Reconciliação Financeira', () => {
   test.beforeEach(async ({ page }) => {
     await loginAdmin(page);

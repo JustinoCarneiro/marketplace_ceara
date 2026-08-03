@@ -48,4 +48,18 @@ test.describe('Login Admin', () => {
     await page.goto('/');
     await expect(page).toHaveURL('/login');
   });
+
+  // Não há refresh token no painel admin (confirmado em src/store/auth.ts + api/client.ts):
+  // só um access token em sessionStorage; 401/403 limpa o token e força novo login. Esse é
+  // o equivalente real ao "refresh token" pra essa superfície — testamos o que existe de fato.
+  test('token inválido força logout e redireciona para /login na próxima chamada à API', async ({ page }) => {
+    await page.fill('input[type="email"]', 'admin@onda.com');
+    await page.fill('input[type="password"]', 'admin123');
+    await page.getByRole('button', { name: /Entrar/i }).click();
+    await expect(page).toHaveURL('/', { timeout: 10000 });
+
+    await page.evaluate(() => sessionStorage.setItem('onda_admin_token', 'token-invalido'));
+    await page.goto('/users');
+    await expect(page).toHaveURL('/login', { timeout: 10000 });
+  });
 });

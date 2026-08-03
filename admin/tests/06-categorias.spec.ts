@@ -27,3 +27,27 @@ test.describe('Catálogo de Categorias', () => {
     await expect(page.getByPlaceholder(/Nome da categoria/i)).not.toBeVisible();
   });
 });
+
+test.describe('Catálogo de Categorias (ação real)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAdmin(page);
+    await page.goto('/categories');
+  });
+
+  test('criar categoria persiste via POST e aparece na lista após reload', async ({ page }) => {
+    const nome = `Categoria E2E ${Date.now()}`;
+
+    await page.getByRole('button', { name: /Nova categoria/i }).click();
+    await page.getByPlaceholder(/Nome da categoria/i).fill(nome);
+    await page.getByRole('button', { name: /Criar/i }).click();
+
+    // O form fecha (setShowForm(false)) só depois do POST resolver — sinal de sucesso real.
+    await expect(page.getByPlaceholder(/Nome da categoria/i)).not.toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(nome)).toBeVisible();
+    await expect(page.getByText('ATIVA').first()).toBeVisible();
+
+    // Recarrega para confirmar que veio do banco (GET /admin/categories), não só do estado local.
+    await page.reload();
+    await expect(page.getByText(nome)).toBeVisible();
+  });
+});
