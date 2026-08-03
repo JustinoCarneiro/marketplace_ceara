@@ -1,0 +1,19 @@
+{
+  "userIgnoreFilters": [
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "coverage",
+    "logs",
+    "backups",
+    ".git",
+    ".github",
+    ".vscode",
+    ".claude"
+  ]
+}

@@ -9,6 +9,12 @@ build/
 *.war
 .env
 
+# Obsidian (estado de UI local, não config compartilhada)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/graph.json
+.obsidian/appearance.json
+
 # Arquivos de IDE
 .idea/
 .vscode/
