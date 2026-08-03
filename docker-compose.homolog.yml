@@ -2,10 +2,10 @@
 # Uso: make homolog-up   (ou: docker compose -f docker-compose.homolog.yml --env-file .env.homolog up -d)
 #
 # Portas expostas:
-#   8080 → backend  (API REST)
+#   8082 → backend  (API REST; 8082 pq 8080/8090 colidem com backends locais de outros projetos)
 #   3000 → admin    (painel web)
-#   5432 → postgres (acesso direto p/ tools como DBeaver)
-#   5050 → pgadmin  (GUI do banco)
+#   5433 → postgres (acesso direto p/ tools como DBeaver; 5433 pq 5432 colide com sawhub_db local)
+#   5051 → pgadmin  (GUI do banco; 5051 pq 5050 colide com sawhub_pgadmin local)
 
 services:
   db:
@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onda_pass}
       POSTGRES_DB: ${POSTGRES_DB:-onda_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_homolog_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@onda.local}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     ports:
-      - "5050:80"
+      - "5051:80"
     depends_on:
       db:
         condition: service_healthy
@@ -46,8 +46,9 @@ services:
     image: onda_backend:homolog
     container_name: onda_homolog_backend
     ports:
-      - "8080:8080"
+      - "8082:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: seed
       DATABASE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-onda_db}
       POSTGRES_USER: ${POSTGRES_USER:-onda_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-onda_pass}

@@ -10,9 +10,9 @@ docker compose -f "$ROOT/docker-compose.homolog.yml" ps
 echo ""
 echo "==> ADB reverse"
 if adb devices | grep -q "device$"; then
-  adb reverse tcp:8080 tcp:8080
+  adb reverse tcp:8082 tcp:8082
   adb reverse tcp:8081 tcp:8081
-  echo "    OK — 8080 (backend) e 8081 (metro) espelhados"
+  echo "    OK — 8082 (backend) e 8081 (metro) espelhados"
 else
   echo "    AVISO: nenhum dispositivo USB detectado — conecte o Xiaomi e rode:"
   echo "    adb reverse tcp:8080 tcp:8080 && adb reverse tcp:8081 tcp:8081"
