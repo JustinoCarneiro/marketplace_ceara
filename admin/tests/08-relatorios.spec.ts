@@ -69,4 +69,21 @@ test.describe('Reconciliação Financeira', () => {
     await expect(page.getByText('Transação')).toBeVisible();
     await expect(page.getByText('Valor')).toBeVisible();
   });
+
+  test('lista a transação liberada pela disputa resolvida (03-disputas)', async ({ page }) => {
+    // GET /admin/transactions filtra por 1 status (default RETIDO) — a página buscava só
+    // esse, então LIBERADO/REEMBOLSADO nunca apareciam mesmo existindo de verdade. Por essa
+    // altura da suíte o OutboxProcessor (roda a cada 5s) já processou o PAYMENT_RELEASED
+    // da disputa resolvida em 03-disputas.
+    await expect(page.getByText('LIBERADO').first()).toBeVisible();
+  });
+
+  test('exportar baixa um CSV de transações de verdade', async ({ page }) => {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /Exportar/i }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('transacoes.csv');
+    expect(await download.path()).toBeTruthy();
+  });
 });

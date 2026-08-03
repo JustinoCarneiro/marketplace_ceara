@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, downloadFile } from '../api/client';
 
 interface Transaction { id: string; serviceRequestId: string; prestadorNome?: string; valorTotal: number; statusPagamento: string; criadaEm: string; }
 interface OutboxEvent { id: string; tipo: string; entidade: string; tentativas: number; status: string; }
+
+// GET /admin/transactions filtra por 1 status só (?status=, default RETIDO) — sem essas 3
+// chamadas em paralelo, os KPIs "Liberado"/"Reembolsado" e a tabela nunca mostravam nada
+// além de RETIDO, mesmo com transações de verdade nos outros status.
+const RECONCILE_STATUSES = ['RETIDO', 'LIBERADO', 'REEMBOLSADO'] as const;
 
 function statusBadge(s: string) {
   const m: Record<string, { bg: string; color: string }> = {
@@ -19,15 +24,17 @@ export default function FinancePage() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [outbox, setOutbox] = useState<OutboxEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportErr, setExportErr] = useState('');
 
   useEffect(() => {
     (async () => {
       try {
-        const [t, o] = await Promise.all([
-          api.get<Transaction[]>('/admin/transactions').catch(() => []),
+        const [statuses, o] = await Promise.all([
+          Promise.all(RECONCILE_STATUSES.map(s =>
+            api.get<Transaction[]>(`/admin/transactions?status=${s}`).catch(() => []))),
           api.get<OutboxEvent[]>('/admin/outbox?status=FALHA').catch(() => []),
         ]);
-        setTxs(Array.isArray(t) ? t : []);
+        setTxs(statuses.flat());
         setOutbox(Array.isArray(o) ? o : []);
       } finally { setLoading(false); }
     })();
@@ -35,6 +42,12 @@ export default function FinancePage() {
 
   async function reprocess(id: string) {
     try { await api.post(`/admin/outbox/${id}/reprocess`, {}); } catch {}
+  }
+
+  async function exportar() {
+    setExportErr('');
+    try { await downloadFile('/admin/reports/transactions.csv', 'transacoes.csv'); }
+    catch (e: unknown) { setExportErr(e instanceof Error ? e.message : 'Erro ao exportar'); }
   }
 
   const fmt = (n: number) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 0 });
@@ -46,9 +59,12 @@ export default function FinancePage() {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
         <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Reconciliação financeira</span>
-        <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: '1.5px solid #14A8A0', borderRadius: 100, background: 'var(--surface)', color: '#0E7D77', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14A8A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {exportErr && <span style={{ fontSize: 12.5, color: '#C0392B' }}>{exportErr}</span>}
+          <button onClick={exportar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: '1.5px solid #14A8A0', borderRadius: 100, background: 'var(--surface)', color: '#0E7D77', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14A8A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
+          </button>
+        </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
