@@ -21,24 +21,21 @@ export default function RegisterProviderScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [bio, setBio] = useState('');
-  const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const [categoria, setCategoria] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  function toggleCat(cat: string) {
-    setSelectedCats(prev =>
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat],
-    );
-  }
-
   async function handleRegister() {
     setError('');
+    if (!categoria) { setError('Selecione uma categoria.'); return; }
     setLoading(true);
     try {
+      // Backend aceita 1 categoria por prestador (RegisterProviderRequest.categoria: String) —
+      // "bio" ainda não tem campo no request de cadastro, fica só na UI por enquanto.
       const res = await fetch(`${API_BASE}/auth/register/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, cpf, email, senha, bio, categorias: selectedCats }),
+        body: JSON.stringify({ nome, cpf, email, senha, categoria }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');
@@ -129,12 +126,12 @@ export default function RegisterProviderScreen() {
               <Text style={styles.label}>CATEGORIA PRINCIPAL</Text>
               <View style={styles.chips}>
                 {CATEGORIES.map(cat => {
-                  const active = selectedCats.includes(cat);
+                  const active = categoria === cat;
                   return (
                     <TouchableOpacity
                       key={cat}
                       style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => toggleCat(cat)}
+                      onPress={() => setCategoria(cat)}
                       activeOpacity={0.8}
                     >
                       <Text style={[styles.chipText, active && styles.chipTextActive]}>{cat}</Text>

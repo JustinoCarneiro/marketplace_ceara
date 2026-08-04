@@ -33,11 +33,10 @@ export default function SendProposalScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/proposals`, {
+      const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/proposals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          serviceRequestId: route.params.requestId,
           valor: valorNum,
           prazoDias: parseInt(prazoDias, 10),
         }),

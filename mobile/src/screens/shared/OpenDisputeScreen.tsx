@@ -42,13 +42,16 @@ export default function OpenDisputeScreen() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/disputes`, {
+      // Endpoint real é singular (/dispute) e não recebe corpo — o backend ainda não
+      // persiste motivo/detalhes (não há coluna pra isso hoje, só o status EM_DISPUTA).
+      const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/dispute`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ motivo: `${reason}${details ? ': ' + details : ''}` }),
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? 'Erro ao abrir disputa');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message ?? 'Erro ao abrir disputa');
+      }
       nav.goBack();
     } catch (e: any) {
       setError(e.message ?? 'Erro ao abrir disputa.');
