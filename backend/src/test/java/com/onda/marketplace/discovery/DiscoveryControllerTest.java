@@ -1,5 +1,7 @@
 package com.onda.marketplace.discovery;
 
+import com.onda.marketplace.provider.ProviderPublicService;
+import com.onda.marketplace.servicerequest.ServiceRequestService;
 import com.onda.marketplace.shared.TestSecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +24,8 @@ class DiscoveryControllerTest {
 
     @Autowired MockMvc mvc;
     @MockBean  DiscoveryService discoveryService;
+    @MockBean  ServiceRequestService serviceRequestService;
+    @MockBean  ProviderPublicService providerPublicService;
 
     @Test
     void nearby_validParams_returns200WithList() throws Exception {
@@ -53,5 +57,31 @@ class DiscoveryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void availableRequests_retornaFilaAberta() throws Exception {
+        var dto = new com.onda.marketplace.servicerequest.AvailableRequestDto(
+                UUID.randomUUID(), "Chuveiro sem funcionar", "Chuveiro sem funcionar",
+                "ELETRICISTA", "PENDENTE", null, null, java.time.Instant.now());
+        when(serviceRequestService.listarDisponiveis()).thenReturn(List.of(dto));
+
+        mvc.perform(get("/api/v1/providers/available-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("PENDENTE"));
+    }
+
+    @Test
+    void perfil_prestadorExistente_retorna200() throws Exception {
+        UUID userId = UUID.randomUUID();
+        var dto = new com.onda.marketplace.provider.ProviderPublicDto(
+                userId, "Zé Elétrica", "Elétrica", "Eletricista há 12 anos",
+                java.math.BigDecimal.valueOf(4.8), 10, 8, "VERIFICADO", List.of());
+        when(providerPublicService.buscarPorUserId(userId)).thenReturn(dto);
+
+        mvc.perform(get("/api/v1/providers/{userId}", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Zé Elétrica"))
+                .andExpect(jsonPath("$.notaMedia").value(4.8));
     }
 }

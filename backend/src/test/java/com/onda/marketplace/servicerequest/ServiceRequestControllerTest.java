@@ -85,4 +85,52 @@ class ServiceRequestControllerTest {
                 .andExpect(jsonPath("$.url").value("https://storage.example.com/foto.jpg"))
                 .andExpect(jsonPath("$.tipo").value("FOTO"));
     }
+
+    @Test
+    void meusPedidos_retornaListaDoCliente() throws Exception {
+        var dto = new MyRequestDto(UUID.randomUUID(), "ELETRICISTA", "Chuveiro sem funcionar",
+                "PROPOSTO", Instant.now(), null, 2, null);
+        when(service.listarMeusPedidos(any())).thenReturn(java.util.List.of(dto));
+
+        mvc.perform(get("/api/v1/service-requests/my"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("PROPOSTO"))
+                .andExpect(jsonPath("$[0].propostas").value(2));
+    }
+
+    @Test
+    void detalhe_pedidoExistente_retorna200() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        var dto = new ServiceRequestDetailDto(requestId, "ACEITO", "ELETRICISTA", "Chuveiro sem funcionar",
+                UUID.randomUUID(), UUID.randomUUID(), "Zé Elétrica", Instant.now(), Instant.now(), null);
+        when(service.detalhar(eq(requestId), any())).thenReturn(dto);
+
+        mvc.perform(get("/api/v1/service-requests/{id}", requestId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prestadorNome").value("Zé Elétrica"));
+    }
+
+    @Test
+    void publish_descricaoValida_retorna200() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        var dto = new ServiceRequestDto(requestId, "ELETRICISTA", "descrição final",
+                "PENDENTE", null, null, null, Instant.now());
+        when(service.publicar(eq(requestId), any(), any())).thenReturn(dto);
+
+        mvc.perform(post("/api/v1/service-requests/{id}/publish", requestId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new PublishRequest("descrição final"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.descricao").value("descrição final"));
+    }
+
+    @Test
+    void publish_descricaoEmBranco_retorna422() throws Exception {
+        mvc.perform(post("/api/v1/service-requests/{id}/publish", UUID.randomUUID())
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"descricao\":\"\"}"))
+                .andExpect(status().isUnprocessableEntity());
+    }
 }

@@ -17,6 +17,12 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // Fila de disputas (US24)
     java.util.List<ServiceRequest> findByStatus(ServiceRequestStatus status);
 
+    // "Meus pedidos" do cliente no app (mobile)
+    java.util.List<ServiceRequest> findByClienteIdOrderByUpdatedAtDesc(UUID clienteId);
+
+    // Fila aberta do prestador no app (mobile)
+    java.util.List<ServiceRequest> findByStatusOrderByCreatedAtDesc(ServiceRequestStatus status);
+
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 

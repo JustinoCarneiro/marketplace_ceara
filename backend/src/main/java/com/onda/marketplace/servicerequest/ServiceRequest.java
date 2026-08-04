@@ -65,6 +65,7 @@ public class ServiceRequest {
     public BigDecimal getAiFaixaMax()           { return aiFaixaMax; }
     public String getIdempotencyKey()           { return idempotencyKey; }
     public Instant getCreatedAt()               { return createdAt; }
+    public Instant getUpdatedAt()               { return updatedAt; }
 
     public void setCategoria(String v)          { this.categoria = v; }
     public void setDescricao(String v)          { this.descricao = v; }

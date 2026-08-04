@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,5 +37,42 @@ public class ServiceRequestController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("tipo") String tipo) {
         return service.addMedia(id, file, tipo);
+    }
+
+    /** "Meus pedidos" do cliente logado (mobile). */
+    @GetMapping("/my")
+    public List<MyRequestDto> meusPedidos(Authentication auth) {
+        return service.listarMeusPedidos(userId(auth));
+    }
+
+    /** Atendimento ativo do prestador logado — resolve a tab "Em Andamento" (mobile). */
+    @GetMapping("/active")
+    public ActiveJobDto atendimentoAtivo(Authentication auth) {
+        return new ActiveJobDto(service.buscarPedidoAtivoDoPrestador(userId(auth)));
+    }
+
+    /** Detalhe do pedido — só para quem participa dele (cliente dono ou prestador aceito). */
+    @GetMapping("/{id}")
+    public ServiceRequestDetailDto detalhe(@PathVariable UUID id, Authentication auth) {
+        return service.detalhar(id, userId(auth));
+    }
+
+    /** Sugestão da IA persistida no pedido; campos nulos = fallback manual na tela. */
+    @GetMapping("/{id}/ai-suggestion")
+    public AiSuggestionDto sugestaoIa(@PathVariable UUID id, Authentication auth) {
+        return service.buscarSugestaoIa(id, userId(auth));
+    }
+
+    /** Confirma a descrição final do pedido depois da revisão com a IA. */
+    @PostMapping("/{id}/publish")
+    public ServiceRequestDto publicar(
+            @PathVariable UUID id,
+            @Valid @RequestBody PublishRequest req,
+            Authentication auth) {
+        return service.publicar(id, userId(auth), req);
+    }
+
+    private static UUID userId(Authentication auth) {
+        return auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
     }
 }
