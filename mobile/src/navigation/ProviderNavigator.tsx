@@ -7,6 +7,7 @@ import { color } from '../theme';
 import type { ProviderStackParams } from './types';
 
 import AvailableRequestsScreen from '../screens/provider/AvailableRequestsScreen';
+import ActiveJobScreen from '../screens/provider/ActiveJobScreen';
 import SendProposalScreen from '../screens/provider/SendProposalScreen';
 import EscrowHeldScreen from '../screens/provider/EscrowHeldScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
@@ -75,7 +76,7 @@ function ProviderTabs() {
       })}
     >
       <Tab.Screen name="Available" component={AvailableRequestsScreen} options={{ tabBarLabel: 'Disponíveis' }} />
-      <Tab.Screen name="Active" component={RequestDetailScreen} options={{ tabBarLabel: 'Em Andamento' }} />
+      <Tab.Screen name="Active" component={ActiveJobScreen} options={{ tabBarLabel: 'Em Andamento' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Perfil' }} />
     </Tab.Navigator>
   );
