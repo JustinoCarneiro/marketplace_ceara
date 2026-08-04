@@ -54,7 +54,8 @@ notification:
   admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  # 3000 = admin build · 5173 = admin dev (Vite) · 8081 = preview web do Expo (mobile)
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8081}
 
 marketplace:
   webhook:
