@@ -36,6 +36,11 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
 # generated native folders
 /ios
 /android
