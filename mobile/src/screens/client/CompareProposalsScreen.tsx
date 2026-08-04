@@ -34,6 +34,8 @@ export default function CompareProposalsScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -52,12 +54,31 @@ export default function CompareProposalsScreen() {
     })();
   }, []);
 
-  function accept(p: Proposal) {
-    nav.navigate('PaymentChoice', {
-      requestId: route.params.requestId,
-      proposalId: p.id,
-      valor: p.valor,
-    });
+  // A tela só navegava pra PaymentChoice — nunca aceitava a proposta de verdade
+  // (PUT /proposals/{id}/accept). O pedido nunca saía de PROPOSTO e o pagamento
+  // subsequente falhava (PAYMENT_NOT_ALLOWED), silenciado pelo doPay() do PaymentChoice.
+  async function accept(p: Proposal) {
+    setError('');
+    setAcceptingId(p.id);
+    try {
+      const res = await fetch(`${API_BASE}/proposals/${p.id}/accept`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message ?? 'Erro ao aceitar proposta.');
+      }
+      nav.navigate('PaymentChoice', {
+        requestId: route.params.requestId,
+        proposalId: p.id,
+        valor: p.valor,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao aceitar proposta.');
+    } finally {
+      setAcceptingId(null);
+    }
   }
 
   return (
@@ -134,14 +155,22 @@ export default function CompareProposalsScreen() {
                   {/* CTA */}
                   <TouchableOpacity
                     testID="btn-aceitar-proposta"
-                    style={isBest ? styles.acceptBtnFilled : styles.acceptBtnOutline}
+                    style={[isBest ? styles.acceptBtnFilled : styles.acceptBtnOutline, acceptingId === p.id && { opacity: 0.6 }]}
                     onPress={() => accept(p)}
+                    disabled={acceptingId !== null}
                     activeOpacity={0.85}
                   >
-                    <Text style={isBest ? styles.acceptBtnFilledText : styles.acceptBtnOutlineText}>
-                      Aceitar proposta
-                    </Text>
+                    {acceptingId === p.id ? (
+                      <ActivityIndicator color={isBest ? color.textOnAccent : color.text} />
+                    ) : (
+                      <Text style={isBest ? styles.acceptBtnFilledText : styles.acceptBtnOutlineText}>
+                        Aceitar proposta
+                      </Text>
+                    )}
                   </TouchableOpacity>
+                  {error && acceptingId === null && (
+                    <Text style={styles.errorText}>{error}</Text>
+                  )}
                 </View>
               </View>
             );
@@ -261,6 +290,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   acceptBtnOutlineText: { fontSize: 15, fontWeight: font.weight.bold, color: color.text },
+  errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', marginTop: 4 },
 
   footerNote: {
     flexDirection: 'row',

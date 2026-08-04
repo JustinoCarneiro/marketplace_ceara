@@ -26,6 +26,7 @@ export default function PaymentChoiceScreen() {
 
   const [method, setMethod] = useState<Method>('pix');
   const [loading, setLoading] = useState(false);
+  const [payError, setPayError] = useState('');
 
   // Coleta de CPF no primeiro pagamento (antifraude Camada 2)
   const [showCpfModal, setShowCpfModal] = useState(false);
@@ -66,6 +67,7 @@ export default function PaymentChoiceScreen() {
 
   async function doPay() {
     setLoading(true);
+    setPayError('');
     try {
       const idempotencyKey = `${requestId}-${Date.now()}`;
       const res = await fetch(`${API_BASE}/service-requests/${requestId}/payment`, {
@@ -83,12 +85,18 @@ export default function PaymentChoiceScreen() {
           setShowCpfModal(true);
           return;
         }
+        // Antes caía direto pra "pagamento confirmado" mesmo com erro (ex.: proposta
+        // não aceita ainda -> PAYMENT_NOT_ALLOWED) — usuário via sucesso sem transação real.
+        setPayError(data.message ?? 'Não foi possível iniciar o pagamento.');
+        return;
       }
       if (method === 'pix') {
         nav.replace('PaymentPix', { requestId, valor: total });
       } else {
         nav.replace('PaymentCard', { requestId, valor: total });
       }
+    } catch {
+      setPayError('Falha de conexão. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -178,6 +186,8 @@ export default function PaymentChoiceScreen() {
             Pagamento <Text style={{ fontWeight: font.weight.black }}>retido com segurança</Text>. Só é liberado quando você confirmar o serviço.
           </Text>
         </View>
+
+        {!!payError && <Text style={styles.payErrorText}>{payError}</Text>}
 
         {/* CTA */}
         <TouchableOpacity testID="btn-pagar" style={styles.cta} onPress={pay} activeOpacity={0.85} disabled={loading}>
@@ -355,6 +365,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
+  payErrorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   // Modal de CPF
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
