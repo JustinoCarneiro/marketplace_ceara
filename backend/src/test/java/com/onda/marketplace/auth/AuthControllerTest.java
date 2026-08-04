@@ -35,7 +35,8 @@ class AuthControllerTest {
     @MockBean AuthService authService;
 
     static final AuthResponse FAKE_RESPONSE = new AuthResponse(
-            "access.token.jwt", "refresh-uuid-token", "ROLE_CLIENT"
+            "access.token.jwt", "refresh-uuid-token", "ROLE_CLIENT",
+            java.util.UUID.randomUUID(), "Cliente Teste", "cliente@test.com"
     );
 
     // ── US01: cadastro de cliente ────────────────────────────────────────────

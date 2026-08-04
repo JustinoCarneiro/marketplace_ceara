@@ -32,7 +32,8 @@ class ProviderRegistrationControllerTest {
                 "Carlos Silva", "carlos@example.com", "Senha@123",
                 "999.999.999-99", "ELETRICISTA");
         when(providerService.register(any())).thenReturn(
-                new AuthResponse("access-token", "refresh-token", "ROLE_PROVIDER"));
+                new AuthResponse("access-token", "refresh-token", "ROLE_PROVIDER",
+                        java.util.UUID.randomUUID(), "Carlos Silva", "carlos@example.com"));
 
         mvc.perform(post("/api/v1/auth/register/provider")
                         .with(csrf())

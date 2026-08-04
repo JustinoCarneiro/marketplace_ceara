@@ -107,7 +107,8 @@ public class AuthService {
                 Instant.now().plus(refreshTokenDays, ChronoUnit.DAYS)
         );
         refreshTokenRepository.save(rt);
-        return new AuthResponse(accessToken, rawRefresh, user.getRole().name());
+        return new AuthResponse(accessToken, rawRefresh, user.getRole().name(),
+                user.getId(), user.getNome(), user.getEmail());
     }
 
     private static String sha256(String value) {
