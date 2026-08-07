@@ -60,6 +60,17 @@ public class ServiceExecutionService {
                 .orElseThrow(() -> new BusinessException("UNAUTHORIZED_PROVIDER",
                         "Prestador não é o responsável por este pedido."));
 
+        // US07: o prestador só começa porque o dinheiro já está retido — é essa a
+        // promessa anti-calote do escrow. Sem esta guarda dava pra executar (e concluir)
+        // um serviço cujo pagamento nunca foi confirmado pelo gateway.
+        boolean retido = transactionRepository.findByServiceRequestId(srId)
+                .map(tx -> tx.getStatusPagamento() == TransactionStatus.RETIDO)
+                .orElse(false);
+        if (!retido) {
+            throw new BusinessException("PAYMENT_NOT_RETAINED",
+                    "O serviço só pode ser iniciado com o pagamento retido no escrow.");
+        }
+
         sr.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
         srRepository.save(sr);
     }
@@ -78,8 +89,12 @@ public class ServiceExecutionService {
         sr.setStatus(ServiceRequestStatus.CONCLUIDO);
         srRepository.save(sr);
 
-        transactionRepository.findByServiceRequestId(srId).ifPresent(tx ->
-                outboxRepository.save(outboxEvent(tx, "PAYMENT_RELEASED")));
+        // Só libera o que de fato está retido (mesma defesa já aplicada em cancel()):
+        // emitir PAYMENT_RELEASED sobre transação PENDENTE mandaria o gateway repassar
+        // dinheiro que nunca entrou.
+        transactionRepository.findByServiceRequestId(srId)
+                .filter(tx -> tx.getStatusPagamento() == TransactionStatus.RETIDO)
+                .ifPresent(tx -> outboxRepository.save(outboxEvent(tx, "PAYMENT_RELEASED")));
     }
 
     /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte autenticada pode abrir disputa. */

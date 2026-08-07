@@ -1,0 +1,13 @@
+# Profile "seed" — ambiente de desenvolvimento/demo/CI (SeedRunner popula dados de teste).
+# NÃO é profile de produção.
+marketplace:
+  gateway:
+    # Sem gateway real aqui, GatewayServiceImpl é stub e ninguém chamaria nosso webhook —
+    # toda cobrança ficaria PENDENTE pra sempre e o escrow travaria. A simulação fecha
+    # esse ciclo pelo mesmo caminho do webhook de produção.
+    simulate-confirmation: true
+    simulate-delay-ms: 500
+  outbox:
+    # Mais rápido que o default de 5s: aqui a cadeia cobrança → confirmação precisa
+    # fechar dentro do tempo de um clique no app (e dos testes de fluxo).
+    delay-ms: 500

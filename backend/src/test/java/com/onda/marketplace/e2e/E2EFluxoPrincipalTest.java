@@ -3,8 +3,10 @@ package com.onda.marketplace.e2e;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -55,6 +57,9 @@ class E2EFluxoPrincipalTest {
     }
 
     @LocalServerPort int port;
+
+    /** Lê o id que o gateway gerou — é o que o gateway real saberia ao chamar nosso webhook. */
+    @Autowired JdbcTemplate jdbc;
 
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
@@ -286,7 +291,28 @@ class E2EFluxoPrincipalTest {
                 .extract().response();
 
         transactionId = resp.path("id");
-        gatewayTxId   = resp.path("gatewayTransactionId");
+
+        // A cobrança é despachada ao gateway de forma assíncrona (OutboxProcessor, fora de
+        // @Transactional) — o gateway_transaction_id só existe DEPOIS disso, nunca na
+        // resposta deste POST. Antes o teste lia daqui (sempre null), caía no fallback e
+        // mandava o webhook com um id inexistente: confirmava nada e mesmo assim passava.
+        gatewayTxId = aguardarGatewayTxId();
+        Assertions.assertNotNull(gatewayTxId, "OutboxProcessor não despachou a cobrança ao gateway");
+    }
+
+    /** Aguarda o OutboxProcessor despachar a cobrança (profile e2e: varredura a cada 500ms). */
+    private String aguardarGatewayTxId() {
+        for (int i = 0; i < 40; i++) {
+            var ids = jdbc.queryForList(
+                    "SELECT gateway_transaction_id FROM transactions WHERE id = ?::uuid",
+                    String.class, transactionId);
+            if (!ids.isEmpty() && ids.get(0) != null) return ids.get(0);
+            try { Thread.sleep(250); } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+        return null;
     }
 
     @Test @Order(10)
@@ -300,11 +326,22 @@ class E2EFluxoPrincipalTest {
                           "gatewayTransactionId": "%s",
                           "status": "PAGO"
                         }
-                        """, gatewayTxId != null ? gatewayTxId : transactionId))
+                        """, gatewayTxId))
                 .when()
                 .post("/api/v1/payments/webhook")
                 .then()
                 .statusCode(anyOf(is(200), is(204)));
+
+        // O webhook responde 200 mesmo quando não acha a transação (não vaza existência de id).
+        // Sem esta asserção o passo passava sem ter retido nada — foi assim que o dinheiro
+        // seguia PENDENTE por todo o fluxo.
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .get("/api/v1/transactions/{srId}", requestId)
+                .then()
+                .statusCode(200)
+                .body("statusPagamento", equalTo("RETIDO"));
     }
 
     @Test @Order(11)

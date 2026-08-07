@@ -57,17 +57,49 @@ class ServiceExecutionServiceTest {
     // ----- start -----
 
     @Test
-    void start_aceitoEPrestadorCorreto_moveParaEmAndamento() {
+    void start_aceitoPrestadorCorretoEDinheiroRetido_moveParaEmAndamento() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
+        when(transactionRepository.findByServiceRequestId(SR_ID))
+                .thenReturn(Optional.of(transaction(TransactionStatus.RETIDO)));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.start(SR_ID, PRESTADOR_ID);
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.EM_ANDAMENTO);
         verify(srRepository).save(sr);
+    }
+
+    @Test
+    void start_pagamentoAindaPendente_lancaException() {
+        // US07: sem dinheiro retido o prestador estaria trabalhando de graça — e o
+        // pedido chegaria a CONCLUIDO mandando liberar valor que nunca foi cobrado.
+        var sr = sr(ServiceRequestStatus.ACEITO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
+                .thenReturn(List.of(proposta(PRESTADOR_ID)));
+        when(transactionRepository.findByServiceRequestId(SR_ID))
+                .thenReturn(Optional.of(transaction(TransactionStatus.PENDENTE)));
+
+        assertThatThrownBy(() -> service.start(SR_ID, PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYMENT_NOT_RETAINED");
+        verify(srRepository, never()).save(any());
+    }
+
+    @Test
+    void start_semTransacaoNenhuma_lancaException() {
+        var sr = sr(ServiceRequestStatus.ACEITO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
+                .thenReturn(List.of(proposta(PRESTADOR_ID)));
+        when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.start(SR_ID, PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYMENT_NOT_RETAINED");
     }
 
     @Test
@@ -93,6 +125,22 @@ class ServiceExecutionServiceTest {
     }
 
     // ----- confirmCompletion -----
+
+    @Test
+    void confirmCompletion_pagamentoPendente_naoEmiteRepasse() {
+        // Rede de segurança: mesmo que o pedido chegue aqui sem escrow (dado legado,
+        // caminho fora da API), nada de mandar o gateway repassar dinheiro não cobrado.
+        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestId(SR_ID))
+                .thenReturn(Optional.of(transaction(TransactionStatus.PENDENTE)));
+        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.confirmCompletion(SR_ID, CLIENTE_ID);
+
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CONCLUIDO);
+        verify(outboxRepository, never()).save(any());
+    }
 
     @Test
     void confirmCompletion_emAndamento_moveParaConcluido_e_criaOutbox() {

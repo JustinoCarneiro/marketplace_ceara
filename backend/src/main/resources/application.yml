@@ -63,6 +63,11 @@ marketplace:
   comissao: ${MARKETPLACE_COMISSAO:0.15}           # percentual padrão (15%)
   outbox:
     delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
+  gateway:
+    # Confirma cobranças automaticamente, emulando o webhook do gateway real.
+    # SEMPRE false em produção — lá quem confirma é o gateway de verdade.
+    # Ativado no profile "seed" (dev/demo/CI), ver application-seed.yml.
+    simulate-confirmation: ${MARKETPLACE_GATEWAY_SIMULATE:false}
   review:
     # Double-blind: avaliação só fica pública quando ambas as partes avaliam, ou
     # quando vence este prazo de reciprocidade (padrão Airbnb = 14 dias).

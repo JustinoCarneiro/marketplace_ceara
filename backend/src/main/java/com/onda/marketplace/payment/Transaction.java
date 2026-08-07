@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.shared.exception.BusinessException;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -73,8 +74,43 @@ public class Transaction {
     public String getIdempotencyKey()        { return idempotencyKey; }
     public Instant getCreatedAt()            { return createdAt; }
 
-    public void reter()       { this.statusPagamento = TransactionStatus.RETIDO; }
-    public void liberar()     { this.statusPagamento = TransactionStatus.LIBERADO; }
-    public void reembolsar()  { this.statusPagamento = TransactionStatus.REEMBOLSADO; }
+    /*
+     * Máquina de estados financeira (CLAUDE.md):
+     *     PENDENTE → RETIDO → (LIBERADO | REEMBOLSADO)
+     *
+     * As transições são guardadas aqui, na entidade, e não só em quem chama: sem isso
+     * um PAYMENT_RELEASED sobre transação PENDENTE repassaria ao prestador dinheiro que
+     * nunca foi cobrado do cliente. Repetir a transição atual é no-op de propósito —
+     * webhook de gateway é reentregue e o OutboxProcessor faz retry; ambos precisam ser
+     * idempotentes. Já andar para trás (ex.: reter depois de liberado) é anomalia real
+     * e estoura.
+     */
+
+    public void reter() {
+        if (statusPagamento == TransactionStatus.RETIDO) return;   // reentrega do webhook
+        exigir(TransactionStatus.PENDENTE, TransactionStatus.RETIDO);
+        this.statusPagamento = TransactionStatus.RETIDO;
+    }
+
+    public void liberar() {
+        if (statusPagamento == TransactionStatus.LIBERADO) return; // retry do outbox
+        exigir(TransactionStatus.RETIDO, TransactionStatus.LIBERADO);
+        this.statusPagamento = TransactionStatus.LIBERADO;
+    }
+
+    public void reembolsar() {
+        if (statusPagamento == TransactionStatus.REEMBOLSADO) return;
+        exigir(TransactionStatus.RETIDO, TransactionStatus.REEMBOLSADO);
+        this.statusPagamento = TransactionStatus.REEMBOLSADO;
+    }
+
+    private void exigir(TransactionStatus origemExigida, TransactionStatus destino) {
+        if (statusPagamento != origemExigida) {
+            throw new BusinessException("INVALID_PAYMENT_TRANSITION",
+                    "Transição financeira inválida: " + statusPagamento + " → " + destino
+                            + " (exige " + origemExigida + ").");
+        }
+    }
+
     public void setGatewayTransactionId(String v) { this.gatewayTransactionId = v; }
 }

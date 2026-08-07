@@ -37,8 +37,12 @@ test.describe('Mediação de Disputa (ação real)', () => {
     await expect(page).toHaveURL(/\/disputes\/[0-9a-f-]+/);
 
     // Detalhe carregado a partir do DTO real (DisputaDetalheDto) — sem crash.
-    await expect(page.getByText('Hidráulica')).toBeVisible();
-    await expect(page.getByText(/R\$\s*250,00/)).toBeVisible();
+    // A lista também mostra "R$ 250,00" (total retido) e "Hidráulica" (categoria da linha):
+    // no instante da troca de rota as duas telas coexistem no DOM e um getByText solto
+    // resolvia 2 elementos, estourando strict mode na hora (sem retry) — daí a flakiness.
+    // Ancoramos no valor do detalhe, que tem testid próprio.
+    await expect(page.getByTestId('valor-retido')).toHaveText(/R\$\s*250,00/);
+    await expect(page.getByText('Hidráulica').last()).toBeVisible();
 
     await page.getByRole('button', { name: /Liberar ao prestador/i }).click();
     await expect(page.getByText(/Disputa resolvida/i)).toBeVisible({ timeout: 8000 });

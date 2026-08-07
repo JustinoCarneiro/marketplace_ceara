@@ -95,7 +95,7 @@ export default function DisputeDetailPage() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={S.escrow}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', color: '#fff' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#B7DCE3' }} />VALOR RETIDO</span>
-            <span style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>{fmt(d.valorTotal)}</span>
+            <span data-testid="valor-retido" style={{ fontSize: 30, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>{fmt(d.valorTotal)}</span>
             <span style={{ fontSize: 12.5, color: '#B7DCE3' }}>Decida para quem o valor será liberado.</span>
           </div>
           <div style={S.card}>
