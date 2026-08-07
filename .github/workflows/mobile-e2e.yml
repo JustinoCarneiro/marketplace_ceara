@@ -90,7 +90,9 @@ jobs:
 
       - name: Iniciar backend em background
         run: |
-          java -jar backend/target/marketplace-*.jar &
+          # Sem -Xmx, o heap default (~25% da RAM do runner) fica competindo com o
+          # build do Gradle rodando em seguida — 512m sobra pro backend de teste.
+          java -Xmx512m -jar backend/target/marketplace-*.jar &
           echo "Aguardando :8080..."
           timeout 90 bash -c 'until nc -z localhost 8080; do sleep 2; done'
           echo "Backend UP"
