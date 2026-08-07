@@ -431,6 +431,14 @@ Um projeto pode (e frequentemente deve) ter os dois — não são concorrentes.
 
 O Trello da Onda não é uma ferramenta separada da documentação técnica; ele é o seu espelho visual. **Regra de Ouro da Sincronização:** Toda e qualquer especificação funcional criada, alterada ou deletada (nos arquivos `CLAUDE.md`, `ROADMAP.md` ou `spec.md`) deve obrigatoriamente engatilhar o utilitário local `./scripts/trello_sync.py` para sincronizar o quadro do projeto correspondente. A documentação e o Trello são a mesma entidade.
 
+> **Credencial do `trello_sync.py` (30/07/2026):** o script lê `TRELLO_KEY`/`TRELLO_TOKEN` de
+> variável de ambiente — nunca hardcoded no código (já vazou hardcoded uma vez antes de ser
+> commitado; corrigido a tempo). É a mesma credencial de conta pra todos os projetos Onda, então
+> vive em **um lugar só**, fora de qualquer repositório: `~/.trello_env` (`chmod 600`), carregado
+> automaticamente pelo `~/.zshrc` via `[ -f ~/.trello_env ] && source ~/.trello_env`. Pra gerar uma
+> credencial nova (perdeu/rotacionou): `trello.com/power-ups/admin` → Power-Up "Onda Sync" → API
+> key → gerar Token a partir de lá.
+
 Para comportar o fluxo das 5 Fases da Onda (do Design ao Deploy), o quadro oficial de Kanban no Trello deve ter *exatamente* e *apenas* as seguintes **9 listas (colunas)** na ordem especificada:
 
 1. **📚 Base de Conhecimento (Docs / Memória Técnica):**
