@@ -143,8 +143,10 @@ jobs:
           # -q temporariamente fora: o watchdog de GC (resolvido) escondia um segundo
           # problema — "Process 'command node' finished with non-zero exit value 1"
           # sem stderr nenhum visível por causa do -q. Provavelmente o bundler Metro
-          # (bundleReleaseJsAndAssets). Precisa do output completo pra ver a causa real.
-          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+          # (bundleReleaseJsAndAssets). Nem sem -q o Gradle mostra o stderr real do
+          # node — --stacktrace (sugerido pelo próprio Gradle) costuma incluir o
+          # stdout/stderr do processo capturado dentro da exceção.
+          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 --stacktrace
         working-directory: mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
