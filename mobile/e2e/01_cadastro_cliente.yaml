@@ -20,6 +20,9 @@ env:
 - tapOn:
     text: "mínimo 8 caracteres"
 - inputText: ${SENHA}
+# Botão "Criar conta" fica desabilitado até aceitar os termos (canSubmit exige
+# acceptedTerms) — sem esse tapOn, o botão nunca é encontrado pelo Maestro.
+- tapOn: "Li e aceito os"
 - tapOn: "Criar conta"
 - assertVisible: "Elétrica"
 - waitForAnimationToEnd
