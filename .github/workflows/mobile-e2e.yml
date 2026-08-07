@@ -122,6 +122,12 @@ jobs:
       # Fix: restringir pra ABI única do emulador (arch: x86_64 acima — o próprio
       # template do Expo já comenta esse flag) + subir o teto de Metaspace de verdade,
       # sobrescrevendo a linha depois que o prebuild gera o arquivo.
+      - name: Diagnóstico de memória do runner
+        run: |
+          echo "--- free -h ---"; free -h
+          echo "--- nproc ---"; nproc
+          echo "--- processos java/node vivos ---"; ps aux | grep -E 'java|node' | grep -v grep
+
       - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
