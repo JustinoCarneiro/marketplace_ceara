@@ -118,13 +118,25 @@ Como **Prestador**, quero atualizar o andamento do serviço, para refletir o sta
 
 ### US08 — Cliente avalia Prestador
 Como **Cliente**, quero dar 1–5 estrelas e comentar, para ajudar outros a escolher.
-- **Dado** pedido `CONCLUIDO`, **quando** avalio, **então** a nota entra no cálculo da nota média do prestador.
+- **Dado** pedido `CONCLUIDO`, **quando** avalio, **então** a nota entra no cálculo da nota média do prestador **assim que for revelada** (ver US28).
 - **Dado** pedido não concluído, **quando** tento avaliar, **então** recebo 422.
 
 ### US20 — Prestador avalia Cliente
 Como **Prestador**, quero avaliar o Cliente após o serviço, para sinalizar bons/maus contratantes.
 - **Dado** pedido `CONCLUIDO`, **quando** avalio o cliente (1–5 + comentário), **então** a nota entra na reputação dele.
 - Avaliações são liberadas para ambos somente após `CONCLUIDO` (sem retaliação durante o serviço).
+
+### US28 — Avaliação double-blind (reveal simultâneo)
+Como **plataforma**, quero que as duas avaliações só apareçam ao mesmo tempo, para que ninguém
+escreva a sua olhando a nota que recebeu (retaliação) nem combine notas altas mútuas (conluio).
+- **Dado** que avaliei e a outra parte ainda não, **então** minha avaliação fica **oculta**: não
+  aparece no perfil público nem entra na nota média — a média também vazaria a nota escondida.
+- **Dado** que a outra parte avalia depois, **então** as **duas** são reveladas no mesmo instante
+  e a reputação é recalculada.
+- **Dado** que a outra parte nunca avalia, **quando** vence o prazo de reciprocidade
+  (`marketplace.review.reveal-deadline-days`, padrão **14 dias**), **então** minha avaliação é
+  publicada assim mesmo — quem avaliou não pode ser punido pelo silêncio do outro.
+- **Dado** que avaliei, **então** vejo na confirmação se já está pública ou até quando fica oculta.
 
 ---
 

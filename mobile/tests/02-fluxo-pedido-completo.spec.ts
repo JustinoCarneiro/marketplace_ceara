@@ -130,4 +130,12 @@ test('cliente confirma a conclusão e avalia o prestador', async ({ page }) => {
   await page.getByText('Enviar avaliação', { exact: true }).click();
 
   await expect(page.getByText('Obrigado!')).toBeVisible({ timeout: 8000 });
+
+  // Double-blind (spec US28): o prestador ainda não avaliou, então a nota do cliente
+  // fica oculta — a confirmação tem que dizer isso, não fingir que já é pública.
+  await expect(page.getByText('Aguardando a outra avaliação')).toBeVisible();
+  await expect(page.getByText(/fica visível quando .* também avaliar/)).toBeVisible();
+  await expect(
+    page.getByText('Nenhuma das partes vê a nota da outra antes de avaliar.'),
+  ).toBeVisible();
 });

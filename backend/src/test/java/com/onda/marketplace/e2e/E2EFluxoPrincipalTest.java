@@ -59,6 +59,7 @@ class E2EFluxoPrincipalTest {
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
     static String tokenPrestador;
+    static String prestadorId;
     static String requestId;
     static String proposalId;
     static String transactionId;
@@ -98,7 +99,7 @@ class E2EFluxoPrincipalTest {
     @Test @Order(2)
     @DisplayName("02 · Registrar prestador")
     void registrarPrestador() {
-        tokenPrestador = given()
+        var resp = given()
                 .contentType(ContentType.JSON)
                 .body("""
                         {
@@ -106,7 +107,8 @@ class E2EFluxoPrincipalTest {
                           "email":     "joao.e2e@onda.test",
                           "senha":     "Senha@123",
                           "cpf":       "123.456.789-09",
-                          "categoria": "eletrica"
+                          "categoria": "eletrica",
+                          "bio":       "Eletricista há 12 anos em Fortaleza."
                         }
                         """)
                 .when()
@@ -115,7 +117,10 @@ class E2EFluxoPrincipalTest {
                 .statusCode(201)
                 .body("accessToken", notNullValue())
                 .body("role", equalTo("ROLE_PROVIDER"))
-                .extract().path("accessToken");
+                .extract();
+
+        tokenPrestador = resp.path("accessToken");
+        prestadorId    = resp.path("userId");
     }
 
     @Test @Order(3)
@@ -349,7 +354,7 @@ class E2EFluxoPrincipalTest {
     // ─── Épico 7 — Avaliação ──────────────────────────────────────────────
 
     @Test @Order(14)
-    @DisplayName("14 · Cliente avalia o prestador (1-5 estrelas)")
+    @DisplayName("14 · Cliente avalia o prestador — fica OCULTA até o prestador avaliar (double-blind)")
     void clienteAvaliaPresador() {
         given()
                 .contentType(ContentType.JSON)
@@ -364,11 +369,24 @@ class E2EFluxoPrincipalTest {
                 .post("/api/v1/service-requests/{id}/review", requestId)
                 .then()
                 .statusCode(201)
-                .body("nota", equalTo(5));
+                .body("nota", equalTo(5))
+                // ninguém vê essa nota ainda — o prestador não avaliou
+                .body("revelada", equalTo(false))
+                .body("prazoRevelacao", notNullValue());
+
+        // e enquanto oculta não pode aparecer no perfil público nem mexer na reputação
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .get("/api/v1/providers/{id}", prestadorId)
+                .then()
+                .statusCode(200)
+                .body("totalAvaliacoes", equalTo(0))
+                .body("avaliacoes", hasSize(0));
     }
 
     @Test @Order(15)
-    @DisplayName("15 · Prestador avalia o cliente")
+    @DisplayName("15 · Prestador avalia o cliente — revela as DUAS ao mesmo tempo")
     void prestadorAvaliaCliente() {
         given()
                 .contentType(ContentType.JSON)
@@ -383,7 +401,18 @@ class E2EFluxoPrincipalTest {
                 .post("/api/v1/service-requests/{id}/review", requestId)
                 .then()
                 .statusCode(201)
-                .body("nota", equalTo(5));
+                .body("nota", equalTo(5))
+                .body("revelada", equalTo(true));
+
+        // agora a avaliação do cliente (feita no passo 14) virou pública e conta na nota
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .get("/api/v1/providers/{id}", prestadorId)
+                .then()
+                .statusCode(200)
+                .body("totalAvaliacoes", equalTo(1))
+                .body("notaMedia", equalTo(5.0f));
     }
 
     @Test @Order(16)

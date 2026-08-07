@@ -45,10 +45,12 @@ micro-interações visíveis.
 
 ## 3. Reputação e Avaliações (Épico 7)
 
-- ⬜ **Avaliação double-blind (reveal simultâneo):** nota/comentário só ficam
-  visíveis quando **ambas as partes avaliaram** OU o prazo expira. Padrão
-  Airbnb. Reduz retaliação e conluio — reforça a [[PENDENCIAS_INTEGRIDADE]].
-  → afeta `RateScreen`, `RateConfirmScreen` e a exibição no perfil.
+- ✅ **Avaliação double-blind (reveal simultâneo):** implementado 2026-08-07
+  (spec US28). Avaliação nasce oculta; é revelada quando a contraparte avalia
+  ou quando vence o prazo de 14 dias (`ReviewRevealJob`). Enquanto oculta não
+  entra na nota média nem no perfil público — senão a média denunciaria a nota.
+  `RateConfirmScreen` mostra ao usuário se já está pública ou até quando fica
+  oculta. Reforça a [[PENDENCIAS_INTEGRIDADE]] (reduz retaliação e conluio).
 - ⬜ **Avaliação só com transação verificada:** nota só conta se vinculada a um
   `service_request` CONCLUIDO (impede review de não-cliente).
 - ⬜ **Canal de denúncia** de avaliação/prestador fraudulento (UI simples de
@@ -119,7 +121,7 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🔴 Alta~~ | Barra de status do escrow no `RequestDetail` | 5/6 | Médio | ✅ Feito |
 | ~~🔴 Alta~~ | Estados Loading/Vazio/Erro padronizados + `<ScreenState>` | todos | Médio | ✅ Feito |
 | ~~🔴 Alta~~ | Labels de acessibilidade em ícones-botão | todos | Baixo | ✅ Feito |
-| 🟡 Média | Avaliação double-blind | 7 | Médio | ⬜ Pendente |
+| ~~🟡 Média~~ | Avaliação double-blind | 7 | Médio | ✅ Feito |
 | ~~🟡 Média~~ | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) | ✅ Feito |
 | ~~🟢 Baixa~~ | Skeleton screens nas listas | 2/4 | Médio | ✅ Feito |
 | 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |

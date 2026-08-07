@@ -32,7 +32,8 @@ class ReviewControllerTest {
 
     @Test
     void review_notaValida_returns201() throws Exception {
-        var dto = new ReviewDto(UUID.randomUUID(), 5, "Excelente!", "CLIENTE_AVALIA_PRESTADOR", Instant.now());
+        var dto = new ReviewDto(UUID.randomUUID(), 5, "Excelente!", "CLIENTE_AVALIA_PRESTADOR",
+                Instant.now(), false, Instant.now().plus(java.time.Duration.ofDays(14)));
         when(reviewService.avaliar(any(), any(), any(), any())).thenReturn(dto);
 
         mvc.perform(post("/api/v1/service-requests/{id}/review", SR_ID)

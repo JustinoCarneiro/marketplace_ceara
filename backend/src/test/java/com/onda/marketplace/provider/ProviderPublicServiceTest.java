@@ -61,7 +61,8 @@ class ProviderPublicServiceTest {
                 .senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
 
         when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
-        when(reviewRepository.findByAvaliadoIdAndTipoOrderByCriadoEmDesc(userId, ReviewType.CLIENTE_AVALIA_PRESTADOR))
+        when(reviewRepository.findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
+                userId, ReviewType.CLIENTE_AVALIA_PRESTADOR))
                 .thenReturn(List.of(review));
         when(userRepository.findById(avaliadorId)).thenReturn(Optional.of(cliente));
         when(proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA)).thenReturn(3L);

@@ -36,6 +36,17 @@ public class Review {
     @Column(name = "criado_em", nullable = false, updatable = false)
     private Instant criadoEm = Instant.now();
 
+    /**
+     * Double-blind: nasce oculta e só é revelada quando a contraparte também
+     * avalia, ou quando expira o prazo de reciprocidade (job agendado).
+     * Enquanto oculta, não entra na nota média nem no perfil público.
+     */
+    @Column(nullable = false)
+    private boolean revelada = false;
+
+    @Column(name = "revelada_em")
+    private Instant reveladaEm;
+
     protected Review() {}
 
     public Review(UUID serviceRequestId, UUID avaliadorId, UUID avaliadoId,
@@ -56,4 +67,14 @@ public class Review {
     public int        getNota()             { return nota; }
     public String     getComentario()       { return comentario; }
     public Instant    getCriadoEm()         { return criadoEm; }
+    public boolean    isRevelada()          { return revelada; }
+    public Instant    getReveladaEm()       { return reveladaEm; }
+
+    /** Idempotente: revelar uma avaliação já revelada não altera a data original. */
+    public void revelar() {
+        if (!this.revelada) {
+            this.revelada   = true;
+            this.reveladaEm = Instant.now();
+        }
+    }
 }

@@ -49,7 +49,15 @@ export default function RateScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao avaliar');
-      nav.navigate('RateConfirm', { nota, comentario });
+      // Double-blind: a avaliação só fica pública quando a outra parte também
+      // avalia (ou quando vence o prazo) — a tela de confirmação explica qual dos dois.
+      nav.navigate('RateConfirm', {
+        nota,
+        comentario,
+        revelada: data.revelada ?? false,
+        prazoRevelacao: data.prazoRevelacao ?? null,
+        avaliadoNome,
+      });
     } catch (e: any) {
       setError(e.message ?? 'Erro ao enviar avaliação.');
     } finally {

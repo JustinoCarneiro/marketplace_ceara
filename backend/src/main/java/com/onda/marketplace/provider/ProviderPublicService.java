@@ -38,8 +38,11 @@ public class ProviderPublicService {
         ProviderProfile p = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException("PROVIDER_NOT_FOUND", "Prestador não encontrado."));
 
+        // Double-blind: só avaliações já reveladas entram no perfil público — as
+        // ocultas também não contam na notaMedia, senão a média denunciaria a nota.
         List<Review> reviews = reviewRepository
-                .findByAvaliadoIdAndTipoOrderByCriadoEmDesc(userId, ReviewType.CLIENTE_AVALIA_PRESTADOR);
+                .findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
+                        userId, ReviewType.CLIENTE_AVALIA_PRESTADOR);
 
         List<ProviderPublicDto.Avaliacao> avaliacoes = reviews.stream()
                 .map(r -> new ProviderPublicDto.Avaliacao(

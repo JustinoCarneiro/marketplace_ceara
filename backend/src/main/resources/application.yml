@@ -63,6 +63,11 @@ marketplace:
   comissao: ${MARKETPLACE_COMISSAO:0.15}           # percentual padrão (15%)
   outbox:
     delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
+  review:
+    # Double-blind: avaliação só fica pública quando ambas as partes avaliam, ou
+    # quando vence este prazo de reciprocidade (padrão Airbnb = 14 dias).
+    reveal-deadline-days: ${MARKETPLACE_REVIEW_REVEAL_DAYS:14}
+    reveal-job-delay-ms: ${MARKETPLACE_REVIEW_REVEAL_JOB_MS:3600000}  # varredura de vencidas (1h)
 
 # Actuator — observabilidade base (TS08)
 management:

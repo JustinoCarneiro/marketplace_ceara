@@ -57,9 +57,11 @@ contexto. Torna a auto-contratação impossível por construção (sempre o mesm
 - **Detecção de colusão:** mesmo dispositivo (device fingerprint), mesma conta
   bancária de origem/destino do Pix, mesmo IP recorrente entre "cliente" e
   "prestador".
-- **Avaliação double-blind:** nota só fica visível quando ambas as partes
-  avaliaram, ou após expirar o prazo — reduz conluio e retaliação (ver
-  [[boas-praticas-ux]]).
+- ~~**Avaliação double-blind**~~ — ✅ **IMPLEMENTADA em 2026-08-07** (antecipada da v2):
+  a nota só fica visível quando ambas as partes avaliaram ou após expirar o prazo de
+  14 dias. Enquanto oculta não entra na `notaMedia` nem no perfil público. Reduz conluio
+  (não dá pra combinar nota vendo a do outro) e retaliação. Spec US28, `ReviewService` +
+  `ReviewRevealJob`.
 - **Reputação verificada por volume real:** ponderar nota por nº de transações
   com clientes distintos; sinalizar prestadores com poucos avaliadores únicos.
 
@@ -69,7 +71,8 @@ contexto. Torna a auto-contratação impossível por construção (sempre o mesm
 | 1 — Validação de transação | ✅ Sim | ✅ Feito | Uma linha no backend, custo zero |
 | 2 — CPF único (pedido no 1º pagamento) | ✅ Sim | ✅ Feito | Resolve o problema real, atrito controlado |
 | 3 — Conta dual-role | ❌ v2 | — | Mudança arquitetural grande |
-| Double-blind / device fingerprint | ❌ v2 | — | Refinamento pós-tração |
+| Avaliação double-blind | ✅ Sim (antecipado) | ✅ Feito | Barato e ataca conluio direto |
+| Device fingerprint / detecção de colusão | ❌ v2 | — | Refinamento pós-tração |
 
 ---
 
