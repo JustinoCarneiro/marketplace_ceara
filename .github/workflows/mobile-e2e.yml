@@ -110,10 +110,22 @@ jobs:
       # embute o bundle JS e roda sozinho. O Expo prebuild assina o release com
       # a keystore de debug por padrão, então não precisa de keystore próprio.
       # 10.0.2.2 é o IP padrão do emulador Android para o host → não precisa adb reverse
+      #
+      # 2026-08-04: job estourava o timeout de 1h travado em "e: [ksp]
+      # java.lang.OutOfMemoryError: Metaspace" — o android/gradle.properties que o
+      # `expo prebuild` gera (gitignored, não editável no repo) compila as 4 ABIs
+      # (armeabi-v7a/arm64-v8a/x86/x86_64) com teto de só 512m de Metaspace.
+      # GRADLE_OPTS abaixo NÃO ajuda nisso — configura a JVM cliente do Gradle, não
+      # a JVM de build (que lê org.gradle.jvmargs do arquivo, mesmo com --no-daemon).
+      # Fix: restringir pra ABI única do emulador (arch: x86_64 acima — o próprio
+      # template do Expo já comenta esse flag) + subir o teto de Metaspace de verdade,
+      # sobrescrevendo a linha depois que o prebuild gera o arquivo.
       - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-          cd android && ./gradlew assembleRelease --no-daemon -q
+          sed -i '/^org.gradle.jvmargs=/d' android/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1536m" >> android/gradle.properties
+          cd android && ./gradlew assembleRelease --no-daemon -q -PreactNativeArchitectures=x86_64
         working-directory: mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
