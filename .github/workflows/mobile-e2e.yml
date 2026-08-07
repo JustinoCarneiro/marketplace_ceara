@@ -119,20 +119,17 @@ jobs:
       # (armeabi-v7a/arm64-v8a/x86/x86_64) com teto de só 512m de Metaspace.
       # GRADLE_OPTS abaixo NÃO ajuda nisso — configura a JVM cliente do Gradle, não
       # a JVM de build (que lê org.gradle.jvmargs do arquivo, mesmo com --no-daemon).
-      # Fix: restringir pra ABI única do emulador (arch: x86_64 acima — o próprio
-      # template do Expo já comenta esse flag) + subir o teto de Metaspace de verdade,
-      # sobrescrevendo a linha depois que o prebuild gera o arquivo.
-      - name: Diagnóstico de memória do runner
-        run: |
-          echo "--- free -h ---"; free -h
-          echo "--- nproc ---"; nproc
-          echo "--- processos java/node vivos ---"; ps aux | grep -E 'java|node' | grep -v grep
-
+      # Restringir pra ABI única do emulador (arch: x86_64 acima) resolveu o timeout,
+      # mas passou a falhar rápido com "GC thrashing" mesmo com heap de 3g — um
+      # diagnóstico (`free -h`) confirmou que o runner tem 15GB livres nesse ponto,
+      # então não é falta de RAM do host: o teto de heap que eu tinha posto era
+      # pequeno demais pra fase de configuração do Gradle (~15 módulos nativos do
+      # Expo), mesmo sobrando memória física. Heap subido de verdade abaixo.
       - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           sed -i '/^org.gradle.jvmargs=/d' android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1536m" >> android/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m" >> android/gradle.properties
           cd android && ./gradlew assembleRelease --no-daemon -q -PreactNativeArchitectures=x86_64
         working-directory: mobile
         env:
