@@ -140,7 +140,11 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           sed -i '/^org.gradle.jvmargs=/d' android/gradle.properties
           echo "org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m" >> android/gradle.properties
-          cd android && ./gradlew assembleRelease --no-daemon -q -PreactNativeArchitectures=x86_64
+          # -q temporariamente fora: o watchdog de GC (resolvido) escondia um segundo
+          # problema — "Process 'command node' finished with non-zero exit value 1"
+          # sem stderr nenhum visível por causa do -q. Provavelmente o bundler Metro
+          # (bundleReleaseJsAndAssets). Precisa do output completo pra ver a causa real.
+          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
         working-directory: mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
