@@ -153,7 +153,17 @@ jobs:
           GRADLE_OPTS: "-Xmx3g"
           JDK_JAVA_OPTIONS: "-Dorg.gradle.daemon.performance.enable-monitoring=false"
 
-      # ─── Maestro CLI ──────────────────────────────────────────────────────
+      # --stacktrace apontou expo.modules.plugin.ExpoAutolinkingPlugin (Kotlin:69/47)
+      # como quem chama o `node` que falha — o script de autolinking do Expo, na fase
+      # de configuração. Leva ~5min de silêncio até falhar sem mensagem própria — case
+      # clássico do OOM-killer do kernel matando o processo sem stacktrace. dmesg
+      # confirma ou descarta isso de vez.
+      - name: Diagnóstico de OOM-killer (se o build falhou)
+        if: failure()
+        run: |
+          echo "--- dmesg (últimas ocorrências de oom/killed) ---"
+          sudo dmesg -T 2>/dev/null | grep -iE 'killed process|out of memory|oom' | tail -20 || echo "sem acesso a dmesg ou nada encontrado"
+          echo "--- free -h agora ---"; free -h
       - name: Instalar Maestro CLI
         run: |
           curl -Ls "https://get.maestro.mobile.dev" | bash
