@@ -8,6 +8,7 @@
 //   wait-for text=<substr>    poll body innerText until it contains <substr> (max 15s)
 //   wait-for ms=<n>           fixed wait, only for things wait-for text can't catch
 //   click text=<substr>       click first element whose text matches (exact-ish)
+//   fill placeholder=<substr> value=<val>   type <val> into the input with that placeholder
 //   screenshot [name]         PNG to SCREENSHOT_DIR (env, default /tmp/mobile-web-shots)
 //   console                   print console.error/pageerror seen so far
 //   title                     print document.title
@@ -68,6 +69,13 @@ fs.mkdirSync(SHOT_DIR, { recursive: true });
         const needle = arg.slice(5);
         await page.getByText(needle, { exact: true }).first().click();
         console.log(`[click] "${needle}"`);
+      } else if (cmd === 'fill' && arg.startsWith('placeholder=')) {
+        const rest2 = arg.slice('placeholder='.length);
+        const sep = rest2.indexOf(' value=');
+        const needle = rest2.slice(0, sep);
+        const val = rest2.slice(sep + ' value='.length);
+        await page.getByPlaceholder(needle).first().fill(val);
+        console.log(`[fill] placeholder="${needle}" <- "${val}"`);
       } else if (cmd === 'screenshot') {
         shotN += 1;
         const name = arg || String(shotN).padStart(2, '0');

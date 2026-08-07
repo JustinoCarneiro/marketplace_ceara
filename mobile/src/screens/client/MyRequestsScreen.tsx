@@ -10,6 +10,7 @@ import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp } from '../../navigation/types';
 import { useAuthStore } from '../../store/auth';
 import ScreenState from '../../components/ScreenState';
+import { SkeletonList } from '../../components/Skeleton';
 
 interface Request {
   id: string;
@@ -192,9 +193,13 @@ export default function MyRequestsScreen() {
           </View>
         </View>
 
-        {loading || hasError || requests.length === 0 ? (
+        {loading ? (
+          <View style={styles.groups}>
+            <SkeletonList variant="request" count={3} />
+          </View>
+        ) : hasError || requests.length === 0 ? (
           <ScreenState
-            state={loading ? 'loading' : hasError ? 'error' : 'empty'}
+            state={hasError ? 'error' : 'empty'}
             icon="clipboard"
             emptyTitle="Nenhum pedido ainda"
             emptyBody="Seus chamados aparecerão aqui."

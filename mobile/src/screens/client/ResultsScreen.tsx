@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import ScreenState from '../../components/ScreenState';
+import { SkeletonList } from '../../components/Skeleton';
 
 type RouteProps = RouteProp<ClientStackParams, 'Results'>;
 
@@ -152,9 +153,13 @@ export default function ResultsScreen() {
         </View>
       </View>
 
-      {loading || hasError || filtered.length === 0 ? (
+      {loading ? (
+        <View style={styles.list}>
+          <SkeletonList variant="provider" count={4} />
+        </View>
+      ) : hasError || filtered.length === 0 ? (
         <ScreenState
-          state={loading ? 'loading' : hasError ? 'error' : 'empty'}
+          state={hasError ? 'error' : 'empty'}
           icon="search"
           emptyTitle="Nenhum profissional no seu raio"
           emptyBody="Tente ampliar o raio ou mudar os filtros."

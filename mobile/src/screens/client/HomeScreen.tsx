@@ -12,6 +12,7 @@ import { useAuthStore } from '../../store/auth';
 import { ProviderData } from '../../components/ProviderCard';
 import { API_BASE } from '../../api/config';
 import ScreenState from '../../components/ScreenState';
+import { SkeletonList } from '../../components/Skeleton';
 
 const CATEGORIES = [
   {
@@ -156,10 +157,12 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.providerList}>
-          {loading || nearbyError || nearby.length === 0 ? (
+          {loading ? (
+            <SkeletonList variant="provider" count={3} />
+          ) : nearbyError || nearby.length === 0 ? (
             <View style={styles.stateBox}>
               <ScreenState
-                state={loading ? 'loading' : nearbyError ? 'error' : 'empty'}
+                state={nearbyError ? 'error' : 'empty'}
                 icon="map-pin"
                 emptyTitle="Nenhum prestador próximo"
                 emptyBody="Aumente o raio ou crie um pedido para receber propostas."

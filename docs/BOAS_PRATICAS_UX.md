@@ -70,11 +70,13 @@ todas as telas que dependem de rede.
 - 🟡 **Distinguir erro de rede vs. 422 de validação**: ainda genérico —
   `<ScreenState>` hoje só diferencia "vazio" de "erro", não o motivo do erro.
   Refinamento futuro, não bloqueante.
-- ⬜ **Skeleton screens** (não spinner) nas listas de carga rápida —
-  `HomeScreen`, `ResultsScreen`, `MyRequestsScreen`, `AvailableRequestsScreen`
-  hoje usam o spinner do `<ScreenState state="loading">`. Trocar por skeleton
-  é puramente estético (reduz percepção de espera) — segue pendente, baixa
-  prioridade.
+- ✅ **Skeleton screens** (não spinner) nas listas de carga rápida —
+  implementado 2026-08-07 (`mobile/src/components/Skeleton.tsx`,
+  `SkeletonProviderCard`/`SkeletonRequestCard`, replicando as dimensões reais
+  dos cards para não pular layout). Substitui o spinner do `state="loading"`
+  em `HomeScreen`, `ResultsScreen` (variante prestador) e `MyRequestsScreen`,
+  `AvailableRequestsScreen` (variante pedido). `<ScreenState>` continua
+  cobrindo só `empty`/`error` nessas 4 telas.
 
 ## 5. Acessibilidade (AA — exigência do projeto)
 
@@ -119,7 +121,7 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🔴 Alta~~ | Labels de acessibilidade em ícones-botão | todos | Baixo | ✅ Feito |
 | 🟡 Média | Avaliação double-blind | 7 | Médio | ⬜ Pendente |
 | ~~🟡 Média~~ | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) | ✅ Feito |
-| 🟢 Baixa | Skeleton screens nas listas | 2/4 | Médio | ⬜ Pendente |
+| ~~🟢 Baixa~~ | Skeleton screens nas listas | 2/4 | Médio | ✅ Feito |
 | 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |
 | 🟢 Baixa | Distinguir erro de rede vs. validação no `<ScreenState>` | todos | Baixo | ⬜ Pendente |
 

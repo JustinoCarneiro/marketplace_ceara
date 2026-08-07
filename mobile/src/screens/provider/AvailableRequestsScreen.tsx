@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -11,6 +11,7 @@ import type { ProviderNavProp } from '../../navigation/types';
 import { color, font, space, radius, shadow } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import ScreenState from '../../components/ScreenState';
+import { SkeletonList } from '../../components/Skeleton';
 
 interface ServiceRequest {
   id: string;
@@ -110,9 +111,13 @@ export default function AvailableRequestsScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading || hasError ? (
+      {loading ? (
+        <View style={styles.list}>
+          <SkeletonList variant="request" count={3} />
+        </View>
+      ) : hasError ? (
         <ScreenState
-          state={loading ? 'loading' : 'error'}
+          state="error"
           onRetry={() => { setLoading(true); load(); }}
         />
       ) : (
