@@ -67,6 +67,8 @@ public class AdminQueryService {
                 sr.getStatus().name(),
                 tx  != null ? tx.getValorTotal()        : null,
                 tx  != null ? tx.getStatusPagamento()   : null,
+                sr.getMotivoDisputa(),
+                sr.getDetalhesDisputa(),
                 resolution != null ? resolution.getDecisao().name() : null,
                 sr.getCreatedAt());
     }

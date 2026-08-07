@@ -2,12 +2,13 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, TouchableOpacity,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
+import ScreenState from '../../components/ScreenState';
 
 interface Request {
   id: string;
@@ -270,18 +271,32 @@ export default function RequestDetailScreen() {
   const [request, setRequest] = useState<Request | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const requestId = route.params?.requestId ?? '';
 
   async function load() {
-    if (!requestId) { setLoading(false); return; }
+    if (!requestId) { setLoading(false); setLoadError(true); return; }
+    setLoading(true);
+    setNotFound(false);
+    setLoadError(false);
     try {
       const res = await fetch(`${API_BASE}/service-requests/${requestId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setRequest(res.ok ? await res.json() : null);
+      if (res.ok) {
+        setRequest(await res.json());
+      } else if (res.status === 404) {
+        setRequest(null);
+        setNotFound(true);
+      } else {
+        setRequest(null);
+        setLoadError(true);
+      }
     } catch {
       setRequest(null);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -353,7 +368,7 @@ export default function RequestDetailScreen() {
     },
   ];
 
-  if (loading) {
+  if (loading || !request) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
@@ -362,25 +377,14 @@ export default function RequestDetailScreen() {
             <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} size="large" />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!request) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}
-            accessibilityLabel="Voltar" accessibilityRole="button">
-            <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>Chamado não encontrado.</Text>
-        </View>
+        <ScreenState
+          state={loading ? 'loading' : notFound ? 'empty' : 'error'}
+          icon="file-text"
+          emptyTitle="Chamado não encontrado"
+          emptyBody="Esse pedido pode ter sido removido ou o link está incorreto."
+          errorTitle="Não foi possível carregar o chamado"
+          onRetry={load}
+        />
       </SafeAreaView>
     );
   }
@@ -536,8 +540,6 @@ export default function RequestDetailScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { fontSize: 14, color: COLORS.textSoft },
   topBar: {
     paddingHorizontal: 20,
     paddingVertical: 8,

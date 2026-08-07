@@ -76,8 +76,9 @@ export default function ProviderProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView style={styles.safe}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}>
-          <Feather name="chevron-left" size={22} color={color.text} />
+        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}
+          accessibilityLabel="Voltar" accessibilityRole="button">
+          <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
         </TouchableOpacity>
         <View style={styles.center}><Text style={styles.emptyText}>Perfil não encontrado.</Text></View>
       </SafeAreaView>
@@ -95,8 +96,9 @@ export default function ProviderProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}>
-          <Feather name="chevron-left" size={22} color={color.text} />
+        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backPad} hitSlop={12}
+          accessibilityLabel="Voltar" accessibilityRole="button">
+          <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
         </TouchableOpacity>
 
         <View style={styles.hero}>

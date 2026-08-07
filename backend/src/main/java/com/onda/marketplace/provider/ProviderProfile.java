@@ -62,6 +62,7 @@ public class ProviderProfile {
     public User getUser()                  { return user; }
     public String getCategoria()           { return categoria; }
     public String getBio()                 { return bio; }
+    public void   setBio(String bio)       { this.bio = bio; }
     public String getCpfCifrado()          { return cpfCifrado; }
     public ProviderStatus getStatusVerificacao() { return statusVerificacao; }
     public BigDecimal getSaldoRetido()     { return saldoRetido; }

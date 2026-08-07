@@ -68,8 +68,9 @@ export default function NewRequestScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}>
-              <Feather name="chevron-left" size={22} color={color.text} />
+            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}
+              accessibilityLabel="Voltar" accessibilityRole="button">
+              <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Novo pedido</Text>
           </View>

@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
 // Contrato real do backend (DisputaDetalheDto): serviceRequestId, categoria, status,
-// valorTotal, statusPagamento, decisao (null até resolvida), criadoEm.
+// valorTotal, statusPagamento, motivoDisputa/detalhesDisputa (quem abriu a disputa
+// informou na hora), decisao (null até resolvida), criadoEm.
 interface DisputeDetail {
   serviceRequestId: string;
   categoria: string;
   status: string;
   valorTotal: number;
   statusPagamento: string;
+  motivoDisputa?: string;
+  detalhesDisputa?: string;
   decisao?: string;
   criadoEm: string;
 }
@@ -81,6 +84,13 @@ export default function DisputeDetailPage() {
               {d.decisao && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#8A989B' }}>Decisão</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.decisao}</span></div>}
             </div>
           </div>
+          {(d.motivoDisputa || d.detalhesDisputa) && (
+            <div style={S.card}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Motivo informado</span>
+              {d.motivoDisputa && <span style={S.badge}>{d.motivoDisputa}</span>}
+              {d.detalhesDisputa && <span style={{ fontSize: 13.5, color: '#4C636A', lineHeight: 1.5 }}>{d.detalhesDisputa}</span>}
+            </div>
+          )}
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={S.escrow}>

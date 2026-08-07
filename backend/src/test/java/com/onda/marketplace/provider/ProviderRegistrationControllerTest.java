@@ -30,7 +30,7 @@ class ProviderRegistrationControllerTest {
     void registerProvider_validPayload_returns201() throws Exception {
         var req = new RegisterProviderRequest(
                 "Carlos Silva", "carlos@example.com", "Senha@123",
-                "999.999.999-99", "ELETRICISTA");
+                "999.999.999-99", "ELETRICISTA", "Eletricista há 10 anos.");
         when(providerService.register(any())).thenReturn(
                 new AuthResponse("access-token", "refresh-token", "ROLE_PROVIDER",
                         java.util.UUID.randomUUID(), "Carlos Silva", "carlos@example.com"));

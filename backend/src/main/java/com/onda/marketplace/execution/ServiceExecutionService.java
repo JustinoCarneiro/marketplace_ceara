@@ -84,7 +84,7 @@ public class ServiceExecutionService {
 
     /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte autenticada pode abrir disputa. */
     @Transactional
-    public void openDispute(UUID srId) {
+    public void openDispute(UUID srId, String motivo, String detalhes) {
         ServiceRequest sr = srRepository.findById(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
@@ -94,6 +94,8 @@ public class ServiceExecutionService {
         }
 
         sr.setStatus(ServiceRequestStatus.EM_DISPUTA);
+        sr.setMotivoDisputa(motivo);
+        sr.setDetalhesDisputa(detalhes);
         srRepository.save(sr);
 
         // M12: alerta ao admin — disputa aberta exige mediação

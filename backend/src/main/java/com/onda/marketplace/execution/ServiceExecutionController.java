@@ -35,8 +35,11 @@ public class ServiceExecutionController {
 
     @PostMapping("/dispute")
     @PreAuthorize("hasAnyRole('CLIENT','PROVIDER')")
-    public ResponseEntity<Void> openDispute(@PathVariable UUID id) {
-        executionService.openDispute(id);
+    public ResponseEntity<Void> openDispute(@PathVariable UUID id,
+                                             @RequestBody(required = false) OpenDisputeRequest body) {
+        String motivo   = body != null ? body.motivo()   : null;
+        String detalhes = body != null ? body.detalhes() : null;
+        executionService.openDispute(id, motivo, detalhes);
         return ResponseEntity.ok().build();
     }
 

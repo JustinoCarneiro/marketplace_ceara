@@ -68,6 +68,9 @@ public class ProviderService {
 
         String cpfCifrado = cpfEncryptor.encrypt(req.cpf());
         ProviderProfile profile = new ProviderProfile(user, req.categoria(), cpfCifrado);
+        if (req.bio() != null && !req.bio().isBlank()) {
+            profile.setBio(req.bio());
+        }
         profileRepository.save(profile);
 
         backgroundCheckService.scheduleCheck(profile);

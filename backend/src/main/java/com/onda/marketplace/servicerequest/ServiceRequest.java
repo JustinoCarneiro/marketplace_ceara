@@ -45,6 +45,12 @@ public class ServiceRequest {
     @Column(name = "idempotency_key", unique = true)
     private String idempotencyKey;
 
+    @Column(name = "motivo_disputa")
+    private String motivoDisputa;
+
+    @Column(name = "detalhes_disputa", columnDefinition = "TEXT")
+    private String detalhesDisputa;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -64,6 +70,8 @@ public class ServiceRequest {
     public BigDecimal getAiFaixaMin()           { return aiFaixaMin; }
     public BigDecimal getAiFaixaMax()           { return aiFaixaMax; }
     public String getIdempotencyKey()           { return idempotencyKey; }
+    public String getMotivoDisputa()            { return motivoDisputa; }
+    public String getDetalhesDisputa()          { return detalhesDisputa; }
     public Instant getCreatedAt()               { return createdAt; }
     public Instant getUpdatedAt()               { return updatedAt; }
 
@@ -73,6 +81,8 @@ public class ServiceRequest {
     public void setLocalizacao(Point v)         { this.localizacao = v; }
     public void setCliente(User v)              { this.cliente = v; }
     public void setIdempotencyKey(String v)     { this.idempotencyKey = v; }
+    public void setMotivoDisputa(String v)      { this.motivoDisputa = v; }
+    public void setDetalhesDisputa(String v)    { this.detalhesDisputa = v; }
 
     public void aplicarSugestaoIA(AiSuggestion s) {
         this.aiDescricaoSugerida = s.descricaoSugerida();

@@ -42,11 +42,11 @@ export default function OpenDisputeScreen() {
     setError('');
     setLoading(true);
     try {
-      // Endpoint real é singular (/dispute) e não recebe corpo — o backend ainda não
-      // persiste motivo/detalhes (não há coluna pra isso hoje, só o status EM_DISPUTA).
+      // Endpoint real é singular (/dispute).
       const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/dispute`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motivo: reason, detalhes: details }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

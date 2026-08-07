@@ -41,7 +41,7 @@ class ProviderServiceTest {
     @Test
     void register_createsUserWithRoleProvider() {
         var req = new RegisterProviderRequest(
-                "Carlos", "carlos@test.com", "Senha@123", "999.999.999-99", "ELETRICISTA");
+                "Carlos", "carlos@test.com", "Senha@123", "999.999.999-99", "ELETRICISTA", null);
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -57,7 +57,7 @@ class ProviderServiceTest {
     @Test
     void register_cpfNeverStoredAsPlainText() {
         var req = new RegisterProviderRequest(
-                "Carlos", "c2@test.com", "Senha@123", "123.456.789-09", "ELETRICISTA");
+                "Carlos", "c2@test.com", "Senha@123", "123.456.789-09", "ELETRICISTA", null);
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> {
@@ -77,7 +77,7 @@ class ProviderServiceTest {
         when(userRepository.existsByEmail("dup@test.com")).thenReturn(true);
 
         assertThatThrownBy(() -> providerService.register(
-                new RegisterProviderRequest("X", "dup@test.com", "P@ss1", "000", "EL")))
+                new RegisterProviderRequest("X", "dup@test.com", "P@ss1", "000", "EL", null)))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "EMAIL_IN_USE");
     }

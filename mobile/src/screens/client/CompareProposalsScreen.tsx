@@ -85,8 +85,9 @@ export default function CompareProposalsScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}>
-          <Feather name="chevron-left" size={22} color={color.text} />
+        <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}
+          accessibilityLabel="Voltar" accessibilityRole="button">
+          <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
         </TouchableOpacity>
         <View style={styles.headerTitles}>
           <Text style={styles.headerTitle}>Propostas recebidas</Text>

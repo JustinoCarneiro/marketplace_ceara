@@ -131,9 +131,11 @@ class ServiceExecutionServiceTest {
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(notificationService.criarAlerta(any(), any())).thenReturn(null);
 
-        service.openDispute(SR_ID);
+        service.openDispute(SR_ID, "Serviço não foi concluído", "detalhes do ocorrido");
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.EM_DISPUTA);
+        assertThat(sr.getMotivoDisputa()).isEqualTo("Serviço não foi concluído");
+        assertThat(sr.getDetalhesDisputa()).isEqualTo("detalhes do ocorrido");
         verify(srRepository).save(sr);
         verify(notificationService).criarAlerta("DISPUTA", SR_ID);
     }
@@ -143,7 +145,7 @@ class ServiceExecutionServiceTest {
         var sr = sr(ServiceRequestStatus.ACEITO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
 
-        assertThatThrownBy(() -> service.openDispute(SR_ID))
+        assertThatThrownBy(() -> service.openDispute(SR_ID, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION");
     }

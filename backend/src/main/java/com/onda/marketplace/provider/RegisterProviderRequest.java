@@ -9,5 +9,6 @@ public record RegisterProviderRequest(
         @NotBlank @Email String email,
         @NotBlank @Size(min = 8) String senha,
         @NotBlank String cpf,
-        @NotBlank String categoria
+        @NotBlank String categoria,
+        String bio
 ) {}

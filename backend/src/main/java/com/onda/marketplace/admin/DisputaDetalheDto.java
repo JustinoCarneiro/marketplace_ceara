@@ -17,6 +17,8 @@ public record DisputaDetalheDto(
         String status,
         BigDecimal valorTotal,
         TransactionStatus statusPagamento,
+        String motivoDisputa,
+        String detalhesDisputa,
         String decisao,
         Instant criadoEm
 ) {}

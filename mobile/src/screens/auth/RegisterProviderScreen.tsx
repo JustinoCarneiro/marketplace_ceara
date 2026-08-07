@@ -30,12 +30,11 @@ export default function RegisterProviderScreen() {
     if (!categoria) { setError('Selecione uma categoria.'); return; }
     setLoading(true);
     try {
-      // Backend aceita 1 categoria por prestador (RegisterProviderRequest.categoria: String) —
-      // "bio" ainda não tem campo no request de cadastro, fica só na UI por enquanto.
+      // Backend aceita 1 categoria por prestador (RegisterProviderRequest.categoria: String).
       const res = await fetch(`${API_BASE}/auth/register/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, cpf, email, senha, categoria }),
+        body: JSON.stringify({ nome, cpf, email, senha, categoria, bio }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');

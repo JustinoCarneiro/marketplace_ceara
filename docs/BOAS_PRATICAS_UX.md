@@ -1,7 +1,10 @@
 # 🎨 Boas Práticas de UI/UX — Backlog de Implementação
 
 > **Status:** Pesquisa consolidada em 2026-06-28. Itens marcados ⬜ ainda **não
-> implementados** — candidatos para a próxima sessão.
+> implementados**. Em **2026-08-07**, ao investigar o fluxo completo do mobile
+> (ver [[mobile-web-flow-tests]] e [[PENDENCIAS_INTEGRIDADE]]), vários itens
+> listados aqui como ⬜ já estavam implementados no código real — corrigidos
+> abaixo para ✅. Itens genuinamente pendentes continuam ⬜.
 > **Escopo:** marketplace mobile de serviços com escrow + reputação bidirecional.
 > Fontes ao final.
 >
@@ -18,26 +21,26 @@ O diferencial do Onda é o **escrow + reputação verificada**. A pesquisa é un
 em marketplace de pagamento, confiança não se afirma, se **mostra** com
 micro-interações visíveis.
 
-- ⬜ **Barra de status do escrow** visível no acompanhamento do pedido:
+- ✅ **Barra de status do escrow** visível no acompanhamento do pedido:
   `Cliente paga → Retido na Onda → Serviço concluído → Prestador recebe`.
-  Hoje temos as telas de estado (`EscrowConfirmedScreen`, `EscrowHeldScreen`)
-  mas falta o **stepper contínuo** que mostra ONDE o dinheiro está agora.
-  → aplicar em `RequestDetailScreen` (cliente e prestador).
+  `EscrowStepper` já implementado em `RequestDetailScreen` (cliente e
+  prestador), lado a lado com a timeline de status do pedido.
 - ✅ Selo de pagamento seguro (já existe na `SplashScreen` — badge "Pagamento
   seguro com escrow").
 - ⬜ **Mascaramento de contato** no chat pré-transação (telefone/whatsapp
   borrados) com aviso amigável: "Seus dados ficam protegidos enquanto o
   pagamento está retido". Relevante quando o chat for implementado.
-- ⬜ **Custos antecipados sem dark patterns:** mostrar comissão Onda, valor do
-  serviço e total na mesma tela, antes de confirmar. Conferir `PaymentChoiceScreen`
-  (já mostra "Comissão Onda (10%)" — validar que o total é explícito).
+- ✅ **Custos antecipados sem dark patterns:** `PaymentChoiceScreen` mostra
+  valor do serviço, "Comissão Onda (10%)" e o **Total** somado na mesma tela,
+  antes de confirmar — validado.
 
 ## 2. Onboarding Progressivo
 
-- ⬜ **Pedir o mínimo no cadastro, cobrar dados pesados só na intenção real.**
-  Casa diretamente com a [[PENDENCIAS_INTEGRIDADE]] Camada 2: pedir CPF do
-  cliente apenas no **primeiro pagamento**, não no cadastro. Cadastro continua
-  leve (nome/email/senha), KYC entra no momento de transacionar.
+- ✅ **Pedir o mínimo no cadastro, cobrar dados pesados só na intenção real.**
+  Implementado e confirmado 2026-08-07 — ver [[PENDENCIAS_INTEGRIDADE]] Camada 2:
+  CPF do cliente é pedido só no **primeiro pagamento** (`PaymentChoiceScreen`,
+  modal disparado por `IDENTITY_REQUIRED`). Cadastro continua leve
+  (nome/email/senha).
 - ✅ Cadastro de cliente já é leve (3 campos).
 
 ## 3. Reputação e Avaliações (Épico 7)
@@ -56,28 +59,36 @@ micro-interações visíveis.
 Princípio: **nunca deixar o usuário adivinhando.** Padronizar os 3 estados em
 todas as telas que dependem de rede.
 
+- ✅ **Componente compartilhado** `<ScreenState loading|empty|error>` —
+  implementado (`mobile/src/components/ScreenState.tsx`) e adotado em
+  `HomeScreen`, `MyRequestsScreen`, `AvailableRequestsScreen`, `ResultsScreen`,
+  `ActiveJobScreen` e `RequestDetailScreen`.
+- ✅ **Estados vazios com orientação** e ⬜→✅ **erros com retry**: resolvidos
+  onde `<ScreenState>` foi adotado (6 telas acima) — `error` mostra
+  "Tentar novamente" (`onRetry`), `empty` mostra ícone + título + corpo
+  explicativo em vez de tela em branco.
+- 🟡 **Distinguir erro de rede vs. 422 de validação**: ainda genérico —
+  `<ScreenState>` hoje só diferencia "vazio" de "erro", não o motivo do erro.
+  Refinamento futuro, não bloqueante.
 - ⬜ **Skeleton screens** (não spinner) nas listas de carga rápida —
-  `HomeScreen` (prestadores próximos), `ResultsScreen`, `MyRequestsScreen`,
-  `AvailableRequestsScreen`. Skeleton reduz a percepção de espera e evita
-  "pulo" de layout. Spinner só para esperas longas/indeterminadas.
-- ⬜ **Estados vazios com orientação** (não tela em branco): "Nenhum prestador
-  no seu raio ainda — aumente a distância ou volte mais tarde" + ação. A spec
-  já exige isso para `nearby` vazio (US03).
-- ⬜ **Erros com retry e mensagem específica:** distinguir erro de rede
-  (sem conexão) de erro HTTP de validação (422). Hoje o tratamento é por
-  `try/catch` com mensagem genérica em vários lugares (`HomeScreen` engole o
-  erro e mostra lista vazia — confunde "vazio" com "falhou").
-- ⬜ **Componente compartilhado** `<ScreenState loading|empty|error>` para
-  garantir consistência visual entre telas (evita cada tela reinventar).
+  `HomeScreen`, `ResultsScreen`, `MyRequestsScreen`, `AvailableRequestsScreen`
+  hoje usam o spinner do `<ScreenState state="loading">`. Trocar por skeleton
+  é puramente estético (reduz percepção de espera) — segue pendente, baixa
+  prioridade.
 
 ## 5. Acessibilidade (AA — exigência do projeto)
 
 - ⬜ **Área de toque mínima 48×48 dp** em todos os alvos. Auditar ícones com
   `hitSlop` pequeno e chips. (Já usamos `hitSlop` em vários botões — falta
   padronizar e revisar os menores.)
-- ⬜ **Labels acessíveis** (`accessibilityLabel`) em ícones-botão sem texto
-  (voltar, olho de senha, SOS, chevrons). Hoje vários `<Feather>` clicáveis não
-  têm rótulo para leitor de tela (TalkBack/VoiceOver).
+- ✅ **Labels acessíveis** (`accessibilityLabel`) em ícones-botão sem texto —
+  auditados todos os `TouchableOpacity` com `<Feather>` sem texto acompanhante
+  em `mobile/src/screens/`; os 6 botões de "voltar" ainda sem rótulo
+  (`NewRequestScreen`, `PaymentPixScreen`, `ProviderProfileScreen` ×2,
+  `CompareProposalsScreen`, `AiAssistantScreen`) receberam
+  `accessibilityLabel="Voltar"` + `accessibilityRole="button"` +
+  `accessibilityElementsHidden` no ícone. Os demais ícones clicáveis já tinham
+  texto ao lado (ex.: "Foto", "Filtros", "Copiar") ou já eram rotulados.
 - ⬜ **Erros não só por cor:** mensagens de erro com texto + ícone, nunca só
   borda vermelha (daltonismo). `RegisterClientScreen` já faz isso no email —
   padronizar nos demais formulários.
@@ -95,17 +106,28 @@ todas as telas que dependem de rede.
 
 ---
 
-## Priorização sugerida para a próxima sessão
+## Priorização sugerida (atualizado 2026-08-07)
 
-| Prioridade | Item | Épico | Esforço |
-|-----------|------|-------|---------|
-| 🔴 Alta | Barra de status do escrow no `RequestDetail` | 5/6 | Médio |
-| 🔴 Alta | Estados Loading/Vazio/Erro padronizados + `<ScreenState>` | todos | Médio |
-| 🔴 Alta | Labels de acessibilidade em ícones-botão | todos | Baixo |
-| 🟡 Média | Avaliação double-blind | 7 | Médio |
-| 🟡 Média | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) |
-| 🟢 Baixa | Skeleton screens nas listas | 2/4 | Médio |
-| 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat |
+Os 3 itens 🔴 Alta da rodada anterior já estavam implementados no código real
+(achado ao auditar o backlog contra o estado atual do app — mesmo padrão do
+que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
+
+| Prioridade | Item | Épico | Esforço | Status |
+|-----------|------|-------|---------|--------|
+| ~~🔴 Alta~~ | Barra de status do escrow no `RequestDetail` | 5/6 | Médio | ✅ Feito |
+| ~~🔴 Alta~~ | Estados Loading/Vazio/Erro padronizados + `<ScreenState>` | todos | Médio | ✅ Feito |
+| ~~🔴 Alta~~ | Labels de acessibilidade em ícones-botão | todos | Baixo | ✅ Feito |
+| 🟡 Média | Avaliação double-blind | 7 | Médio | ⬜ Pendente |
+| ~~🟡 Média~~ | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) | ✅ Feito |
+| 🟢 Baixa | Skeleton screens nas listas | 2/4 | Médio | ⬜ Pendente |
+| 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |
+| 🟢 Baixa | Distinguir erro de rede vs. validação no `<ScreenState>` | todos | Baixo | ⬜ Pendente |
+
+**Fora deste doc, mas achados no mesmo levantamento:** dois campos coletados na
+UI e nunca persistidos — `bio` do prestador (`RegisterProviderScreen`) e
+motivo/detalhes da disputa (`OpenDisputeScreen`) — corrigidos ponta a ponta
+(migration `V10__dispute_reason.sql`, DTOs, e exibidos na tela de mediação do
+admin).
 
 ---
 

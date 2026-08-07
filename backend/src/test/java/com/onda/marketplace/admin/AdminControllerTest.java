@@ -127,7 +127,7 @@ class AdminControllerTest {
         UUID srId = UUID.randomUUID();
         when(adminQueryService.findDetalheDisputa(srId)).thenReturn(
                 new DisputaDetalheDto(srId, "ELETRICISTA", "EM_DISPUTA",
-                        BigDecimal.valueOf(500), TransactionStatus.RETIDO, null, Instant.now()));
+                        BigDecimal.valueOf(500), TransactionStatus.RETIDO, null, null, null, Instant.now()));
 
         mvc.perform(get("/api/v1/admin/disputes/{id}", srId))
                 .andExpect(status().isOk())
