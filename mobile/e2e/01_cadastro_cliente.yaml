@@ -22,7 +22,11 @@ env:
 - inputText: ${SENHA}
 # Botão "Criar conta" fica desabilitado até aceitar os termos (canSubmit exige
 # acceptedTerms) — sem esse tapOn, o botão nunca é encontrado pelo Maestro.
-- tapOn: "Li e aceito os"
+# tapOn por texto falhou ("Li e aceito os" not found) — os links "Termos de Uso"/
+# "Política de Privacidade" aninhados com onPress fragmentam a árvore de
+# acessibilidade nativa. testID é o padrão já usado em todo o resto do app.
+- tapOn:
+    id: "checkbox-termos"
 - tapOn: "Criar conta"
 - assertVisible: "Elétrica"
 - waitForAnimationToEnd

@@ -175,6 +175,7 @@ export default function RegisterClientScreen() {
 
             {/* Termos */}
             <TouchableOpacity
+              testID="checkbox-termos"
               style={styles.termsRow}
               onPress={() => setAcceptedTerms(v => !v)}
               activeOpacity={0.7}
