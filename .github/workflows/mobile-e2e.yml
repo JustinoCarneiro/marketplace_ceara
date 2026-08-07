@@ -113,51 +113,30 @@ jobs:
       # a keystore de debug por padrão, então não precisa de keystore próprio.
       # 10.0.2.2 é o IP padrão do emulador Android para o host → não precisa adb reverse
       #
-      # 2026-08-04: job estourava o timeout de 1h travado em "e: [ksp]
-      # java.lang.OutOfMemoryError: Metaspace" — o android/gradle.properties que o
-      # `expo prebuild` gera (gitignored, não editável no repo) compila as 4 ABIs
-      # (armeabi-v7a/arm64-v8a/x86/x86_64) com teto de só 512m de Metaspace.
-      # GRADLE_OPTS abaixo NÃO ajuda nisso — configura a JVM cliente do Gradle, não
-      # a JVM de build (que lê org.gradle.jvmargs do arquivo, mesmo com --no-daemon).
-      # Restringir pra ABI única do emulador (arch: x86_64 acima) resolveu o timeout,
-      # mas passou a falhar rápido com "GC thrashing" mesmo com heap de 3g — um
-      # diagnóstico (`free -h`) confirmou que o runner tem 15GB livres nesse ponto,
-      # então não é falta de RAM do host: o teto de heap que eu tinha posto era
-      # pequeno demais pra fase de configuração do Gradle (~15 módulos nativos do
-      # Expo), mesmo sobrando memória física. Dobrar o heap (3g→6g) NÃO mudou nada
-      # — falhou de novo no mesmo "GC thrashing", no mesmo ponto, no mesmo tempo.
-      # Isso não é falta de heap: é o watchdog de performance do daemon (pensado
-      # pra proteger um daemon de longa duração de degradar ao longo de várias
-      # builds) disparando num build --no-daemon de tiro único, onde ele não faz
-      # muito sentido. Tentei desligar via -D em org.gradle.jvmargs — não teve
-      # NENHUM efeito, mesma falha idêntica. Bug conhecido do Gradle
-      # (gradle/gradle#24283): essa propriedade via gradle.properties/linha de
-      # comando é lida tarde demais pra ter efeito; o único jeito que funciona de
-      # verdade é JDK_JAVA_OPTIONS (env var lida pela JVM antes do Gradle processar
-      # qualquer coisa).
+      # 2026-08-04/07: job estourava o timeout de 1h travado em OutOfMemoryError de
+      # Metaspace — o android/gradle.properties que o `expo prebuild` gera (gitignored,
+      # não editável no repo) compila as 4 ABIs por padrão, com teto de só 512m de
+      # Metaspace, embora o CI só rode no emulador x86_64. Restringir a ABI
+      # (-PreactNativeArchitectures) e subir o heap resolve — mas o PRIMEIRO fix de
+      # heap não teve efeito nenhum por um bug bem sorrateiro: o gradle.properties do
+      # prebuild não termina com quebra de linha, então "echo ... >> arquivo" colava
+      # direto na última linha existente, formando UMA propriedade inválida em vez de
+      # duas. O heap nunca foi aplicado de verdade em nenhuma tentativa anterior — só
+      # existia no papel. `printf '\n...'` garante a quebra antes de anexar. Achado
+      # reproduzindo localmente (mesmo SDK/NDK, `expo prebuild` + gradlew) depois que
+      # o CI não expunha o stderr real do processo que falhava de jeito nenhum, nem
+      # com --stacktrace.
       - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           sed -i '/^org.gradle.jvmargs=/d' android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m" >> android/gradle.properties
-          # -q temporariamente fora: o watchdog de GC (resolvido) escondia um segundo
-          # problema — "Process 'command node' finished with non-zero exit value 1"
-          # sem stderr nenhum visível por causa do -q. Provavelmente o bundler Metro
-          # (bundleReleaseJsAndAssets). Nem sem -q o Gradle mostra o stderr real do
-          # node — --stacktrace (sugerido pelo próprio Gradle) costuma incluir o
-          # stdout/stderr do processo capturado dentro da exceção.
-          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 --stacktrace
+          printf '\norg.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m\n' >> android/gradle.properties
+          cd android && ./gradlew assembleRelease --no-daemon -q -PreactNativeArchitectures=x86_64
         working-directory: mobile
         env:
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8080/api/v1
           GRADLE_OPTS: "-Xmx3g"
-          JDK_JAVA_OPTIONS: "-Dorg.gradle.daemon.performance.enable-monitoring=false"
 
-      # --stacktrace apontou expo.modules.plugin.ExpoAutolinkingPlugin (Kotlin:69/47)
-      # como quem chama o `node` que falha — o script de autolinking do Expo, na fase
-      # de configuração. Leva ~5min de silêncio até falhar sem mensagem própria — case
-      # clássico do OOM-killer do kernel matando o processo sem stacktrace. dmesg
-      # confirma ou descarta isso de vez.
       - name: Diagnóstico de OOM-killer (se o build falhou)
         if: failure()
         run: |
