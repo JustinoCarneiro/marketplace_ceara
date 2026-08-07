@@ -124,12 +124,17 @@ jobs:
       # diagnóstico (`free -h`) confirmou que o runner tem 15GB livres nesse ponto,
       # então não é falta de RAM do host: o teto de heap que eu tinha posto era
       # pequeno demais pra fase de configuração do Gradle (~15 módulos nativos do
-      # Expo), mesmo sobrando memória física. Heap subido de verdade abaixo.
+      # Expo), mesmo sobrando memória física. Dobrar o heap (3g→6g) NÃO mudou nada
+      # — falhou de novo no mesmo "GC thrashing", no mesmo ponto, no mesmo tempo.
+      # Isso não é falta de heap: é o watchdog de performance do daemon (pensado
+      # pra proteger um daemon de longa duração de degradar ao longo de várias
+      # builds) disparando num build --no-daemon de tiro único, onde ele não faz
+      # muito sentido — desliga via org.gradle.daemon.performance.enable-monitoring.
       - name: Build APK release (standalone)
         run: |
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           sed -i '/^org.gradle.jvmargs=/d' android/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m" >> android/gradle.properties
+          echo "org.gradle.jvmargs=-Xmx6144m -XX:MaxMetaspaceSize=2048m -Dorg.gradle.daemon.performance.enable-monitoring=false" >> android/gradle.properties
           cd android && ./gradlew assembleRelease --no-daemon -q -PreactNativeArchitectures=x86_64
         working-directory: mobile
         env:
