@@ -52,7 +52,9 @@ Como **Cliente**, quero filtrar por distância e nota mínima, para refinar a es
 ### US04 — Abertura de pedido multimídia
 Como **Cliente**, quero abrir um pedido com texto, áudio e/ou foto, para o prestador avaliar antes de aceitar.
 - **Dado que** anexo mídia, **quando** envio, **então** o app solicita permissões nativas de Câmera/Microfone e o arquivo vai para o object storage; o banco guarda só a URL.
-- **Dado** o endpoint `POST /api/v1/services/requests`, **então** ele aceita `multipart/form-data` e cria o pedido em `PENDENTE`.
+- **Dado** o pedido criado via `POST /api/v1/service-requests` (JSON — categoria/descrição/localização), **então** cada mídia é anexada em seguida por `POST /api/v1/service-requests/{id}/media` (`multipart/form-data`, campos `file` + `tipo` ∈ `FOTO`/`AUDIO`/`TEXTO`); são duas chamadas, não uma — falha ao anexar não desfaz o pedido já criado.
+- **Dado** que anexo mídia a um pedido, **então** só cliente dono ou prestador com proposta aceita podem anexar (mesma regra de participação do detalhe do pedido); e o `tipo` declarado precisa bater com o content-type do arquivo (`FOTO`→`image/*`, `AUDIO`→`audio/*`).
+- Reaproveita `RateScreen` (avaliação bidirecional, Épico 7): anexar foto à avaliação usa o mesmo endpoint, contra o mesmo `requestId` já `CONCLUIDO`.
 
 ### US14 — Assistente de IA para abrir o pedido
 Como **Cliente**, quero que a IA leia minha foto/texto e sugira a descrição e uma faixa de orçamento, para abrir o pedido mais rápido.

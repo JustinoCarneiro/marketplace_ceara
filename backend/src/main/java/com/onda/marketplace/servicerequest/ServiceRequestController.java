@@ -35,8 +35,9 @@ public class ServiceRequestController {
     public MediaUploadResponse addMedia(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file,
-            @RequestParam("tipo") String tipo) {
-        return service.addMedia(id, file, tipo);
+            @RequestParam("tipo") String tipo,
+            Authentication auth) {
+        return service.addMedia(id, file, tipo, userId(auth));
     }
 
     /** "Meus pedidos" do cliente logado (mobile). */

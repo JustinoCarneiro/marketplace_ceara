@@ -177,6 +177,81 @@ class ServiceRequestServiceTest {
     }
 
     @Test
+    void addMedia_participante_salvaEDevolveUrlDoStorage() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+        when(storageService.upload(any(), eq("service-requests/" + requestId)))
+                .thenReturn("https://storage.example.com/foto.jpg");
+        when(mediaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "file", "foto.jpg", "image/jpeg", "img".getBytes());
+        MediaUploadResponse resp = service.addMedia(requestId, file, "foto", userId);
+
+        assertThat(resp.url()).isEqualTo("https://storage.example.com/foto.jpg");
+        assertThat(resp.tipo()).isEqualTo("FOTO");
+    }
+
+    @Test
+    void addMedia_naoParticipante_lancaForbidden() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
+
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "file", "foto.jpg", "image/jpeg", "img".getBytes());
+
+        assertThatThrownBy(() -> service.addMedia(requestId, file, "FOTO", userId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(mediaRepository, never()).save(any());
+    }
+
+    @Test
+    void addMedia_tipoInvalido_lancaBusinessException() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "file", "x.bin", "application/octet-stream", "x".getBytes());
+
+        // Antes, um tipo fora do enum vazava IllegalArgumentException sem handler (500 cru).
+        assertThatThrownBy(() -> service.addMedia(requestId, file, "VIDEO", userId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_MEDIA_TYPE");
+    }
+
+    @Test
+    void addMedia_contentTypeNaoBateComTipoDeclarado_lancaBusinessException() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+
+        // Declara FOTO mas envia um PDF — não é o que a tela de anexo se propõe a aceitar.
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "file", "doc.pdf", "application/pdf", "x".getBytes());
+
+        assertThatThrownBy(() -> service.addMedia(requestId, file, "FOTO", userId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_MEDIA_CONTENT_TYPE");
+        verify(storageService, never()).upload(any(), any());
+    }
+
+    @Test
     void listarDisponiveis_retornaPedidosPendentes() {
         var sr = new ServiceRequest();
         sr.setCliente(cliente);

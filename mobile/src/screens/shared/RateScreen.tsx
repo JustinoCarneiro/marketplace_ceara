@@ -1,14 +1,17 @@
 import { API_BASE } from '../../api/config';
+import { uploadMedia } from '../../api/media';
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
+  View, Text, StyleSheet, ScrollView, Image, Alert,
   TextInput, KeyboardAvoidingView, Platform,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuthStore } from '../../store/auth';
+import PermissionDenied from '../../components/PermissionDenied';
 
 const COLORS = {
   bg: '#F3ECDC',
@@ -36,6 +39,17 @@ export default function RateScreen() {
   const [comentario, setComentario] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [foto, setFoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [permissaoNegada, setPermissaoNegada] = useState<'camera' | null>(null);
+
+  async function escolherFoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { setPermissaoNegada('camera'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
+    if (!result.canceled && result.assets?.[0]) {
+      setFoto(result.assets[0]);
+    }
+  }
 
   async function submit() {
     if (nota === 0) { setError('Selecione uma nota de 1 a 5 estrelas.'); return; }
@@ -49,6 +63,16 @@ export default function RateScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao avaliar');
+
+      if (foto) {
+        try {
+          await uploadMedia(requestId, 'FOTO', foto.uri, foto.fileName ?? 'foto.jpg',
+              foto.mimeType ?? 'image/jpeg', token);
+        } catch {
+          Alert.alert('Foto não enviada', 'A avaliação foi enviada, mas não foi possível anexar a foto.');
+        }
+      }
+
       // Double-blind: a avaliação só fica pública quando a outra parte também
       // avalia (ou quando vence o prazo) — a tela de confirmação explica qual dos dois.
       nav.navigate('RateConfirm', {
@@ -63,6 +87,10 @@ export default function RateScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (permissaoNegada) {
+    return <PermissionDenied type={permissaoNegada} onSkip={() => setPermissaoNegada(null)} />;
   }
 
   const initials = typeof avaliadoNome === 'string'
@@ -121,13 +149,23 @@ export default function RateScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.photoBtn} activeOpacity={0.75}>
+            <TouchableOpacity testID="btn-adicionar-foto" style={styles.photoBtn} activeOpacity={0.75} onPress={escolherFoto}>
               <View style={styles.photoBox}>
-                <Feather name="camera" size={22} color={COLORS.primary} />
+                {foto ? (
+                  <Image source={{ uri: foto.uri }} style={styles.photoThumb} />
+                ) : (
+                  <Feather name="camera" size={22} color={COLORS.primary} />
+                )}
               </View>
-              <Text style={styles.photoBtnText}>
-                Adicionar foto <Text style={styles.photoOptional}>(opcional)</Text>
-              </Text>
+              {foto ? (
+                <Text style={styles.photoBtnText}>
+                  Foto anexada <Text style={styles.photoOptional} onPress={() => setFoto(null)}>(remover)</Text>
+                </Text>
+              ) : (
+                <Text style={styles.photoBtnText}>
+                  Adicionar foto <Text style={styles.photoOptional}>(opcional)</Text>
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -256,7 +294,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  photoThumb: { width: '100%', height: '100%' },
   photoBtnText: {
     fontSize: 13.5,
     color: COLORS.textSoft,

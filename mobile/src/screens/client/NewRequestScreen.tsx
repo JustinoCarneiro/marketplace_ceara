@@ -1,16 +1,30 @@
 import { API_BASE } from '../../api/config';
+import { uploadMedia } from '../../api/media';
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
+  View, Text, StyleSheet, ScrollView, Image, Alert,
   TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import {
+  useAudioRecorder, useAudioRecorderState, RecordingPresets,
+  requestRecordingPermissionsAsync, setAudioModeAsync,
+} from 'expo-audio';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
+import PermissionDenied from '../../components/PermissionDenied';
+
+function formatDuration(ms: number) {
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
+  const s = (totalSec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
 
 type RouteProps = RouteProp<ClientStackParams, 'NewRequest'>;
 
@@ -33,6 +47,55 @@ export default function NewRequestScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [foto, setFoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [permissaoNegada, setPermissaoNegada] = useState<'camera' | 'microphone' | null>(null);
+
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+
+  async function escolherFoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { setPermissaoNegada('camera'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
+    if (!result.canceled && result.assets?.[0]) {
+      setFoto(result.assets[0]);
+    }
+  }
+
+  async function alternarGravacao() {
+    if (recorderState.isRecording) {
+      await audioRecorder.stop();
+      if (audioRecorder.uri) setAudioUri(audioRecorder.uri);
+      return;
+    }
+    const perm = await requestRecordingPermissionsAsync();
+    if (!perm.granted) { setPermissaoNegada('microphone'); return; }
+    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+    await audioRecorder.prepareToRecordAsync();
+    audioRecorder.record();
+  }
+
+  async function enviarAnexos(requestId: string): Promise<string[]> {
+    const falhas: string[] = [];
+    if (foto) {
+      try {
+        await uploadMedia(requestId, 'FOTO', foto.uri, foto.fileName ?? 'foto.jpg',
+            foto.mimeType ?? 'image/jpeg', token);
+      } catch {
+        falhas.push('a foto');
+      }
+    }
+    if (audioUri) {
+      try {
+        await uploadMedia(requestId, 'AUDIO', audioUri, 'audio.m4a', 'audio/m4a', token);
+      } catch {
+        falhas.push('o áudio');
+      }
+    }
+    return falhas;
+  }
+
   async function createRequest() {
     if (!categoria) { setError('Selecione uma categoria.'); return; }
     if (!descricao.trim()) { setError('Descreva o problema.'); return; }
@@ -51,12 +114,24 @@ export default function NewRequestScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao criar pedido');
+
+      const falhas = await enviarAnexos(data.id);
+      if (falhas.length > 0) {
+        Alert.alert(
+          'Anexo não enviado',
+          `O pedido foi criado, mas não foi possível enviar ${falhas.join(' e ')}. Você pode tentar de novo depois.`,
+        );
+      }
       nav.navigate('AiAssistant', { requestId: data.id });
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar pedido.');
     } finally {
       setLoading(false);
     }
+  }
+
+  if (permissaoNegada) {
+    return <PermissionDenied type={permissaoNegada} onSkip={() => setPermissaoNegada(null)} />;
   }
 
   const selectedCat = CATEGORIES.find(c => c.label === categoria);
@@ -126,13 +201,59 @@ export default function NewRequestScreen() {
             <View style={styles.field}>
               <Text style={styles.label}>ANEXOS</Text>
               <View style={styles.anexosRow}>
-                <TouchableOpacity style={styles.anexoBtn}>
-                  <Feather name="camera" size={22} color={color.primary} />
-                  <Text style={styles.anexoBtnText}>Foto</Text>
+                <TouchableOpacity testID="btn-anexo-foto" style={[styles.anexoBtn, foto && styles.anexoBtnFilled]} onPress={escolherFoto} activeOpacity={0.8}>
+                  {foto ? (
+                    <>
+                      <Image source={{ uri: foto.uri }} style={styles.anexoThumb} />
+                      <TouchableOpacity
+                        style={styles.anexoRemoveBadge}
+                        onPress={() => setFoto(null)}
+                        hitSlop={8}
+                        accessibilityLabel="Remover foto"
+                        accessibilityRole="button"
+                      >
+                        <Feather name="x" size={12} color="#fff" />
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="camera" size={22} color={color.primary} />
+                      <Text style={styles.anexoBtnText}>Foto</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.anexoBtn}>
-                  <Feather name="mic" size={22} color={color.primary} />
-                  <Text style={styles.anexoBtnText}>Áudio</Text>
+
+                <TouchableOpacity
+                  testID="btn-anexo-audio"
+                  style={[styles.anexoBtn, (recorderState.isRecording || audioUri) && styles.anexoBtnFilled]}
+                  onPress={alternarGravacao}
+                  activeOpacity={0.8}
+                >
+                  {recorderState.isRecording ? (
+                    <>
+                      <Feather name="square" size={20} color={color.danger} />
+                      <Text style={styles.anexoBtnText}>{formatDuration(recorderState.durationMillis)}</Text>
+                    </>
+                  ) : audioUri ? (
+                    <>
+                      <Feather name="check-circle" size={22} color={color.primary} />
+                      <Text style={styles.anexoBtnText}>Áudio gravado</Text>
+                      <TouchableOpacity
+                        style={styles.anexoRemoveBadge}
+                        onPress={() => setAudioUri(null)}
+                        hitSlop={8}
+                        accessibilityLabel="Remover áudio"
+                        accessibilityRole="button"
+                      >
+                        <Feather name="x" size={12} color="#fff" />
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="mic" size={22} color={color.primary} />
+                      <Text style={styles.anexoBtnText}>Áudio</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -238,8 +359,22 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#B7DCE3',
     borderStyle: 'dashed',
+    overflow: 'hidden',
   },
+  anexoBtnFilled: { borderStyle: 'solid', borderColor: color.primary },
   anexoBtnText: { fontSize: 12, fontWeight: font.weight.semibold, color: color.textSoft },
+  anexoThumb: { width: '100%', height: '100%' },
+  anexoRemoveBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: color.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   locRow: {
     flexDirection: 'row',

@@ -24,7 +24,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Onda usa a câmera para anexar uma foto ao pedido.",
+          "photosPermission": "O Onda acessa suas fotos para anexar uma imagem ao pedido."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Onda usa o microfone para gravar um áudio descrevendo o problema.",
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -74,7 +74,7 @@ class ServiceRequestControllerTest {
     void addMedia_validMultipart_returns201() throws Exception {
         UUID requestId = UUID.randomUUID();
         var resp = new MediaUploadResponse(UUID.randomUUID(), "https://storage.example.com/foto.jpg", "FOTO");
-        when(service.addMedia(eq(requestId), any(), any())).thenReturn(resp);
+        when(service.addMedia(eq(requestId), any(), any(), any())).thenReturn(resp);
 
         MockMultipartFile file = new MockMultipartFile("file", "foto.jpg", "image/jpeg", "img".getBytes());
         mvc.perform(multipart("/api/v1/service-requests/{id}/media", requestId)

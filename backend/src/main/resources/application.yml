@@ -31,6 +31,13 @@ spring:
       name: ${ADMIN_USER:admin}
       password: ${ADMIN_PASS:changeme}
 
+  # Upload de mídia do pedido (US04) — default do Boot (1MB) é pequeno demais pra
+  # foto de câmera; áudio curto (m4a) fica bem abaixo disso.
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 15MB
+
   # M12: E-mail (alertas SOS/Disputa/Verificação)
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}

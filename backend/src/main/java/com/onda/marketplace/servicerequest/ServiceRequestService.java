@@ -56,17 +56,49 @@ public class ServiceRequestService {
                 .orElseGet(() -> criarNovo(clienteId, req, idempotencyKey));
     }
 
+    /**
+     * Anexa mídia (foto/áudio) a um pedido já existente. Mesma regra de participação de
+     * {@link #detalhar}: sem isso, qualquer usuário autenticado podia anexar mídia a
+     * pedido de terceiros.
+     */
     @Transactional
-    public MediaUploadResponse addMedia(UUID requestId, MultipartFile file, String tipoStr) {
+    public MediaUploadResponse addMedia(UUID requestId, MultipartFile file, String tipoStr, UUID userId) {
         ServiceRequest sr = requestRepository.findById(requestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
+        if (!requestRepository.isParticipante(requestId, userId)) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
+
+        MediaType tipo = parseTipo(tipoStr);
+        validarContentType(tipo, file);
+
         String url = storageService.upload(file, "service-requests/" + requestId);
-        MediaType tipo = MediaType.valueOf(tipoStr.toUpperCase());
         ServiceMedia media = new ServiceMedia(sr, tipo, url);
         mediaRepository.save(media);
 
         return new MediaUploadResponse(media.getId(), url, tipo.name());
+    }
+
+    private MediaType parseTipo(String tipoStr) {
+        try {
+            return MediaType.valueOf(tipoStr.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("INVALID_MEDIA_TYPE", "Tipo de mídia inválido: " + tipoStr);
+        }
+    }
+
+    private void validarContentType(MediaType tipo, MultipartFile file) {
+        String contentType = file.getContentType();
+        boolean valido = switch (tipo) {
+            case FOTO -> contentType != null && contentType.startsWith("image/");
+            case AUDIO -> contentType != null && contentType.startsWith("audio/");
+            case TEXTO -> true;
+        };
+        if (!valido) {
+            throw new BusinessException("INVALID_MEDIA_CONTENT_TYPE",
+                    "Arquivo não corresponde ao tipo declarado (" + tipo + ").");
+        }
     }
 
     /** Pedidos do cliente logado, mais recentes primeiro (MyRequestsScreen). */
