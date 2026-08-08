@@ -8,4 +8,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
     boolean existsByCpfHash(String cpfHash);
+
+    /** Métrica de estoque do dashboard (US23): contas ativas por papel, estado atual. */
+    long countByRoleAndAtivoTrue(UserRole role);
 }

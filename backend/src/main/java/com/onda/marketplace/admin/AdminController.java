@@ -7,12 +7,16 @@ import com.onda.marketplace.payment.OutboxStatus;
 import com.onda.marketplace.payment.TransactionStatus;
 import com.onda.marketplace.provider.ProviderStatus;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -83,9 +87,26 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Fuso do negócio (marketplace hiperlocal do Ceará). O dia do filtro é o dia de
+     * quem opera o painel, não o dia UTC: convertendo em UTC, tudo que acontecia entre
+     * 21h e a meia-noite local já contava como o dia seguinte e sumia do "hoje".
+     */
+    private static final ZoneId ZONA_NEGOCIO = ZoneId.of("America/Fortaleza");
+
+    /**
+     * Métricas do dashboard (US23). {@code de}/{@code ate} são datas (yyyy-MM-dd)
+     * opcionais; sem elas devolve o histórico inteiro. O fim é exclusivo — {@code ate}
+     * entra como o começo do dia seguinte, senão o próprio dia informado ficaria de fora.
+     */
     @GetMapping("/metrics")
-    public ResponseEntity<MetricsDto> metrics() {
-        return ResponseEntity.ok(adminReportService.metrics());
+    public ResponseEntity<MetricsDto> metrics(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate de,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate) {
+
+        Instant inicio = de  != null ? de.atStartOfDay(ZONA_NEGOCIO).toInstant()              : null;
+        Instant fim    = ate != null ? ate.plusDays(1).atStartOfDay(ZONA_NEGOCIO).toInstant() : null;
+        return ResponseEntity.ok(adminReportService.metrics(inicio, fim));
     }
 
     @GetMapping("/alerts")

@@ -75,15 +75,47 @@ class AdminControllerTest {
         verify(moderationService).moderar(userId, ModerationAction.SUSPENDER);
     }
 
+    private static MetricsDto metricsFake() {
+        return new MetricsDto(
+                BigDecimal.valueOf(10000), BigDecimal.valueOf(1234.50), BigDecimal.valueOf(250),
+                java.util.Map.of("CONCLUIDO", 30L, "PENDENTE", 12L),
+                0.71, 2L, 12.5, 15L, 20L, 120L, 3L);
+    }
+
     @Test
     void metrics_retorna200_comAgregados() throws Exception {
-        when(adminReportService.metrics()).thenReturn(
-                new MetricsDto(42L, 30L, 2L, 15L, 5L, BigDecimal.valueOf(1234.50)));
+        when(adminReportService.metrics(null, null)).thenReturn(metricsFake());
 
         mvc.perform(get("/api/v1/admin/metrics"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalPedidos").value(42))
-                .andExpect(jsonPath("$.pedidosEmDisputa").value(2));
+                // o dashboard lê exatamente estes campos — se sumirem, a tela mostra NaN
+                .andExpect(jsonPath("$.gmv").value(10000))
+                .andExpect(jsonPath("$.receitaComissao").value(1234.50))
+                .andExpect(jsonPath("$.ticketMedio").value(250))
+                .andExpect(jsonPath("$.taxaConclusao").value(0.71))
+                .andExpect(jsonPath("$.disputasAbertas").value(2))
+                .andExpect(jsonPath("$.tempoMedioResolucaoHoras").value(12.5))
+                .andExpect(jsonPath("$.prestadoresVerificados").value(15))
+                .andExpect(jsonPath("$.prestadoresAtivos").value(20))
+                .andExpect(jsonPath("$.clientesAtivos").value(120))
+                .andExpect(jsonPath("$.sosAcionados").value(3))
+                .andExpect(jsonPath("$.pedidosPorStatus.CONCLUIDO").value(30));
+    }
+
+    @Test
+    void metrics_comPeriodo_usaFusoDoNegocioEFimExclusivo() throws Exception {
+        // O dia do filtro é o dia em Fortaleza (UTC-3), não o dia UTC: convertendo em UTC,
+        // o que acontecia das 21h à meia-noite local caía no dia seguinte e sumia do "hoje".
+        // "ate" é inclusive → vira o começo do dia seguinte, 00:00 local = 03:00Z.
+        Instant de  = Instant.parse("2026-07-01T03:00:00Z");
+        Instant ate = Instant.parse("2026-08-01T03:00:00Z");
+        when(adminReportService.metrics(de, ate)).thenReturn(metricsFake());
+
+        mvc.perform(get("/api/v1/admin/metrics").param("de", "2026-07-01").param("ate", "2026-07-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gmv").value(10000));
+
+        verify(adminReportService).metrics(de, ate);
     }
 
     @Test

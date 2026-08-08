@@ -26,6 +26,19 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 
+    /**
+     * Pedidos agrupados por status dentro do período (US23). Uma consulta só resolve
+     * o gráfico, o total e a taxa de conclusão do dashboard.
+     * Retorna linhas [ServiceRequestStatus, Long].
+     */
+    @Query("""
+           SELECT s.status, COUNT(s) FROM ServiceRequest s
+            WHERE s.createdAt >= :de AND s.createdAt < :ate
+            GROUP BY s.status
+           """)
+    java.util.List<Object[]> contarPorStatusNoPeriodo(@Param("de") java.time.Instant de,
+                                                      @Param("ate") java.time.Instant ate);
+
     // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
     @Query("""
         SELECT CASE WHEN EXISTS(
