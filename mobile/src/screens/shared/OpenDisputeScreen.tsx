@@ -14,8 +14,8 @@ const C = {
   surface: '#FCF8EE',
   text: '#0E2A33',
   textSoft: '#4C636A',
-  textFaint: '#8A989B',
-  primary: '#14A8A0',
+  textFaint: '#606E71',
+  primary: '#10847D',
   institutional2: '#15596E',
   lineSoft: '#E6DDC9',
   warmTerra: '#DA6A32',
@@ -79,7 +79,7 @@ export default function OpenDisputeScreen() {
           >
             {/* Warning banner */}
             <View style={styles.warningBanner}>
-              <Feather name="alert-triangle" size={20} color="#C2572A" style={{ flexShrink: 0 }} />
+              <Feather name="alert-triangle" size={20} color="#A94C25" style={{ flexShrink: 0 }} />
               <Text style={styles.warningText}>
                 Seu dinheiro <Text style={styles.warningBold}>permanece retido</Text> enquanto avaliamos a disputa. Nossa equipe entra em contato em até 48h.
               </Text>

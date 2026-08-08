@@ -28,7 +28,7 @@ Filtros que vieram do "detesta": **nada de** azul de banco engessado, paleta de 
 | Fundo | `--bg` | `#F3ECDC` | areia — fundo de todas as telas |
 | Card | `--surface` | `#FCF8EE` | marfim — cards de prestador, sheets |
 | Texto | `--text` | `#0E2A33` | corpo e títulos (AA sobre areia/marfim) |
-| **Ação / CTA** | `--primary` | `#14A8A0` | **turquesa — uma ação principal por tela** |
+| **Ação / CTA** | `--primary` | `#10847D` | **turquesa — uma ação principal por tela** |
 | Confiança | `--institutional` | `#0E3F52` | oceano — selos VERIFICADO / valor RETIDO, faixas |
 | Acento quente | `--warm-sun` | `#F2B015` | estrelas/rating, pequenos destaques |
 | Acento quente | `--warm-terra` | `#DA6A32` | alertas suaves, status de disputa |
@@ -41,6 +41,12 @@ Filtros que vieram do "detesta": **nada de** azul de banco engessado, paleta de 
 **Status do pedido** e **status financeiro (escrow)** têm tokens próprios (`--status-*`, `--escrow-*`) para a máquina de estados do `ROADMAP.md` — sempre acompanhados de **ícone + rótulo** (não comunicar só por cor).
 
 **Chips e banners de status** usam o par `--<cor>-tint` (fundo claro) + `--<cor>-ink` (texto AA sobre o tint) — ex.: alerta SOS = `--danger-tint` + `--danger-ink`. **Sempre o par**, nunca um -tint com texto ink genérico. A turquesa como texto usa `--primary-ink` (a `--primary` só vale como preenchimento/CTA, reprova AA como texto).
+
+**2026-08-08 — recalibração de contraste AA:** `--primary`, `--text-faint`, `--sun-ink` e
+`--terra-ink` foram escurecidos (auditoria WCAG completa, ver memória `contraste-aa-2026-08-08`
+do agente). `--primary` reprovava AA mesmo como preenchimento — 2.94:1 com texto branco em
+cima (o uso normal de CTA), abaixo do limiar de 3:1 pra componente de UI. Aprovado pelo
+cliente; mesma direção visual, tons um pouco mais fechados.
 
 ---
 

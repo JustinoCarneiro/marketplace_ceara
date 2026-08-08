@@ -11,7 +11,7 @@ const COLORS = {
   surface: '#FCF8EE',
   text: '#0E2A33',
   textSoft: '#4C636A',
-  textFaint: '#8A989B',
+  textFaint: '#606E71',
   danger: '#C0392B',
   dangerTint: '#FBE6E2',
   line: '#DCD2BC',
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   bgStatusBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#14A8A0',
+    backgroundColor: '#10847D',
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 100,

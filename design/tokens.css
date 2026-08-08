@@ -26,11 +26,11 @@
   /* ---- Texto (ink) ----------------------------------------------------- */
   --text:          #0E2A33;   /* texto principal        (AA sobre bg) */
   --text-soft:     #4C636A;   /* texto secundário                     */
-  --text-faint:    #8A989B;   /* legendas / terciário                 */
+  --text-faint:    #606E71;   /* legendas / terciário (2026-08-08: era #8A989B, falhava AA 2.53–2.81:1 sobre bg/surface) */
   --text-on-accent:#FFFFFF;   /* texto sobre turquesa/oceano          */
 
   /* ---- Ação / marca ---------------------------------------------------- */
-  --primary:       #14A8A0;   /* TURQUESA — única ação principal/CTA  */
+  --primary:       #10847D;   /* TURQUESA — única ação principal/CTA (2026-08-08: era #14A8A0, falhava AA 2.94:1 como fundo de botão + texto branco) */
   --primary-hover: #1AC6B6;   /* turquesa brilhante (pressed/hover)   */
   --institutional: #0E3F52;   /* OCEANO — selos de confiança, faixas  */
   --institutional-2:#15596E;  /* oceano médio                         */
@@ -88,8 +88,8 @@
 
   --primary-ink:     #0E7D77;   /* turquesa AA p/ texto (ex.: botão ghost) */
   --success-ink:     #15756E;   /* texto/ícone sobre tint sucesso        */
-  --sun-ink:         #B5810A;   /* texto sobre tint sol                  */
-  --terra-ink:       #C2572A;   /* texto sobre tint terra                */
+  --sun-ink:         #8E6508;   /* texto sobre tint sol (2026-08-08: era #B5810A, falhava AA 3.10:1) */
+  --terra-ink:       #A94C25;   /* texto sobre tint terra (2026-08-08: era #C2572A, falhava AA 3.61:1) */
   --terra-ink-deep:  #9A4A22;   /* texto em banner terra                 */
   --danger-ink:      #9A2820;   /* texto sobre tint danger               */
 

@@ -21,11 +21,16 @@ export const color = {
   // Texto (ink)
   text:        '#0E2A33',
   textSoft:    '#4C636A',
-  textFaint:   '#8A989B',
+  // 2026-08-08: escurecido de #8A989B pra #606E71 — falhava AA (2.53–2.81:1) sobre bg/surface;
+  // usado em texto real (hints, timestamps), não só decoração. Ver contraste-aa-2026-08-08.
+  textFaint:   '#606E71',
   textOnAccent:'#FFFFFF',
 
   // Ação / marca
-  primary:        '#14A8A0',
+  // 2026-08-08: primary escurecido de #14A8A0 pra #10847D — o original falhava contraste AA
+  // (2.94:1) como fundo de botão + texto branco, o uso mais comum dele no app. Ver memória
+  // contraste-aa-2026-08-08 pros números; aprovado pelo cliente pra corrigir (Gate G3).
+  primary:        '#10847D',
   primaryHover:   '#1AC6B6',
   primaryInk:     '#0E7D77',   // turquesa AA para texto (botão ghost)
   institutional:  '#0E3F52',
@@ -55,8 +60,10 @@ export const color = {
   terraTintLine: '#E6BFA6',
   dangerTint:    '#FBE6E2',
   successInk:    '#15756E',
-  sunInk:        '#B5810A',
-  terraInk:      '#C2572A',
+  // 2026-08-08: sunInk/terraInk escurecidos — falhavam AA (3.10:1/3.61:1) contra seus Tint
+  // pareados em texto de badge (ex. categoria "Elétrica"/"Reforma"). Ver contraste-aa-2026-08-08.
+  sunInk:        '#8E6508',
+  terraInk:      '#A94C25',
   terraInkDeep:  '#9A4A22',
   dangerInk:     '#9A2820',
 

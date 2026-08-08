@@ -120,20 +120,25 @@ todas as telas que dependem de rede.
   já usado em `LoginScreen`/`PaymentChoiceScreen`. `components/Input.tsx` (só
   texto, sem ícone) não foi tocado — está órfão, zero import em todo o app.
 - ✅ Placeholders que não somem ao digitar (labels fora do input — já é o padrão).
-- 🟡 **Contraste AA** — 2026-08-08, auditoria completa (fórmula WCAG, todos os
-  pares `*Tint`+`*Ink` do tema + usos de texto sobre `bg`/`surface`). Corrigido
-  o que dava pra corrigir sem tocar em cor de marca: 10 lugares em 6 telas
-  usavam `color.primary` como cor de **texto** (links, badges) quando o tema
-  já tem `color.primaryInk` — "turquesa AA para texto" no próprio comentário
-  do token — só que nunca era usado; troca sem nenhuma mudança visual
-  perceptível (2.77:1 → 4.69:1). **4 achados exigem mudar o valor de um token
-  de marca** (não uso errado — a cor em si falha), então esbarram no design
-  congelado (Gate G3): `color.primary` como fundo de botão + texto branco
-  (2.94:1, quase todo CTA do app), `color.textFaint` sobre `bg`/`surface`
-  (2.53–2.81:1, ~19 arquivos), `sunInk` sobre `sunTint` (3.10:1, badge
-  "Elétrica") e `terraInk` sobre `terraTint` (3.61:1, badges reforma/status).
-  Decisão do cliente/design, não código — ver ficha técnica completa na
-  memória `contraste-aa-2026-08-08`.
+- ✅ **Contraste AA** — 2026-08-08, auditoria completa (fórmula WCAG, todos os
+  pares `*Tint`+`*Ink` do tema + usos de texto sobre `bg`/`surface`). Duas fases:
+  1. Uso errado de token: 10 lugares em 6 telas usavam `color.primary` como cor
+     de **texto** (links, badges) quando o tema já tem `color.primaryInk` —
+     trocado, zero mudança visual (2.77:1 → 4.69:1).
+  2. **Cores de marca recalibradas** (aprovado pelo cliente, ver `design/tokens.css`
+     e `design/DESIGN.md` §2): `--primary` `#14A8A0`→`#10847D` (era 2.94:1 como
+     fundo de botão + texto branco — o CTA do app inteiro), `--text-faint`
+     `#8A989B`→`#606E71` (era 2.53–2.81:1, ~19 arquivos), `--sun-ink`
+     `#B5810A`→`#8E6508` (badge "Elétrica", era 3.10:1), `--terra-ink`
+     `#C2572A`→`#A94C25` (badges reforma/status, era 3.61:1). Todos ≥4.5:1
+     agora. Aplicado no theme central (`mobile/src/theme/index.ts`) + 12 telas
+     que duplicavam a paleta localmente em vez de importar o theme. Verificado
+     visualmente (screenshot) e via os 15 testes Playwright mobile — mesma
+     direção visual, só um pouco mais fechada. **Achado fora de escopo, não
+     corrigido:** o painel admin (React/Vite) duplica os mesmos hex em vários
+     arquivos (`FinancePage`, `NotificationsPage`, `ProvidersPage`,
+     `CategoriesPage`...) — auditoria de contraste separada, nunca feita.
+     Ver memória `contraste-aa-2026-08-08`.
 
 ## 6. Checkout / Pagamento
 
@@ -182,7 +187,7 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🟢 Baixa~~ | Erros não só por cor (texto + ícone) | todos | Baixo | ✅ Feito (2026-08-08) |
 | ~~🟢 Baixa~~ | Checkout em uma tela + autofill (`PaymentCardScreen`) | 6 | Baixo | ✅ Feito (2026-08-08) |
 | ~~🟢 Baixa~~ | Feedback de processamento do gateway | 6 | Médio | ✅ Feito (2026-08-08) — achado: confirmação inteira era fake |
-| 🟡 Média | Contraste AA — cores de marca (`primary`, `textFaint`, `sunInk`, `terraInk`) | todos | Depende do design | 🟡 Decisão do cliente (Gate G3) |
+| ~~🟡 Média~~ | Contraste AA — cores de marca (`primary`, `textFaint`, `sunInk`, `terraInk`) | todos | Depende do design | ✅ Feito (2026-08-08) — cliente aprovou recalibrar |
 | 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |
 
 **Fora deste doc, mas achados no mesmo levantamento:** dois campos coletados na

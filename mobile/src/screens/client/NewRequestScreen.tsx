@@ -29,7 +29,7 @@ function formatDuration(ms: number) {
 type RouteProps = RouteProp<ClientStackParams, 'NewRequest'>;
 
 const CATEGORIES: { label: string; icon: React.ComponentProps<typeof Feather>['name']; color: string; bg: string; border: string }[] = [
-  { label: 'Elétrica',   icon: 'zap',       color: '#B5810A', bg: color.sunTint,     border: color.warmSun },
+  { label: 'Elétrica',   icon: 'zap',       color: '#8E6508', bg: color.sunTint,     border: color.warmSun },
   { label: 'Hidráulica', icon: 'droplet',   color: color.institutional2, bg: color.skyTint, border: color.institutional2 },
   { label: 'Limpeza',    icon: 'edit-2',    color: '#15756E', bg: color.successTint, border: color.success },
   { label: 'Pintura',    icon: 'edit-3',    color: color.terraInk, bg: color.terraTint, border: color.warmTerra },

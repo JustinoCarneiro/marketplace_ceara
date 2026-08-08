@@ -21,7 +21,7 @@ const CATEGORIES = [
     label: 'Elétrica',
     bg: '#FDF3D6',
     border: '#F2B015',
-    icon: <Feather name="zap" size={26} color="#B5810A" />,
+    icon: <Feather name="zap" size={26} color="#8E6508" />,
   },
   {
     slug: 'hidraulica',
@@ -42,7 +42,7 @@ const CATEGORIES = [
     label: 'Pintura',
     bg: '#F7E3D6',
     border: '#DA6A32',
-    icon: <Feather name="edit-2" size={26} color="#C2572A" />,
+    icon: <Feather name="edit-2" size={26} color="#A94C25" />,
   },
 ];
 

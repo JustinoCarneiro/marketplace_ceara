@@ -13,8 +13,8 @@ const C = {
   surface: '#FCF8EE',
   text: '#0E2A33',
   textSoft: '#4C636A',
-  textFaint: '#8A989B',
-  primary: '#14A8A0',
+  textFaint: '#606E71',
+  primary: '#10847D',
   institutional: '#0E3F52',
   lineSoft: '#E6DDC9',
   warmSun: '#F2B015',
@@ -51,7 +51,7 @@ export default function RequestCreatedScreen() {
 
             <View style={styles.serviceCard}>
               <View style={styles.serviceIconWrap}>
-                <Feather name="zap" size={22} color="#B5810A" />
+                <Feather name="zap" size={22} color="#8E6508" />
               </View>
               <View style={styles.serviceInfo}>
                 <Text style={styles.serviceTitle}>Troca de tomada com faísca</Text>

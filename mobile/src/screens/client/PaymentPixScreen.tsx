@@ -15,8 +15,8 @@ const C = {
   surface: '#FCF8EE',
   text: '#0E2A33',
   textSoft: '#4C636A',
-  textFaint: '#8A989B',
-  primary: '#14A8A0',
+  textFaint: '#606E71',
+  primary: '#10847D',
   institutional: '#0E3F52',
   institutional2: '#15596E',
   lineSoft: '#E6DDC9',
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   waitText: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#B5810A',
+    color: '#8E6508',
   },
   secureRow: {
     flexDirection: 'row',
