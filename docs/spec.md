@@ -118,7 +118,7 @@ Como **Prestador**, quero atualizar o andamento do serviço, para refletir o sta
 
 ### US08 — Cliente avalia Prestador
 Como **Cliente**, quero dar 1–5 estrelas e comentar, para ajudar outros a escolher.
-- **Dado** pedido `CONCLUIDO`, **quando** avalio, **então** a nota entra no cálculo da nota média do prestador **assim que for revelada** (ver US28).
+- **Dado** pedido `CONCLUIDO`, **quando** avalio, **então** a nota entra no cálculo da nota média do prestador **assim que for revelada** (ver US31).
 - **Dado** pedido não concluído, **quando** tento avaliar, **então** recebo 422.
 
 ### US20 — Prestador avalia Cliente
@@ -126,7 +126,7 @@ Como **Prestador**, quero avaliar o Cliente após o serviço, para sinalizar bon
 - **Dado** pedido `CONCLUIDO`, **quando** avalio o cliente (1–5 + comentário), **então** a nota entra na reputação dele.
 - Avaliações são liberadas para ambos somente após `CONCLUIDO` (sem retaliação durante o serviço).
 
-### US28 — Avaliação double-blind (reveal simultâneo)
+### US31 — Avaliação double-blind (reveal simultâneo)
 Como **plataforma**, quero que as duas avaliações só apareçam ao mesmo tempo, para que ninguém
 escreva a sua olhando a nota que recebeu (retaliação) nem combine notas altas mútuas (conluio).
 - **Dado** que avaliei e a outra parte ainda não, **então** minha avaliação fica **oculta**: não
@@ -235,7 +235,9 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `dispute_resolutions` (id, service_request_id, admin_id, decisao, justificativa, criado_em) — mediação (US24)
 - `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
 
-> ⚠️ `admin_audit_log` (US22/TS09) está especificado mas **ainda não existe** no backend (sem tabela/entidade/endpoint). Ver "Auditoria de drift" no `ROADMAP.md` §4.
+- `admin_audit_log` (id, admin_id, acao, recurso, recurso_id, detalhe, criado_em) — trilha imutável de ações administrativas (US22/TS09). Migration `V8__admin_audit_log.sql`; registrada em `AuditService` e consultada em `GET /api/v1/admin/audit`.
+- `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
+- `service_requests.motivo_disputa` / `detalhes_disputa` — motivo informado ao abrir a disputa (US18), migration `V10__dispute_reason.sql`.
 
 ---
 

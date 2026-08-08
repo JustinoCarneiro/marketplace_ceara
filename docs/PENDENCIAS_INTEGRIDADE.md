@@ -60,7 +60,7 @@ contexto. Torna a auto-contratação impossível por construção (sempre o mesm
 - ~~**Avaliação double-blind**~~ — ✅ **IMPLEMENTADA em 2026-08-07** (antecipada da v2):
   a nota só fica visível quando ambas as partes avaliaram ou após expirar o prazo de
   14 dias. Enquanto oculta não entra na `notaMedia` nem no perfil público. Reduz conluio
-  (não dá pra combinar nota vendo a do outro) e retaliação. Spec US28, `ReviewService` +
+  (não dá pra combinar nota vendo a do outro) e retaliação. Spec US31, `ReviewService` +
   `ReviewRevealJob`.
 - **Reputação verificada por volume real:** ponderar nota por nº de transações
   com clientes distintos; sinalizar prestadores com poucos avaliadores únicos.

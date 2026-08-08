@@ -46,7 +46,7 @@ micro-interações visíveis.
 ## 3. Reputação e Avaliações (Épico 7)
 
 - ✅ **Avaliação double-blind (reveal simultâneo):** implementado 2026-08-07
-  (spec US28). Avaliação nasce oculta; é revelada quando a contraparte avalia
+  (spec US31). Avaliação nasce oculta; é revelada quando a contraparte avalia
   ou quando vence o prazo de 14 dias (`ReviewRevealJob`). Enquanto oculta não
   entra na nota média nem no perfil público — senão a média denunciaria a nota.
   `RateConfirmScreen` mostra ao usuário se já está pública ou até quando fica
