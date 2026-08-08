@@ -290,7 +290,12 @@ export default function NewRequestScreen() {
             </View>
           </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorRow}>
+              <Feather name="alert-circle" size={14} color={color.danger} accessibilityElementsHidden />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* Footer CTA */}
@@ -412,7 +417,8 @@ const styles = StyleSheet.create({
   permText: { flex: 1, fontSize: font.size.caption, color: color.institutional2, lineHeight: font.size.caption * 1.5 },
   permBold: { fontWeight: font.weight.bold },
 
-  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', paddingHorizontal: space[5] },
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: space[5] },
+  error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   footer: {
     paddingHorizontal: space[5],

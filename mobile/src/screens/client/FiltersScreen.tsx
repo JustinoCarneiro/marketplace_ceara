@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionTitle: { fontSize: 15, fontWeight: font.weight.bold, color: color.text },
-  sectionValue: { fontSize: 15, fontWeight: font.weight.black, color: color.primary },
+  sectionValue: { fontSize: 15, fontWeight: font.weight.black, color: color.primaryInk },
 
   sliderTrack: {
     height: 8,

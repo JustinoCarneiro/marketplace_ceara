@@ -165,7 +165,12 @@ export default function RegisterProviderScreen() {
             </View>
           </View>
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorRow}>
+              <Feather name="alert-circle" size={14} color={color.danger} accessibilityElementsHidden />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* Footer */}
@@ -193,7 +198,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: space[5], paddingTop: space[5], paddingBottom: space[4], justifyContent: 'center' },
 
   back: { paddingVertical: space[3] },
-  titleAccent: { color: color.primary },
+  titleAccent: { color: color.primaryInk },
   title: {
     fontSize: font.size.h1,
     fontWeight: font.weight.black,
@@ -255,7 +260,8 @@ const styles = StyleSheet.create({
   },
   locText: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.text },
 
-  errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', marginTop: space[3] },
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space[3] },
+  errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   footer: {
     paddingHorizontal: space[5],

@@ -176,7 +176,12 @@ export default function RateScreen() {
             </TouchableOpacity>
           </View>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorRow}>
+              <Feather name="alert-circle" size={14} color={COLORS.danger} accessibilityElementsHidden />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
 
         </ScrollView>
 
@@ -311,12 +316,18 @@ const styles = StyleSheet.create({
   photoOptional: {
     color: COLORS.textFaint,
   },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginHorizontal: 20,
+    marginTop: 8,
+  },
   error: {
     fontSize: 12,
     color: COLORS.danger,
     textAlign: 'center',
-    marginHorizontal: 20,
-    marginTop: 8,
   },
   footer: {
     backgroundColor: COLORS.surface,

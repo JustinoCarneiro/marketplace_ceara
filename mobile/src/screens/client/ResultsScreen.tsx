@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -60,11 +61,11 @@ export default function ResultsScreen() {
     load();
   }, [categoria, raio]);
 
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
 
   async function load() {
     setLoading(true);
-    setHasError(false);
+    setHasError(null);
     try {
       const params = new URLSearchParams({
         lat: '-3.7319', lng: '-38.5267',
@@ -74,11 +75,11 @@ export default function ResultsScreen() {
       const res = await fetch(`${API_BASE}/providers/nearby?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('HTTP error');
+      if (!res.ok) throw new HttpError(res.status);
       const data = await res.json();
       setProviders(Array.isArray(data) ? data : []);
-    } catch {
-      setHasError(true);
+    } catch (e) {
+      setHasError(screenStateError(e));
       setProviders([]);
     } finally {
       setLoading(false);
@@ -163,6 +164,8 @@ export default function ResultsScreen() {
           icon="search"
           emptyTitle="Nenhum profissional no seu raio"
           emptyBody="Tente ampliar o raio ou mudar os filtros."
+          errorTitle={hasError?.title}
+          errorBody={hasError?.body}
           onRetry={load}
         />
       ) : (

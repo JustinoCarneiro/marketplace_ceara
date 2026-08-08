@@ -170,7 +170,10 @@ export default function CompareProposalsScreen() {
                     )}
                   </TouchableOpacity>
                   {error && acceptingId === null && (
-                    <Text style={styles.errorText}>{error}</Text>
+                    <View style={styles.errorRow}>
+                      <Feather name="alert-circle" size={14} color={color.danger} accessibilityElementsHidden />
+                      <Text style={styles.errorText}>{error}</Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -291,7 +294,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   acceptBtnOutlineText: { fontSize: 15, fontWeight: font.weight.bold, color: color.text },
-  errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', marginTop: 4 },
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4 },
+  errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   footerNote: {
     flexDirection: 'row',

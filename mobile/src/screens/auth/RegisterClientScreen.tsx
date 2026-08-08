@@ -202,7 +202,10 @@ export default function RegisterClientScreen() {
 
             {/* Generic error */}
             {!!error && !error.toLowerCase().includes('email') && (
-              <Text style={styles.genericError}>{error}</Text>
+              <View style={styles.genericErrorRow}>
+                <Feather name="alert-circle" size={14} color={color.danger} accessibilityElementsHidden />
+                <Text style={styles.genericError}>{error}</Text>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -236,7 +239,7 @@ const styles = StyleSheet.create({
   formWrapper: { flex: 1, justifyContent: 'center', gap: space[5] },
   headingBlock: { gap: 6 },
   title: { fontSize: font.size.h1, fontWeight: font.weight.black, color: color.text, letterSpacing: -0.025 * font.size.h1, marginTop: space[2] },
-  titleAccent: { color: color.primary },
+  titleAccent: { color: color.primaryInk },
   subtitle: { fontSize: font.size.bodySm, color: color.textSoft },
 
   form: { gap: 18 },
@@ -271,8 +274,9 @@ const styles = StyleSheet.create({
   },
   errorRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   errorText: { fontSize: font.size.caption, color: color.danger, fontWeight: font.weight.semibold },
-  errorLink: { fontSize: font.size.caption, color: color.primary, fontWeight: font.weight.semibold },
-  genericError: { fontSize: font.size.caption, color: color.danger, textAlign: 'center', marginTop: space[3] },
+  errorLink: { fontSize: font.size.caption, color: color.primaryInk, fontWeight: font.weight.semibold },
+  genericErrorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space[3] },
+  genericError: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   strengthRow: { flexDirection: 'row', alignItems: 'center', gap: space[3], marginTop: 2 },
   strengthBars: { flex: 1, flexDirection: 'row', gap: 4 },
@@ -290,7 +294,7 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: color.primary, borderColor: color.primary },
   termsText: { flex: 1, fontSize: font.size.caption + 0.5, color: color.textSoft, lineHeight: 18 },
-  termsLink: { color: color.primary, fontWeight: font.weight.semibold },
+  termsLink: { color: color.primaryInk, fontWeight: font.weight.semibold },
 
   footer: {
     paddingHorizontal: space[5],
@@ -316,5 +320,5 @@ const styles = StyleSheet.create({
   ctaDisabled: { opacity: 0.45, elevation: 0, shadowOpacity: 0 },
   ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
   loginHint: { fontSize: font.size.caption + 0.5, color: color.textSoft, textAlign: 'center' },
-  loginLink: { color: color.primary, fontWeight: font.weight.bold },
+  loginLink: { color: color.primaryInk, fontWeight: font.weight.bold },
 });

@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     paddingVertical: space[1] + 2,
   },
-  roleText: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.primary },
+  roleText: { fontSize: font.size.bodySm, fontWeight: font.weight.bold, color: color.primaryInk },
 
   menu: {
     backgroundColor: color.surface,

@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -128,20 +129,20 @@ export default function MyRequestsScreen() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
   const [tab, setTab] = useState<'cliente' | 'prestador'>('cliente');
 
   async function load() {
-    setHasError(false);
+    setHasError(null);
     try {
       const res = await fetch(`${API_BASE}/service-requests/my`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('HTTP error');
+      if (!res.ok) throw new HttpError(res.status);
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
-    } catch {
-      setHasError(true);
+    } catch (e) {
+      setHasError(screenStateError(e));
       setRequests([]);
     } finally {
       setLoading(false);
@@ -203,6 +204,8 @@ export default function MyRequestsScreen() {
             icon="clipboard"
             emptyTitle="Nenhum pedido ainda"
             emptyBody="Seus chamados aparecerão aqui."
+            errorTitle={hasError?.title}
+            errorBody={hasError?.body}
             onRetry={() => { setLoading(true); load(); }}
           />
         ) : (

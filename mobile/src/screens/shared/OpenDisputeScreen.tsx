@@ -118,7 +118,12 @@ export default function OpenDisputeScreen() {
               />
             </View>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <View style={styles.errorRow}>
+                <Feather name="alert-circle" size={14} color={C.danger} accessibilityElementsHidden />
+                <Text style={styles.error}>{error}</Text>
+              </View>
+            ) : null}
           </ScrollView>
 
           <View style={styles.footer}>
@@ -236,6 +241,12 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     lineHeight: 14.5 * 1.55,
     color: C.textSoft,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   error: {
     fontSize: 12,

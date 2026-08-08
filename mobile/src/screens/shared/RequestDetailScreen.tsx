@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
@@ -272,15 +273,15 @@ export default function RequestDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<ScreenErrorInfo | null>(null);
 
   const requestId = route.params?.requestId ?? '';
 
   async function load() {
-    if (!requestId) { setLoading(false); setLoadError(true); return; }
+    if (!requestId) { setLoading(false); setLoadError(screenStateError(new HttpError(404))); return; }
     setLoading(true);
     setNotFound(false);
-    setLoadError(false);
+    setLoadError(null);
     try {
       const res = await fetch(`${API_BASE}/service-requests/${requestId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -292,11 +293,11 @@ export default function RequestDetailScreen() {
         setNotFound(true);
       } else {
         setRequest(null);
-        setLoadError(true);
+        setLoadError(screenStateError(new HttpError(res.status)));
       }
-    } catch {
+    } catch (e) {
       setRequest(null);
-      setLoadError(true);
+      setLoadError(screenStateError(e));
     } finally {
       setLoading(false);
     }
@@ -382,7 +383,8 @@ export default function RequestDetailScreen() {
           icon="file-text"
           emptyTitle="Chamado não encontrado"
           emptyBody="Esse pedido pode ter sido removido ou o link está incorreto."
-          errorTitle="Não foi possível carregar o chamado"
+          errorTitle={loadError?.title ?? 'Não foi possível carregar o chamado'}
+          errorBody={loadError?.body}
           onRetry={load}
         />
       </SafeAreaView>

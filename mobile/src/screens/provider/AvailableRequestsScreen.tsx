@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -59,19 +60,19 @@ export default function AvailableRequestsScreen() {
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
 
   const load = useCallback(async () => {
-    setHasError(false);
+    setHasError(null);
     try {
       const res = await fetch(`${API_BASE}/providers/available-requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('HTTP error');
+      if (!res.ok) throw new HttpError(res.status);
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
-    } catch {
-      setHasError(true);
+    } catch (e) {
+      setHasError(screenStateError(e));
       setRequests([]);
     } finally {
       setLoading(false);
@@ -118,6 +119,8 @@ export default function AvailableRequestsScreen() {
       ) : hasError ? (
         <ScreenState
           state="error"
+          errorTitle={hasError?.title}
+          errorBody={hasError?.body}
           onRetry={() => { setLoading(true); load(); }}
         />
       ) : (

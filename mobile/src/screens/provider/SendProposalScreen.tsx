@@ -108,7 +108,12 @@ export default function SendProposalScreen() {
             </View>
           )}
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? (
+            <View style={styles.errorRow}>
+              <Feather name="alert-circle" size={14} color={color.danger} accessibilityElementsHidden />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
 
           {/* CTA */}
           <TouchableOpacity
@@ -203,6 +208,7 @@ const styles = StyleSheet.create({
   comissaoLabel: { fontSize: font.size.caption, color: color.institutional2 },
   comissaoVal: { fontSize: font.size.body, fontWeight: font.weight.black, color: color.institutional },
 
+  errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   error: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
 
   cta: {

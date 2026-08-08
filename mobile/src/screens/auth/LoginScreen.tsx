@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   forgotLink: {
     fontSize: font.size.caption,
     fontWeight: font.weight.semibold,
-    color: color.primary,
+    color: color.primaryInk,
   },
   field: {
     height: 52,
@@ -204,5 +204,5 @@ const styles = StyleSheet.create({
   ctaText: { fontSize: font.size.body, fontWeight: font.weight.bold, color: color.textOnAccent },
   registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   registerHint: { fontSize: font.size.bodySm, color: color.textSoft },
-  registerLink: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.primary },
+  registerLink: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.primaryInk },
 });

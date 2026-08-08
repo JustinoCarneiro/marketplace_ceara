@@ -11,6 +11,7 @@ import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import { ProviderData } from '../../components/ProviderCard';
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import ScreenState from '../../components/ScreenState';
 import { SkeletonList } from '../../components/Skeleton';
 
@@ -71,24 +72,24 @@ export default function HomeScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [nearby, setNearby] = useState<ProviderData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [nearbyError, setNearbyError] = useState(false);
+  const [nearbyError, setNearbyError] = useState<ScreenErrorInfo | null>(null);
 
   const firstName = nome?.split(' ')[0] ?? 'você';
   const initStr = nome ? nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase() : 'EU';
 
   async function loadNearby() {
-    setNearbyError(false);
+    setNearbyError(null);
     setLoading(true);
     try {
       const res = await fetch(
         `${API_BASE}/providers/nearby?lat=-3.7319&lng=-38.5267&raioKm=8`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      if (!res.ok) throw new Error('HTTP error');
+      if (!res.ok) throw new HttpError(res.status);
       const data = await res.json();
       setNearby(Array.isArray(data) ? data.slice(0, 4) : []);
-    } catch {
-      setNearbyError(true);
+    } catch (e) {
+      setNearbyError(screenStateError(e));
       setNearby([]);
     } finally {
       setLoading(false);
@@ -166,6 +167,8 @@ export default function HomeScreen() {
                 icon="map-pin"
                 emptyTitle="Nenhum prestador próximo"
                 emptyBody="Aumente o raio ou crie um pedido para receber propostas."
+                errorTitle={nearbyError?.title}
+                errorBody={nearbyError?.body}
                 action={{ label: 'Criar pedido', onPress: () => nav.navigate('NewRequest', {}) }}
                 onRetry={loadNearby}
               />
@@ -310,7 +313,7 @@ const styles = StyleSheet.create({
     color: color.text,
     letterSpacing: -0.02 * 18,
   },
-  sectionLink: { fontSize: 13, fontWeight: font.weight.bold, color: color.primary },
+  sectionLink: { fontSize: 13, fontWeight: font.weight.bold, color: color.primaryInk },
 
   providerList: { paddingHorizontal: 20, gap: 14, paddingBottom: 24 },
 

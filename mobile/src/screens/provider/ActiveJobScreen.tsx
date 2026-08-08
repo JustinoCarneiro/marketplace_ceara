@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -17,24 +18,24 @@ export default function ActiveJobScreen() {
   const nav = useNavigation<ProviderNavProp>();
   const token = useAuthStore(s => s.accessToken);
   const [loading, setLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setHasError(false);
+    setHasError(null);
     try {
       const res = await fetch(`${API_BASE}/service-requests/active`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('HTTP error');
+      if (!res.ok) throw new HttpError(res.status);
       const data = await res.json();
       if (data.requestId) {
         nav.navigate('RequestDetail', { requestId: data.requestId });
       } else {
         setLoading(false);
       }
-    } catch {
-      setHasError(true);
+    } catch (e) {
+      setHasError(screenStateError(e));
       setLoading(false);
     }
   }, [token, nav]);
@@ -50,6 +51,8 @@ export default function ActiveJobScreen() {
         icon="clipboard"
         emptyTitle="Nenhum atendimento em andamento"
         emptyBody="Aceite uma proposta em Disponíveis para começar."
+        errorTitle={hasError?.title}
+        errorBody={hasError?.body}
         onRetry={load}
       />
     </SafeAreaView>

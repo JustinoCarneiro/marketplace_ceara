@@ -77,9 +77,13 @@ todas as telas que dependem de rede.
   onde `<ScreenState>` foi adotado (6 telas acima) — `error` mostra
   "Tentar novamente" (`onRetry`), `empty` mostra ícone + título + corpo
   explicativo em vez de tela em branco.
-- 🟡 **Distinguir erro de rede vs. 422 de validação**: ainda genérico —
-  `<ScreenState>` hoje só diferencia "vazio" de "erro", não o motivo do erro.
-  Refinamento futuro, não bloqueante.
+- ✅ **Distinguir erro de rede vs. erro do servidor** — 2026-08-08.
+  `mobile/src/api/errors.ts`: `HttpError` carrega o status; `screenStateError()`
+  resolve título/corpo por causa (401/403 → sessão expirada, 5xx → erro no
+  servidor, resto → genérico de dados; qualquer coisa que não seja `HttpError`
+  — o fetch nunca chegou a ter resposta — → "sem conexão"). Aplicado nas 6
+  telas que usam `<ScreenState>` (antes todas diziam "verifique sua conexão"
+  mesmo numa sessão expirada ou erro 500).
 - ✅ **Skeleton screens** (não spinner) nas listas de carga rápida —
   implementado 2026-08-07 (`mobile/src/components/Skeleton.tsx`,
   `SkeletonProviderCard`/`SkeletonRequestCard`, replicando as dimensões reais
@@ -108,20 +112,54 @@ todas as telas que dependem de rede.
   `accessibilityLabel="Voltar"` + `accessibilityRole="button"` +
   `accessibilityElementsHidden` no ícone. Os demais ícones clicáveis já tinham
   texto ao lado (ex.: "Foto", "Filtros", "Copiar") ou já eram rotulados.
-- ⬜ **Erros não só por cor:** mensagens de erro com texto + ícone, nunca só
-  borda vermelha (daltonismo). `RegisterClientScreen` já faz isso no email —
-  padronizar nos demais formulários.
+- ✅ **Erros não só por cor** — 2026-08-08. Auditados todos os `<Text>` de erro
+  do app; achados 7 sem ícone nenhum (`RegisterProviderScreen`,
+  `OpenDisputeScreen`, `NewRequestScreen`, `RateScreen`, `SendProposalScreen`,
+  `CompareProposalsScreen`, e o erro genérico de `RegisterClientScreen`) —
+  todos ganharam `Feather name="alert-circle"` ao lado do texto, mesmo padrão
+  já usado em `LoginScreen`/`PaymentChoiceScreen`. `components/Input.tsx` (só
+  texto, sem ícone) não foi tocado — está órfão, zero import em todo o app.
 - ✅ Placeholders que não somem ao digitar (labels fora do input — já é o padrão).
-- ⬜ **Contraste AA** validar pares tint/texto do `theme` com ferramenta
-  (a maioria já foi pensada em pares `*Tint` + `*Ink`).
+- 🟡 **Contraste AA** — 2026-08-08, auditoria completa (fórmula WCAG, todos os
+  pares `*Tint`+`*Ink` do tema + usos de texto sobre `bg`/`surface`). Corrigido
+  o que dava pra corrigir sem tocar em cor de marca: 10 lugares em 6 telas
+  usavam `color.primary` como cor de **texto** (links, badges) quando o tema
+  já tem `color.primaryInk` — "turquesa AA para texto" no próprio comentário
+  do token — só que nunca era usado; troca sem nenhuma mudança visual
+  perceptível (2.77:1 → 4.69:1). **4 achados exigem mudar o valor de um token
+  de marca** (não uso errado — a cor em si falha), então esbarram no design
+  congelado (Gate G3): `color.primary` como fundo de botão + texto branco
+  (2.94:1, quase todo CTA do app), `color.textFaint` sobre `bg`/`surface`
+  (2.53–2.81:1, ~19 arquivos), `sunInk` sobre `sunTint` (3.10:1, badge
+  "Elétrica") e `terraInk` sobre `terraTint` (3.61:1, badges reforma/status).
+  Decisão do cliente/design, não código — ver ficha técnica completa na
+  memória `contraste-aa-2026-08-08`.
 
 ## 6. Checkout / Pagamento
 
-- ⬜ **Checkout em uma tela**, custos visíveis, autofill onde possível
-  (`PaymentCardScreen`). Validar que não exige mais passos que o necessário.
-- ⬜ **Feedback de processamento** claro durante a chamada ao gateway (estado de
-  loading dedicado, não congelar a tela) — alinhado ao princípio de escrow via
-  Saga/Outbox (a UI reflete estado de evento, não trava esperando transação).
+- ✅ **Checkout em uma tela**, custos visíveis, autofill — 2026-08-08.
+  `PaymentCardScreen` estava **sem campo de nome do titular** (o estado
+  `nome` existia, era usado no preview do cartão, mas não tinha `TextInput`
+  nenhum — o preview sempre mostrava o placeholder fixo). Adicionado, com
+  `autoComplete`/`textContentType` nos 4 campos (nome, número, validade,
+  CVV) e validação real (botão só habilita com os 4 campos preenchidos —
+  antes dava pra tocar "Pagar" com o formulário inteiro vazio).
+- ✅ **Feedback de processamento** durante a chamada ao gateway — 2026-08-08.
+  **Achado mais sério que o item em si:** `PaymentCardScreen.pay()` era só um
+  `setTimeout` de 1.5s — nunca chamava o backend, nunca checava nada, sempre
+  navegava pra "Pagamento retido com segurança" como se tivesse dado certo.
+  `PaymentPixScreen` ("Paguei") fazia a mesma coisa, instantâneo. E
+  `EscrowConfirmedScreen` **nunca lia os dados reais** — "José Wagner" e
+  "R$ 242 RETIDO" eram texto fixo no componente, não vinham de lugar nenhum.
+  Ou seja: o app dizia "pagamento confirmado" sem nunca ter confirmado nada.
+  Corrigido: `mobile/src/api/pollTransaction.ts` faz polling real de
+  `transacao.statusPagamento === 'RETIDO'` (até ~21s, não trava a tela
+  indefinidamente — se estourar, avisa e deixa o usuário voltar depois em
+  "Meus pedidos" em vez de fingir sucesso); Pix e Cartão usam o mesmo
+  helper; `EscrowConfirmedScreen` busca `GET /service-requests/{id}` de
+  verdade e mostra prestador/valor reais. Nova suíte E2E
+  `tests/03-pagamento-cartao.spec.ts` — `PaymentCardScreen` nunca tinha
+  tido cobertura nenhuma antes.
 
 ---
 
@@ -140,8 +178,12 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🟡 Média~~ | Avaliação double-blind | 7 | Médio | ✅ Feito |
 | ~~🟡 Média~~ | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) | ✅ Feito |
 | ~~🟢 Baixa~~ | Skeleton screens nas listas | 2/4 | Médio | ✅ Feito |
+| ~~🟢 Baixa~~ | Distinguir erro de rede vs. validação no `<ScreenState>` | todos | Baixo | ✅ Feito (2026-08-08) |
+| ~~🟢 Baixa~~ | Erros não só por cor (texto + ícone) | todos | Baixo | ✅ Feito (2026-08-08) |
+| ~~🟢 Baixa~~ | Checkout em uma tela + autofill (`PaymentCardScreen`) | 6 | Baixo | ✅ Feito (2026-08-08) |
+| ~~🟢 Baixa~~ | Feedback de processamento do gateway | 6 | Médio | ✅ Feito (2026-08-08) — achado: confirmação inteira era fake |
+| 🟡 Média | Contraste AA — cores de marca (`primary`, `textFaint`, `sunInk`, `terraInk`) | todos | Depende do design | 🟡 Decisão do cliente (Gate G3) |
 | 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |
-| 🟢 Baixa | Distinguir erro de rede vs. validação no `<ScreenState>` | todos | Baixo | ⬜ Pendente |
 
 **Fora deste doc, mas achados no mesmo levantamento:** dois campos coletados na
 UI e nunca persistidos — `bio` do prestador (`RegisterProviderScreen`) e
