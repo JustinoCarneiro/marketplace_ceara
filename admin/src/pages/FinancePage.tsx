@@ -13,7 +13,7 @@ function statusBadge(s: string) {
   const m: Record<string, { bg: string; color: string }> = {
     RETIDO: { bg: '#E2EEF2', color: '#15596E' },
     LIBERADO: { bg: '#DDF0EC', color: '#15756E' },
-    REEMBOLSADO: { bg: '#F7E3D6', color: '#C2572A' },
+    REEMBOLSADO: { bg: '#F7E3D6', color: '#A94C25' },
     FALHA: { bg: '#FBE6E2', color: '#C0392B' },
   };
   const st = m[s] || m.RETIDO;
@@ -61,8 +61,8 @@ export default function FinancePage() {
         <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Reconciliação financeira</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {exportErr && <span style={{ fontSize: 12.5, color: '#C0392B' }}>{exportErr}</span>}
-          <button onClick={exportar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: '1.5px solid #14A8A0', borderRadius: 100, background: 'var(--surface)', color: '#0E7D77', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#14A8A0" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
+          <button onClick={exportar} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 18px', border: '1.5px solid #10847D', borderRadius: 100, background: 'var(--surface)', color: '#0E7D77', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10847D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
           </button>
         </div>
       </div>
@@ -94,10 +94,10 @@ export default function FinancePage() {
                   <div key={e.id} style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33', fontFamily: 'monospace' }}>{e.tipo}</div>
-                      <div style={{ fontSize: 12, color: '#8A989B' }}>{e.entidade} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: 12, color: '#606E71' }}>{e.entidade} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
-                    <button onClick={() => reprocess(e.id)} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Reprocessar</button>
+                    <button onClick={() => reprocess(e.id)} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Reprocessar</button>
                   </div>
                 ))}
                 <span style={{ fontSize: 12, color: '#9A4A22' }}>Reprocessamento é idempotente — seguro repetir.</span>

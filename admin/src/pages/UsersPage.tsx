@@ -33,7 +33,7 @@ export default function UsersPage() {
       <div style={{ height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px' }}>
         <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Gestão de usuários</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F3ECDC', border: '1px solid #E6DDC9', borderRadius: 100, padding: '0 16px', height: 42, width: 320 }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8A989B" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#606E71" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou e-mail…" style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13.5, color: '#0E2A33', flex: 1 }} />
         </div>
       </div>
@@ -52,11 +52,11 @@ export default function UsersPage() {
                 <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center', background: isSuspended ? '#FBE6E2' : 'transparent' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 38, height: 38, borderRadius: 11, background: avatarBg(u.nome), color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.nome)}</div>
-                    <div><div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{u.nome}</div><div style={{ fontSize: 12, color: '#8A989B' }}>{u.email}</div></div>
+                    <div><div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{u.nome}</div><div style={{ fontSize: 12, color: '#606E71' }}>{u.email}</div></div>
                   </div>
                   <span style={{ fontSize: 13, color: '#4C636A' }}>{u.role === 'ROLE_PROVIDER' ? 'Prestador' : 'Cliente'}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: isSuspended ? '#C0392B' : '#15756E', background: isSuspended ? '#fff' : '#DDF0EC', border: isSuspended ? '1px solid #E6BFA6' : 'none', padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{isSuspended ? 'SUSPENSO' : 'ATIVO'}</span>
-                  <button onClick={() => toggleStatus(u.id, u.status)} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#14A8A0' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: 'pointer', justifySelf: 'end' }}>{isSuspended ? 'Reativar' : 'Suspender'}</button>
+                  <button onClick={() => toggleStatus(u.id, u.status)} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#10847D' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: 'pointer', justifySelf: 'end' }}>{isSuspended ? 'Reativar' : 'Suspender'}</button>
                 </div>
               );
             })}

@@ -19,7 +19,7 @@ interface DisputeDetail {
 
 const S = {
   topbar: { height: 64, flexShrink: 0, background: 'var(--surface)', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', gap: 14, padding: '0 28px' } as React.CSSProperties,
-  badge: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F7E3D6', color: '#C2572A', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '4px 10px', borderRadius: 100 } as React.CSSProperties,
+  badge: { display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F7E3D6', color: '#A94C25', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '4px 10px', borderRadius: 100 } as React.CSSProperties,
   card: { background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column' as const, gap: 12 } as React.CSSProperties,
   escrow: { background: '#0E3F52', borderRadius: 12, padding: 20, display: 'flex', flexDirection: 'column' as const, gap: 10 } as React.CSSProperties,
   btnG: { width: '100%', height: 50, border: 'none', borderRadius: 12, color: '#fff', fontWeight: 700, fontSize: 14.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' } as React.CSSProperties,
@@ -78,10 +78,10 @@ export default function DisputeDetailPage() {
           <div style={S.card}>
             <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Pedido</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#8A989B' }}>Categoria</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.categoria}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#8A989B' }}>Status do pagamento</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.statusPagamento}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#8A989B' }}>Aberta em</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{new Date(d.criadoEm).toLocaleString('pt-BR')}</span></div>
-              {d.decisao && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#8A989B' }}>Decisão</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.decisao}</span></div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Categoria</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.categoria}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Status do pagamento</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.statusPagamento}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Aberta em</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{new Date(d.criadoEm).toLocaleString('pt-BR')}</span></div>
+              {d.decisao && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Decisão</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.decisao}</span></div>}
             </div>
           </div>
           {(d.motivoDisputa || d.detalhesDisputa) && (
@@ -107,7 +107,7 @@ export default function DisputeDetailPage() {
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3"/><polyline points="3 4 3 8 7 8"/></svg>Reembolsar o cliente
             </button>
             {err && <span style={{ fontSize: 13, color: '#C0392B' }}>{err}</span>}
-            <span style={{ fontSize: 12, color: '#8A989B', textAlign: 'center' }}>Ação auditada e irreversível.</span>
+            <span style={{ fontSize: 12, color: '#606E71', textAlign: 'center' }}>Ação auditada e irreversível.</span>
           </div>
         </div>
       </div>

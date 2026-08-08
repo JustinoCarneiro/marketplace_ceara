@@ -22,8 +22,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_COLOR: Record<string, string> = {
-  PENDENTE: '#8A989B', ACEITO: '#15596E',
-  EM_ANDAMENTO: '#14A8A0', CONCLUIDO: '#1B8C84',
+  PENDENTE: '#606E71', ACEITO: '#15596E',
+  EM_ANDAMENTO: '#10847D', CONCLUIDO: '#1B8C84',
   EM_DISPUTA: '#DA6A32',
 };
 
@@ -85,7 +85,7 @@ export default function DashboardPage() {
               {PERIODOS.map(p => <option key={p.label} value={String(p.dias)}>{p.label}</option>)}
             </select>
           </label>
-          <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
+          <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
           </button>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: '#15596E', color: '#fff', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>GM</div>
@@ -156,7 +156,7 @@ export default function DashboardPage() {
                           title={`${STATUS_LABEL[status]}: ${count}`}
                           style={{ width: '100%', maxWidth: 54, height: `${count > 0 ? Math.max(pct, 6) : 2}%`, background: count > 0 ? STATUS_COLOR[status] : '#E6DDC9', borderRadius: '8px 8px 0 0' }}
                         />
-                        <span style={{ fontSize: 12, color: '#4C636A', fontWeight: 600 }}>{STATUS_LABEL[status]} <span style={{ color: '#8A989B' }}>({count})</span></span>
+                        <span style={{ fontSize: 12, color: '#4C636A', fontWeight: 600 }}>{STATUS_LABEL[status]} <span style={{ color: '#606E71' }}>({count})</span></span>
                       </div>
                     );
                   })}
@@ -165,7 +165,7 @@ export default function DashboardPage() {
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ flex: 1, background: '#FCF8EE', border: '1px solid #E6DDC9', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <span style={S.kpiTitle}>Prestadores verificados</span>
-                  <span data-testid="kpi-prestadores" style={S.kpiValue}>{num(metrics.prestadoresVerificados)} <span style={{ fontSize: 14, color: '#8A989B', fontWeight: 600 }}>/ {num(metrics.prestadoresAtivos)} ativos</span></span>
+                  <span data-testid="kpi-prestadores" style={S.kpiValue}>{num(metrics.prestadoresVerificados)} <span style={{ fontSize: 14, color: '#606E71', fontWeight: 600 }}>/ {num(metrics.prestadoresAtivos)} ativos</span></span>
                 </div>
                 <div style={{ flex: 1, background: '#FCF8EE', border: '1px solid #E6DDC9', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <span style={S.kpiTitle}>Clientes ativos</span>
@@ -184,5 +184,5 @@ const S = {
   kpiCard: { background: '#FCF8EE', border: '1px solid #E6DDC9', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column' as const, gap: 7 },
   kpiTitle: { fontSize: 12, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: '#15596E' },
   kpiValue: { fontSize: 26, fontWeight: 800, color: '#0E2A33', letterSpacing: '-0.02em' },
-  kpiHint: { fontSize: 12.5, color: '#8A989B', fontWeight: 600 },
+  kpiHint: { fontSize: 12.5, color: '#606E71', fontWeight: 600 },
 };

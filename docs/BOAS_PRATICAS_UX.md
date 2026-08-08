@@ -134,11 +134,13 @@ todas as telas que dependem de rede.
      agora. Aplicado no theme central (`mobile/src/theme/index.ts`) + 12 telas
      que duplicavam a paleta localmente em vez de importar o theme. Verificado
      visualmente (screenshot) e via os 15 testes Playwright mobile — mesma
-     direção visual, só um pouco mais fechada. **Achado fora de escopo, não
-     corrigido:** o painel admin (React/Vite) duplica os mesmos hex em vários
-     arquivos (`FinancePage`, `NotificationsPage`, `ProvidersPage`,
-     `CategoriesPage`...) — auditoria de contraste separada, nunca feita.
-     Ver memória `contraste-aa-2026-08-08`.
+     direção visual, só um pouco mais fechada. **2026-08-08 (mesmo dia):**
+     estendido pro painel admin — `admin/src/styles/tokens.css` era uma
+     duplicata byte-a-byte da paleta mobile (mesmos 4 hex reprovando os
+     mesmos números), corrigido igual, mais 9 páginas que duplicavam a
+     paleta com hex cru (`AuditPage`, `CategoriesPage`, `DashboardPage`,
+     `DisputeDetailPage`, `FinancePage`, `NotificationsPage`, `ProvidersPage`,
+     `ReportsPage`, `UsersPage`). 48 testes Playwright admin verdes.
 
 ## 6. Checkout / Pagamento
 

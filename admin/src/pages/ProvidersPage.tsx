@@ -81,11 +81,11 @@ export default function ProvidersPage() {
               <StatusBadge status={p.statusVerificacao} />
               {isPending ? (
                 <>
-                  <button onClick={() => verify(p.id)} style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#14A8A0', color: '#fff', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Verificar</button>
+                  <button onClick={() => verify(p.id)} style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Verificar</button>
                   <button onClick={() => reject(p.id)} style={{ height: 42, padding: '0 18px', border: '1.5px solid #C0392B', borderRadius: 100, background: 'transparent', color: '#C0392B', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Reprovar</button>
                 </>
               ) : (
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#8A989B', flexShrink: 0 }}>Ver perfil →</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#606E71', flexShrink: 0 }}>Ver perfil →</span>
               )}
             </div>
           );

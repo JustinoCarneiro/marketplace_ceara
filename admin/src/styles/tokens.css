@@ -7,10 +7,10 @@
 
   --text:          #0E2A33;
   --text-soft:     #4C636A;
-  --text-faint:    #8A989B;
+  --text-faint:    #606E71;   /* 2026-08-08: era #8A989B, reprovava AA (2.53-2.81:1) — ver contraste-aa-2026-08-08 */
   --text-on-accent:#FFFFFF;
 
-  --primary:       #14A8A0;
+  --primary:       #10847D;   /* 2026-08-08: era #14A8A0, reprovava AA (2.94:1) como fundo de botão + texto branco */
   --primary-hover: #1AC6B6;
   --institutional: #0E3F52;
   --institutional-2:#15596E;
@@ -49,8 +49,8 @@
 
   --primary-ink:    #0E7D77;
   --success-ink:    #15756E;
-  --sun-ink:        #B5810A;
-  --terra-ink:      #C2572A;
+  --sun-ink:        #8E6508;   /* 2026-08-08: era #B5810A, reprovava AA (3.10:1) */
+  --terra-ink:      #A94C25;   /* 2026-08-08: era #C2572A, reprovava AA (3.61:1) */
   --danger-ink:     #9A2820;
 
   --font-family: 'Manrope', system-ui, -apple-system, sans-serif;

@@ -40,10 +40,10 @@ export default function AuditPage() {
                 <span style={{ fontSize: 13, color: '#0E2A33', fontWeight: 600 }}>{l.adminNome}</span>
                 <span style={{ fontSize: 13, color: '#4C636A' }}>{l.acao}</span>
                 <span style={{ fontSize: 13, color: '#4C636A', fontFamily: 'monospace' }}>{l.entidade}</span>
-                <span style={{ fontSize: 12.5, color: '#8A989B' }}>{fmtDate(l.criadoEm)}</span>
+                <span style={{ fontSize: 12.5, color: '#606E71' }}>{fmtDate(l.criadoEm)}</span>
               </div>
             ))}
-            {logs.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#8A989B' }}>Nenhum registro encontrado.</div>}
+            {logs.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#606E71' }}>Nenhum registro encontrado.</div>}
           </div>
         )}
       </div>
