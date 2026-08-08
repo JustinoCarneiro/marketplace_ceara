@@ -1,17 +1,58 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
+import { API_BASE } from '../../api/config';
+import { useAuthStore } from '../../store/auth';
 
 type RouteProps = RouteProp<ClientStackParams, 'EscrowConfirmed'>;
+
+interface Detalhe {
+  prestadorNome: string | null;
+  categoria: string | null;
+  transacao: { valorTotal: number } | null;
+}
+
+function initialsOf(nome: string) {
+  return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
+}
 
 export default function EscrowConfirmedScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
+  const token = useAuthStore(s => s.accessToken);
+  const [detalhe, setDetalhe] = useState<Detalhe | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setDetalhe(res.ok ? await res.json() : null);
+      } catch {
+        setDetalhe(null);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [route.params.requestId]);
+
+  const prestadorNome = detalhe?.prestadorNome ?? 'Prestador';
+  const valorRetido = detalhe?.transacao?.valorTotal;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.loadingSafe]}>
+        <ActivityIndicator color={color.textOnAccent} size="large" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -42,18 +83,20 @@ export default function EscrowConfirmedScreen() {
             </View>
             <View style={styles.chipWhite}>
               <Feather name="lock" size={13} color={color.institutional} />
-              <Text style={styles.chipWhiteText}>R$ 242 RETIDO</Text>
+              <Text style={styles.chipWhiteText}>
+                {valorRetido != null ? `R$ ${valorRetido.toFixed(2).replace('.', ',')} RETIDO` : 'RETIDO'}
+              </Text>
             </View>
           </View>
 
           {/* Provider mini card */}
           <View style={styles.providerCard}>
             <View style={styles.providerAvatar}>
-              <Text style={styles.providerAvatarText}>JW</Text>
+              <Text style={styles.providerAvatarText}>{initialsOf(prestadorNome)}</Text>
             </View>
             <View style={styles.providerInfo}>
-              <Text style={styles.providerName}>José Wagner</Text>
-              <Text style={styles.providerSub}>Instalação elétrica · prazo 2 dias</Text>
+              <Text style={styles.providerName}>{prestadorNome}</Text>
+              {!!detalhe?.categoria && <Text style={styles.providerSub}>{detalhe.categoria}</Text>}
             </View>
           </View>
         </View>
@@ -74,6 +117,7 @@ export default function EscrowConfirmedScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.institutional },
+  loadingSafe: { alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1, paddingHorizontal: space[5], paddingVertical: space[5] },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 22 },

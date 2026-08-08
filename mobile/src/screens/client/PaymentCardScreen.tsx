@@ -8,6 +8,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { Feather } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/auth';
+import { pollPaymentConfirmed } from '../../api/pollTransaction';
 
 type RouteProps = RouteProp<ClientStackParams, 'PaymentCard'>;
 
@@ -27,11 +29,13 @@ const C = {
 export default function PaymentCardScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
+  const token = useAuthStore(s => s.accessToken);
   const [numero, setNumero] = useState('');
   const [nome, setNome] = useState('');
   const [validade, setValidade] = useState('');
   const [cvv, setCvv] = useState('');
   const [loading, setLoading] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   function formatCard(v: string) {
     return v.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim().substring(0, 19);
@@ -40,12 +44,24 @@ export default function PaymentCardScreen() {
     return v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1/$2').substring(0, 5);
   }
 
-  function pay() {
+  const podePagar = nome.trim().length > 2
+    && numero.replace(/\s/g, '').length >= 16
+    && validade.length === 5
+    && cvv.length >= 3;
+
+  async function pay() {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    setTimedOut(false);
+    // O gateway é quem cobra e confirma (Saga/Outbox) — os campos do cartão aqui ainda não
+    // vão pra um processador real (stub, ver GatewayServiceImpl); o que evita é fingir
+    // sucesso client-side sem checar se a transação foi de fato confirmada.
+    const result = await pollPaymentConfirmed(route.params.requestId, token);
+    setLoading(false);
+    if (result.confirmed) {
       nav.navigate('EscrowConfirmed', { requestId: route.params.requestId });
-    }, 1500);
+    } else {
+      setTimedOut(true);
+    }
   }
 
   const displayNumber = numero || '5102  ••••  ••••  4821';
@@ -94,6 +110,20 @@ export default function PaymentCardScreen() {
             {/* Form fields */}
             <View style={styles.form}>
               <View style={styles.field}>
+                <Text style={styles.fieldLabel}>NOME NO CARTÃO</Text>
+                <TextInput
+                  style={styles.fieldInput}
+                  value={nome}
+                  onChangeText={v => setNome(v.toUpperCase())}
+                  placeholder="LÚCIA M ALVES"
+                  placeholderTextColor={C.textFaint}
+                  autoCapitalize="characters"
+                  textContentType="name"
+                  autoComplete="name"
+                />
+              </View>
+
+              <View style={styles.field}>
                 <Text style={styles.fieldLabel}>NÚMERO DO CARTÃO</Text>
                 <TextInput
                   style={styles.fieldInput}
@@ -103,6 +133,8 @@ export default function PaymentCardScreen() {
                   placeholderTextColor={C.textFaint}
                   keyboardType="number-pad"
                   maxLength={19}
+                  textContentType="creditCardNumber"
+                  autoComplete="cc-number"
                 />
               </View>
 
@@ -130,23 +162,34 @@ export default function PaymentCardScreen() {
                     keyboardType="number-pad"
                     maxLength={4}
                     secureTextEntry
+                    textContentType="none"
                   />
                 </View>
               </View>
+
+              {timedOut && (
+                <View style={styles.timeoutBanner}>
+                  <Feather name="clock" size={14} color={C.institutional2} />
+                  <Text style={styles.timeoutText}>
+                    Ainda não confirmou. A confirmação pode levar mais alguns instantes — tente
+                    de novo ou volte depois em "Meus pedidos".
+                  </Text>
+                </View>
+              )}
             </View>
           </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity
-              style={[styles.btnPrimary, loading && styles.btnLoading]}
+              style={[styles.btnPrimary, loading && styles.btnLoading, !podePagar && styles.btnDisabled]}
               onPress={pay}
               activeOpacity={0.85}
-              disabled={loading}
+              disabled={loading || !podePagar}
             >
               {loading && <View style={styles.spinner} />}
               <Text style={styles.btnPrimaryText}>
                 {loading
-                  ? 'Processando pagamento…'
+                  ? 'Confirmando pagamento…'
                   : `Pagar R$ ${route.params.valor.toFixed(2).replace('.', ',')}`}
               </Text>
             </TouchableOpacity>
@@ -260,6 +303,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  timeoutBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
+    borderRadius: 12,
+    padding: 12,
+  },
+  timeoutText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: C.institutional2,
+    lineHeight: 12.5 * 1.4,
+  },
   footer: {
     padding: 14,
     paddingBottom: 20,
@@ -283,6 +342,9 @@ const styles = StyleSheet.create({
   },
   btnLoading: {
     opacity: 0.85,
+  },
+  btnDisabled: {
+    opacity: 0.45,
   },
   spinner: {
     width: 16,

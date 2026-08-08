@@ -5,6 +5,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { Feather } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/auth';
+import { pollPaymentConfirmed } from '../../api/pollTransaction';
 
 type RouteProps = RouteProp<ClientStackParams, 'PaymentPix'>;
 
@@ -27,11 +29,28 @@ const PIX_KEY = '00020126360014BR.GOV.BCB.PIX0114+5585...';
 export default function PaymentPixScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
+  const token = useAuthStore(s => s.accessToken);
   const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   function copyPix() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function confirmarPagamento() {
+    setConfirming(true);
+    setTimedOut(false);
+    const result = await pollPaymentConfirmed(route.params.requestId, token);
+    setConfirming(false);
+    if (result.confirmed) {
+      nav.navigate('EscrowConfirmed', { requestId: route.params.requestId });
+    } else {
+      // Não fecha em falso positivo: o gateway confirma por evento assíncrono (Saga/Outbox) —
+      // pode não ter fechado ainda. RequestDetail reflete o status real assim que confirmar.
+      setTimedOut(true);
+    }
   }
 
   const valorFormatted = `R$ ${route.params.valor.toFixed(2).replace('.', ',')}`;
@@ -74,8 +93,20 @@ export default function PaymentPixScreen() {
 
           <View style={styles.waitBanner}>
             <View style={styles.spinner} />
-            <Text style={styles.waitText}>Aguardando confirmação do pagamento…</Text>
+            <Text style={styles.waitText}>
+              {confirming ? 'Confirmando com o banco…' : 'Aguardando confirmação do pagamento…'}
+            </Text>
           </View>
+
+          {timedOut && (
+            <View style={styles.timeoutBanner}>
+              <Feather name="clock" size={14} color={C.institutional2} />
+              <Text style={styles.timeoutText}>
+                Ainda não confirmou. A confirmação pode levar mais alguns instantes — tente de
+                novo ou volte depois em "Meus pedidos".
+              </Text>
+            </View>
+          )}
 
           <View style={styles.secureRow}>
             <Feather name="shield" size={14} color={C.institutional2} />
@@ -86,11 +117,12 @@ export default function PaymentPixScreen() {
         <View style={styles.footer}>
           <TouchableOpacity
             testID="btn-paguei"
-            style={styles.btnPrimary}
-            onPress={() => nav.navigate('EscrowConfirmed', { requestId: route.params.requestId })}
+            style={[styles.btnPrimary, confirming && styles.btnLoading]}
+            onPress={confirmarPagamento}
             activeOpacity={0.85}
+            disabled={confirming}
           >
-            <Text style={styles.btnPrimaryText}>Paguei</Text>
+            <Text style={styles.btnPrimaryText}>{confirming ? 'Confirmando…' : 'Paguei'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.btnGhost}
@@ -270,6 +302,23 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: C.institutional2,
   },
+  timeoutBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
+    borderRadius: 12,
+    padding: 12,
+  },
+  timeoutText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: C.institutional2,
+    lineHeight: 12.5 * 1.4,
+  },
   footer: {
     padding: 14,
     paddingBottom: 20,
@@ -294,6 +343,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  btnLoading: {
+    opacity: 0.85,
   },
   btnGhost: {
     height: 52,
