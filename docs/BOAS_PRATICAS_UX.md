@@ -51,8 +51,13 @@ micro-interações visíveis.
   entra na nota média nem no perfil público — senão a média denunciaria a nota.
   `RateConfirmScreen` mostra ao usuário se já está pública ou até quando fica
   oculta. Reforça a [[PENDENCIAS_INTEGRIDADE]] (reduz retaliação e conluio).
-- ⬜ **Avaliação só com transação verificada:** nota só conta se vinculada a um
-  `service_request` CONCLUIDO (impede review de não-cliente).
+- ✅ **Avaliação só com transação verificada:** nota só conta se vinculada a um
+  `service_request` CONCLUIDO — já existia. **2026-08-08:** a parte "impede
+  review de não-cliente" não existia de verdade — `avaliadorId` nunca era
+  conferido contra quem de fato participou (cliente dono ou prestador com
+  proposta ACEITA). Qualquer CLIENT/PROVIDER autenticado avaliava pedido de
+  terceiros e fabricava reputação. Corrigido em `ReviewService.avaliar()`
+  (`FORBIDDEN` se `avaliadorId` não é o cliente/prestador real do pedido).
 - ⬜ **Canal de denúncia** de avaliação/prestador fraudulento (UI simples de
   "Reportar"). Requer moderação no painel admin (Épico 9).
 

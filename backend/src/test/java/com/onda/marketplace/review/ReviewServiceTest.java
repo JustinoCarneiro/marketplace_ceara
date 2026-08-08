@@ -53,6 +53,7 @@ class ReviewServiceTest {
     @Test
     void avaliar_comoCliente_cria_CLIENTE_AVALIA_PRESTADOR() {
         stubSrConcluido();
+        stubClienteDosRequest();
         stubSemReview();
         stubPrestadorDaProposta();
         stubSave();
@@ -69,6 +70,7 @@ class ReviewServiceTest {
     void avaliar_comoPrestador_cria_PRESTADOR_AVALIA_CLIENTE() {
         stubSrConcluido();
         stubSemReview();
+        stubPrestadorDaProposta();
         when(srRepository.findClienteIdBySrId(SR_ID)).thenReturn(Optional.of(CLIENTE_ID));
         stubSave();
 
@@ -95,6 +97,7 @@ class ReviewServiceTest {
     @Test
     void avaliar_reviewDuplicado_lancaException() {
         stubSrConcluido();
+        stubClienteDosRequest();
         when(reviewRepository.existsByServiceRequestIdAndTipo(SR_ID, ReviewType.CLIENTE_AVALIA_PRESTADOR))
                 .thenReturn(true);
 
@@ -105,11 +108,44 @@ class ReviewServiceTest {
                 .hasFieldOrPropertyWithValue("code", "REVIEW_ALREADY_EXISTS");
     }
 
+    // ----- antifraude: só quem participou pode avaliar -----
+
+    @Test
+    void avaliar_clienteAlheioAoPedido_lancaForbidden() {
+        // Antes, avaliadorId nunca era conferido contra o cliente real do pedido —
+        // qualquer CLIENT autenticado avaliava (e fabricava reputação de) pedido de terceiros.
+        stubSrConcluido();
+        stubClienteDosRequest(); // cliente real do pedido é CLIENTE_ID
+
+        UUID alheio = UUID.randomUUID();
+        assertThatThrownBy(() ->
+                service.avaliar(SR_ID, alheio, ReviewType.CLIENTE_AVALIA_PRESTADOR,
+                        new AvaliarRequest(5, "nunca participei disso")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void avaliar_prestadorAlheioAoPedido_lancaForbidden() {
+        stubSrConcluido();
+        stubPrestadorDaProposta(); // prestador aceito real é PRESTADOR_ID
+
+        UUID alheio = UUID.randomUUID();
+        assertThatThrownBy(() ->
+                service.avaliar(SR_ID, alheio, ReviewType.PRESTADOR_AVALIA_CLIENTE,
+                        new AvaliarRequest(3, "nunca fui contratado pra isso")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(reviewRepository, never()).save(any());
+    }
+
     // ----- double-blind (reveal simultâneo) -----
 
     @Test
     void avaliar_semContraparte_ficaOculta_eNaoMexeNaNotaMedia() {
         stubSrConcluido();
+        stubClienteDosRequest();
         stubSemReview();
         stubPrestadorDaProposta();
         stubSave();
@@ -131,6 +167,7 @@ class ReviewServiceTest {
     void avaliar_contraparteJaAvaliou_revelaAsDuas_eAtualizaNotaMedia() {
         stubSrConcluido();
         stubSemReview();
+        stubPrestadorDaProposta();
         when(srRepository.findClienteIdBySrId(SR_ID)).thenReturn(Optional.of(CLIENTE_ID));
         stubSave();
 
@@ -203,6 +240,10 @@ class ReviewServiceTest {
 
     private void stubSemReview() {
         when(reviewRepository.existsByServiceRequestIdAndTipo(any(), any())).thenReturn(false);
+    }
+
+    private void stubClienteDosRequest() {
+        when(srRepository.findClienteIdBySrId(SR_ID)).thenReturn(Optional.of(CLIENTE_ID));
     }
 
     private void stubSave() {

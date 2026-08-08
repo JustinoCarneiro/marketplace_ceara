@@ -49,6 +49,12 @@ public class ReviewService {
                     "Avaliação só é permitida em pedidos CONCLUIDOS.");
         }
 
+        // Sem isto, qualquer CLIENT/PROVIDER autenticado avaliava pedido de terceiros —
+        // avaliadorId nunca era conferido contra quem de fato participou do serviço.
+        if (!avaliadorParticipou(srId, avaliadorId, tipo)) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
+
         if (reviewRepository.existsByServiceRequestIdAndTipo(srId, tipo)) {
             throw new BusinessException("REVIEW_ALREADY_EXISTS",
                     "Este pedido já foi avaliado para o tipo " + tipo);
@@ -103,6 +109,17 @@ public class ReviewService {
     public Instant prazoRevelacao(Review r) {
         return r.isRevelada() ? r.getReveladaEm()
                               : r.getCriadoEm().plus(Duration.ofDays(prazoRevelacaoDias));
+    }
+
+    private boolean avaliadorParticipou(UUID srId, UUID avaliadorId, ReviewType tipo) {
+        return switch (tipo) {
+            case CLIENTE_AVALIA_PRESTADOR ->
+                srRepository.findClienteIdBySrId(srId)
+                        .map(avaliadorId::equals).orElse(false);
+            case PRESTADOR_AVALIA_CLIENTE ->
+                proposalRepository.findByServiceRequestIdAndStatus(srId, ProposalStatus.ACEITA)
+                        .stream().anyMatch(p -> p.getPrestadorId().equals(avaliadorId));
+        };
     }
 
     private UUID resolverAvaliado(UUID srId, ReviewType tipo) {
