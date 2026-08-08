@@ -1,8 +1,12 @@
 package com.onda.marketplace.notification;
 
 import com.onda.marketplace.shared.exception.BusinessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +31,8 @@ import java.util.UUID;
 @SuppressWarnings("null")
 public class NotificationService {
 
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+
     private final AdminNotificationRepository repository;
     private final EmailSender                 emailSender;
     private final PushSender                  pushSender;
@@ -40,19 +46,55 @@ public class NotificationService {
     }
 
     /**
-     * Cria um alerta operacional para o admin.
-     * O envio de e-mail/push é feito após o commit da persistência.
+     * Cria um alerta operacional e tenta entregá-lo pelos canais externos.
+     *
+     * <p>A entrega é agendada para <b>depois do commit</b>. Antes ela acontecia dentro do
+     * {@code @Transactional} (apesar do javadoc afirmar o contrário): um SMTP lento segurava
+     * a transação de banco e a requisição HTTP — no SOS, isso é o usuário em emergência
+     * esperando o timeout do servidor de e-mail.
+     *
+     * <p>Entrega best-effort: a falha é registrada, não propagada — o alerta já está
+     * persistido e aparece no painel. Para entrega com garantia use
+     * {@link #registrarAlerta} + Outbox, como faz o SOS.
      *
      * @param tipo  {@code SOS} | {@code DISPUTA} | {@code VERIFICACAO}
      * @param refId UUID do registro de origem (nunca CPF — TS04/LGPD)
      */
     @Transactional
     public AdminNotificationDto criarAlerta(String tipo, UUID refId) {
+        AdminNotificationDto dto = registrarAlerta(tipo, refId);
+        aposCommit(() -> {
+            try {
+                entregar(tipo, refId);
+            } catch (NotificationDeliveryException ex) {
+                log.error("Alerta {} (ref={}) persistido, mas não entregue: {}",
+                        tipo, refId, ex.getMessage());
+            }
+        });
+        return dto;
+    }
+
+    /**
+     * Só persiste o alerta, sem tentar entregar. Para quando a entrega é responsabilidade
+     * de outro mecanismo — no SOS, do Outbox, que dá durabilidade e retry (US30: o alerta
+     * de SOS não pode depender de uma tentativa única e best-effort).
+     */
+    @Transactional
+    public AdminNotificationDto registrarAlerta(String tipo, UUID refId) {
         AdminNotification notif = new AdminNotification(tipo, refId);
         repository.save(notif);
-        // Envio externo ocorre após o save — falha não afeta a transação
-        enviarCanaisExternos(tipo, refId);
         return AdminNotificationDto.from(notif);
+    }
+
+    /**
+     * Entrega o alerta pelos canais externos. Chamado pelo {@code OutboxProcessor} no caso
+     * do SOS — fora de qualquer transação de banco, como manda o princípio Saga/Outbox.
+     *
+     * @throws NotificationDeliveryException se algum canal ativo falhou
+     */
+    public void entregar(String tipo, UUID refId) {
+        emailSender.enviar(tipo, refId);
+        pushSender.enviar(tipo, refId);
     }
 
     /**
@@ -92,8 +134,16 @@ public class NotificationService {
 
     // --- privado ---
 
-    private void enviarCanaisExternos(String tipo, UUID refId) {
-        emailSender.enviar(tipo, refId);
-        pushSender.enviar(tipo, refId);
+    /**
+     * Executa depois do commit; sem transação ativa (chamada avulsa, teste), roda na hora.
+     */
+    private void aposCommit(Runnable acao) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            acao.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { acao.run(); }
+        });
     }
 }

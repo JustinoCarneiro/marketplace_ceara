@@ -38,8 +38,12 @@ public class JavaMailEmailSender implements EmailSender {
             javaMailSender.send(msg);
             log.info("E-mail de alerta {} enviado para {} (ref={})", tipo, adminEmail, refId);
         } catch (MailException ex) {
-            // Falha de envio NÃO é fatal — alerta já persistido no banco
-            log.warn("Falha ao enviar e-mail de alerta {} (ref={}): {}", tipo, refId, ex.getMessage());
+            // Antes isto era um log.warn e pronto: sem credencial de SMTP, TODO alerta de
+            // SOS falhava em silêncio (e o health check de mail está desligado, então nem
+            // por ali aparecia). Quem chama decide o que fazer — no SOS, o OutboxProcessor
+            // marca FALHA e a pendência fica visível no painel.
+            throw new NotificationDeliveryException(
+                    "Falha ao enviar e-mail de alerta " + tipo + " (ref=" + refId + ")", ex);
         }
     }
 

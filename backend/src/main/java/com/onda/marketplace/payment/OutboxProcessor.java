@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.notification.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -21,13 +22,16 @@ public class OutboxProcessor {
     private final OutboxEventRepository outboxRepository;
     private final TransactionRepository transactionRepository;
     private final GatewayService        gatewayService;
+    private final NotificationService   notificationService;
 
     public OutboxProcessor(OutboxEventRepository outboxRepository,
                            TransactionRepository transactionRepository,
-                           GatewayService gatewayService) {
+                           GatewayService gatewayService,
+                           NotificationService notificationService) {
         this.outboxRepository      = outboxRepository;
         this.transactionRepository = transactionRepository;
         this.gatewayService        = gatewayService;
+        this.notificationService   = notificationService;
     }
 
     /**
@@ -85,14 +89,34 @@ public class OutboxProcessor {
         outboxRepository.save(event);
     }
 
-    // Eventos não-financeiros (SOS, etc.): loga e marca processado sem chamar gateway externo
+    // Eventos não-financeiros. SOS_TRIGGERED entrega o alerta de verdade — antes daqui só
+    // saía um log.warn e o evento era marcado como processado, ou seja, o caminho durável
+    // do SOS existia e não fazia nada (US30: o aviso não pode depender só do painel).
     private void processarOutro(OutboxEvent event) {
         if ("SOS_TRIGGERED".equals(event.getTipoEvento())) {
-            log.warn("ALERTA SOS ATIVO — notificar admin: {}", event.getPayload());
-        } else {
-            log.info("Evento outbox não reconhecido: tipo={}", event.getTipoEvento());
+            entregarSos(event);
+            return;
         }
+        log.info("Evento outbox não reconhecido: tipo={}", event.getTipoEvento());
         marcarProcessado(event);
+    }
+
+    private void entregarSos(OutboxEvent event) {
+        try {
+            notificationService.entregar("SOS", event.getAgregadoId());
+            marcarProcessado(event);
+        } catch (RuntimeException ex) {
+            // Fica FALHA: aparece na reconciliação do painel (US27) e pode ser reprocessado.
+            log.error("SOS acionado e NÃO avisado ao admin (evento={}, ref={}): {}",
+                    event.getId(), event.getAgregadoId(), ex.getMessage(), ex);
+            salvarFalha(event);
+        }
+    }
+
+    @Transactional
+    protected void salvarFalha(OutboxEvent event) {
+        event.marcarFalha();
+        outboxRepository.save(event);
     }
 
     @Transactional

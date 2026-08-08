@@ -1,5 +1,10 @@
 # Profile "seed" — ambiente de desenvolvimento/demo/CI (SeedRunner popula dados de teste).
 # NÃO é profile de produção.
+notification:
+  # Aqui não há SMTP: o alerta de SOS fica só no painel. Declarado de propósito para a
+  # aplicação subir — em produção a ausência de canal barra o boot.
+  allow-missing-alert-channel: true
+
 marketplace:
   gateway:
     # Sem gateway real aqui, GatewayServiceImpl é stub e ninguém chamaria nosso webhook —

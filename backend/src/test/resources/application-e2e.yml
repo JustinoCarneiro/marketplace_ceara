@@ -31,6 +31,8 @@ marketplace:
 
 notification:
   admin-email: admin@test.local
+  # Sem SMTP aqui (ver abaixo): declara a ausência de canal para o contexto subir.
+  allow-missing-alert-channel: true
 
 # Desabilita mail real nos testes E2E
 spring.mail.host: ""

@@ -199,6 +199,8 @@ Como **Admin**, quero exportar relatórios, para análise externa e prestação 
 ### US30 — Alertas operacionais ao Admin
 Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em segurança e disputas.
 - **Dado** um **SOS acionado** (US21), **quando** o evento é registrado, **então** o admin recebe alerta **imediato** (push/e-mail) — caminho de segurança, prioridade máxima.
+- **Dado** que nenhum canal externo está configurado, **quando** a aplicação sobe, **então** ela **se recusa a iniciar** — a não ser que a ausência seja declarada de propósito (`notification.allow-missing-alert-channel=true`, para dev/demo/CI). Sem isso, faltar credencial de SMTP deixava a plataforma rodando sem canal de emergência, em silêncio.
+- **Dado** que a entrega do alerta de SOS falha (SMTP fora do ar), **então** o evento do Outbox fica em `FALHA` — aparece na reconciliação (US27), é reprocessável, e o alerta continua visível no painel. A entrega do SOS **não** é best-effort: passa pelo Outbox justamente para não depender de uma tentativa única.
 - **Dado** uma **disputa aberta** (US18), **então** o admin é notificado para iniciar a mediação.
 - **Dado** um **background check `INCONCLUSIVO`** (US02), **então** o admin é notificado para moderar manualmente.
 - **Dado** os alertas, **então** há uma **central de notificações** no painel (não lidas/lidas), e o alerta de SOS nunca depende só do painel (push/e-mail garantido).

@@ -15,6 +15,13 @@ public interface PushSender {
      *
      * @param tipo  tipo do alerta (SOS | DISPUTA | VERIFICACAO)
      * @param refId UUID do registro de origem
+     * @throws NotificationDeliveryException se o canal está ativo e o envio falhou
      */
     void enviar(String tipo, UUID refId);
+
+    /**
+     * {@code false} quando este é um canal desligado (NoOp) — ver
+     * {@link EmailSender#ativo()}.
+     */
+    default boolean ativo() { return true; }
 }

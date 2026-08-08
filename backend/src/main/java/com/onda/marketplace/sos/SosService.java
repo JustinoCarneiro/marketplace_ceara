@@ -39,8 +39,10 @@ public class SosService {
                 userId, req.serviceRequestId(), req.latitude(), req.longitude());
         outboxRepository.save(new OutboxEvent("sos_alert", alert.getId(), "SOS_TRIGGERED", payload));
 
-        // M12: alerta persistido + e-mail/push ao admin (SOS é sensível a tempo)
-        notificationService.criarAlerta("SOS", alert.getId());
+        // Só registra no painel aqui. A entrega externa é do OutboxProcessor: no SOS ela
+        // precisa ser durável (o evento fica PENDENTE até entregar, e vira FALHA visível
+        // se não conseguir), não uma tentativa best-effort que some num log.
+        notificationService.registrarAlerta("SOS", alert.getId());
 
         return SosAlertDto.from(alert);
     }

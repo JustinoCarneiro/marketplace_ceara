@@ -52,6 +52,10 @@ cpf:
 # M12: destinatário dos alertas operacionais
 notification:
   admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
+  # SOS (US21/US30) precisa avisar fora do painel. Sem MAIL_USERNAME/MAIL_PASSWORD não há
+  # canal externo, e a aplicação se recusa a subir — assim a ausência nunca passa
+  # despercebida em produção. Dev/demo/CI declaram a exceção (ver application-seed.yml).
+  allow-missing-alert-channel: ${ALLOW_MISSING_ALERT_CHANNEL:false}
 
 cors:
   # 3000 = admin build · 5173 = admin dev (Vite) · 8081 = preview web do Expo (mobile)

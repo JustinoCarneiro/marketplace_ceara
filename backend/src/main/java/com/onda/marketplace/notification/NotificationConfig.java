@@ -1,35 +1,43 @@
 package com.onda.marketplace.notification;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
 
 /**
- * Registra a implementação correta de {@link EmailSender} dependendo
- * da presença de {@link JavaMailSender} no contexto.
+ * Escolhe a implementação de {@link EmailSender}.
  *
- * @ConditionalOnBean / @ConditionalOnMissingBean são confiáveis apenas
- * em classes @Configuration (não em @Component de scan de componentes),
- * pois a ordem de avaliação dos beans é determinística aqui.
+ * <p>A decisão é por <b>credencial</b>, não por presença do bean {@link JavaMailSender}:
+ * {@code spring.mail.host} tem default {@code smtp.gmail.com}, então o bean sempre existe
+ * e o antigo {@code @ConditionalOnBean} elegia o remetente real mesmo sem usuário/senha.
+ * Resultado: a aplicação parecia configurada e todo alerta morria num erro de autenticação
+ * do SMTP. Sem credencial agora é NoOp declarado — e o {@link AlertChannelValidator}
+ * impede que isso passe despercebido em produção.
  */
 @Configuration
 class NotificationConfig {
 
-    @Bean
-    @ConditionalOnBean(JavaMailSender.class)
-    EmailSender javaMailEmailSender(
-            JavaMailSender javaMailSender,
-            @Value("${notification.admin-email:admin@marketplace-ceara.com.br}") String adminEmail,
-            @Value("${spring.mail.username:}") String fromEmail) {
-        return new JavaMailEmailSender(javaMailSender, adminEmail, fromEmail);
-    }
+    private static final Logger log = LoggerFactory.getLogger(NotificationConfig.class);
 
     @Bean
-    @ConditionalOnMissingBean(EmailSender.class)
-    EmailSender noOpEmailSender() {
-        return new NoOpEmailSender();
+    EmailSender emailSender(
+            ObjectProvider<JavaMailSender> javaMailSenderProvider,
+            @Value("${notification.admin-email:admin@marketplace-ceara.com.br}") String adminEmail,
+            @Value("${spring.mail.username:}") String fromEmail) {
+
+        JavaMailSender javaMailSender = javaMailSenderProvider.getIfAvailable();
+
+        if (javaMailSender == null || fromEmail.isBlank()) {
+            log.warn("E-mail de alerta DESLIGADO: spring.mail.username não configurado. "
+                    + "Alertas operacionais (inclusive SOS) só existirão no painel.");
+            return new NoOpEmailSender();
+        }
+
+        log.info("E-mail de alerta ativo — destinatário: {}", adminEmail);
+        return new JavaMailEmailSender(javaMailSender, adminEmail, fromEmail);
     }
 }

@@ -17,4 +17,8 @@ public class NoOpEmailSender implements EmailSender {
     public void enviar(String tipo, UUID refId) {
         log.info("[NoOpEmailSender] Alerta {} (ref={}) — e-mail não configurado, ignorado.", tipo, refId);
     }
+
+    /** Canal desligado: não há entrega nenhuma acontecendo. */
+    @Override
+    public boolean ativo() { return false; }
 }

@@ -38,10 +38,10 @@ class SosServiceTest {
     }
 
     @Test
-    void acionarSos_cria_alerta_e_outboxSosTriggered_e_notificaAdmin() {
+    void acionarSos_cria_alerta_e_outboxSosTriggered_e_registraNoPainel() {
         when(alertRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(notificationService.criarAlerta(any(), any())).thenReturn(null);
+        when(notificationService.registrarAlerta(any(), any())).thenReturn(null);
 
         SosAlertDto dto = service.acionarSos(USER_ID,
                 new AcionarSosRequest(null, null, null));
@@ -49,13 +49,17 @@ class SosServiceTest {
         assertThat(dto.status()).isEqualTo("ATIVO");
         verify(alertRepository).save(any(SosAlert.class));
 
+        // O evento nasce PENDENTE: é ele que garante a entrega do aviso ao admin.
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("SOS_TRIGGERED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
 
-        // M12: verifica que o alerta foi criado para o admin
-        verify(notificationService).criarAlerta(eq("SOS"), any());
+        // Aqui só registra no painel. Entregar é responsabilidade do OutboxProcessor —
+        // enviar daqui seria best-effort dentro da transação, que é o que fazia o aviso
+        // sumir quando o SMTP falhava.
+        verify(notificationService).registrarAlerta(eq("SOS"), any());
+        verify(notificationService, never()).entregar(any(), any());
     }
 
     @Test

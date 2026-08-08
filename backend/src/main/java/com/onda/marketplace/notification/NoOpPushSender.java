@@ -21,4 +21,8 @@ public class NoOpPushSender implements PushSender {
         log.info("[PUSH-NOOP] Alerta {} seria enviado via push (ref={}). " +
                  "Implemente FcmPushSender para habilitar push real.", tipo, refId);
     }
+
+    /** Canal desligado: não há entrega nenhuma acontecendo. */
+    @Override
+    public boolean ativo() { return false; }
 }

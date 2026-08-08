@@ -31,3 +31,7 @@ cpf:
 marketplace:
   webhook:
     secret: "test-webhook-secret-for-tests-only"
+
+notification:
+  # Testes não têm SMTP; a ausência de canal é declarada para o contexto subir.
+  allow-missing-alert-channel: true
