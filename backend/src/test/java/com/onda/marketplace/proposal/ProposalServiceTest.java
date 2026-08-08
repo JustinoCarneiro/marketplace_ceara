@@ -66,6 +66,21 @@ class ProposalServiceTest {
     }
 
     @Test
+    void accept_prestadorTentaAceitarOProprioPedido_lancaSelfHireForbidden() {
+        // Antifraude Camada 1 (PENDENCIAS_INTEGRIDADE.md): impede auto-contratação — sem
+        // isto, o mesmo usuário (dono do pedido = prestador da proposta) fabrica reputação.
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        UUID prestadorId = UUID.randomUUID();
+        var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+
+        assertThatThrownBy(() -> service.accept(prop.getId(), prestadorId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "SELF_HIRE_FORBIDDEN");
+        verify(proposalRepository, never()).save(any());
+    }
+
+    @Test
     void reject_marcaComoRecusada() {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var prop = proposal(sr, ProposalStatus.ATIVA);

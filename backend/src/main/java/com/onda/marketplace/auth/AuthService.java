@@ -47,14 +47,18 @@ public class AuthService {
     @Transactional
     public void verifyIdentity(String cpf, UUID userId) {
         String hash = cpfHashService.hash(cpf);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
+
+        // Idempotente de verdade: precisa checar o hash ANTES do existsByCpfHash global, senão
+        // um retry com o mesmo CPF já verificado colide com o próprio registro do usuário e
+        // vira CPF_ALREADY_REGISTERED — mensagem errada ("outra conta" sendo a conta dele mesmo).
+        if (hash.equals(user.getCpfHash())) {
+            return;
+        }
         if (userRepository.existsByCpfHash(hash)) {
             throw new BusinessException("CPF_ALREADY_REGISTERED",
                     "Este CPF já está vinculado a outra conta.");
-        }
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
-        if (user.getCpfHash() != null) {
-            return; // idempotente — já verificado
         }
         user.setCpfHash(hash);
         userRepository.save(user);

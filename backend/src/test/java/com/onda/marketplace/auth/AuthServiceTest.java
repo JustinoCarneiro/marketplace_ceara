@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -90,5 +91,50 @@ class AuthServiceTest {
                 authService.refresh(new RefreshRequest("token-invalido")))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+    }
+
+    // Antifraude Camada 2 (PENDENCIAS_INTEGRIDADE.md): CPF único na plataforma — sem isto,
+    // a mesma pessoa cria uma segunda conta pra se auto-contratar e fabricar reputação.
+
+    @Test
+    void verifyIdentity_cpfJaVinculadoAOutraConta_lancaCpfAlreadyRegistered() {
+        UUID userId = UUID.randomUUID();
+        var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
+        when(cpfHashService.hash("11122233344")).thenReturn("hash-existente");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.existsByCpfHash("hash-existente")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.verifyIdentity("11122233344", userId))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "CPF_ALREADY_REGISTERED");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyIdentity_retryComMesmoCpfJaVerificado_naoLancaEhIdempotente() {
+        // Regressão: antes, checar existsByCpfHash ANTES do hash do próprio usuário fazia um
+        // retry com o mesmo CPF colidir com o próprio registro e vazar CPF_ALREADY_REGISTERED.
+        UUID userId = UUID.randomUUID();
+        var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
+        user.setCpfHash("hash-ja-verificado");
+        when(cpfHashService.hash("11122233344")).thenReturn("hash-ja-verificado");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatCode(() -> authService.verifyIdentity("11122233344", userId)).doesNotThrowAnyException();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyIdentity_cpfNovo_vinculaAoUsuario() {
+        UUID userId = UUID.randomUUID();
+        var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
+        when(cpfHashService.hash("11122233344")).thenReturn("hash-novo");
+        when(userRepository.existsByCpfHash("hash-novo")).thenReturn(false);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        authService.verifyIdentity("11122233344", userId);
+
+        assertThat(user.getCpfHash()).isEqualTo("hash-novo");
+        verify(userRepository).save(user);
     }
 }

@@ -80,3 +80,14 @@ contexto. Torna a auto-contratação impossível por construção (sempre o mesm
 **Criado em:** 2026-06-28
 **Camadas 1 e 2 confirmadas implementadas em:** 2026-08-07 (achado ao investigar o fluxo
 completo de pedido→proposta→pagamento do mobile — ver `mobile/tests/02-fluxo-pedido-completo.spec.ts`)
+
+**2026-08-08 — reverificado, coberto por teste e 1 bug real corrigido:** as Camadas 1 e 2
+estavam implementadas mas **sem nenhum teste travando o comportamento** (`SELF_HIRE_FORBIDDEN`
+e `CPF_ALREADY_REGISTERED` não apareciam em `src/test/`) — um refactor futuro podia quebrar
+qualquer uma das duas em silêncio. Adicionados: `ProposalServiceTest.accept_...SelfHireForbidden`
+e 3 testes de `AuthService.verifyIdentity` em `AuthServiceTest`. Ao escrever o teste de
+idempotência, apareceu um bug real: `verifyIdentity` checava `existsByCpfHash(hash)` **antes**
+de checar se o hash já era do próprio usuário — um retry com o CPF já verificado (rede
+instável, duplo toque) colidia com o próprio registro e vazava `CPF_ALREADY_REGISTERED`
+("vinculado a outra conta", sendo a conta dele mesmo). Corrigido invertendo a ordem dos
+checks (`AuthService.java`).
