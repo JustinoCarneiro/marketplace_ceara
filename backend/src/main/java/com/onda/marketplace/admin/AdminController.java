@@ -1,6 +1,8 @@
 package com.onda.marketplace.admin;
 
 import com.onda.marketplace.audit.AuditService;
+import com.onda.marketplace.denuncia.DenunciaAdminDto;
+import com.onda.marketplace.denuncia.DenunciaService;
 import com.onda.marketplace.notification.AdminNotificationDto;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -39,6 +41,7 @@ public class AdminController {
     private final UserAdminService    userAdminService;
     private final ProviderAdminService providerAdminService;
     private final AuditService        auditService;
+    private final DenunciaService     denunciaService;
 
     public AdminController(MediationService mediationService,
                            ModerationService moderationService,
@@ -47,7 +50,8 @@ public class AdminController {
                            NotificationService notificationService,
                            UserAdminService userAdminService,
                            ProviderAdminService providerAdminService,
-                           AuditService auditService) {
+                           AuditService auditService,
+                           DenunciaService denunciaService) {
         this.mediationService     = mediationService;
         this.moderationService    = moderationService;
         this.adminReportService   = adminReportService;
@@ -56,6 +60,7 @@ public class AdminController {
         this.userAdminService     = userAdminService;
         this.providerAdminService = providerAdminService;
         this.auditService         = auditService;
+        this.denunciaService      = denunciaService;
     }
 
     /** Extrai o id do admin autenticado (subject do JWT). */
@@ -238,6 +243,24 @@ public class AdminController {
     public ResponseEntity<Void> rejectProvider(@PathVariable UUID userId, Authentication auth) {
         moderationService.moderar(userId, ModerationAction.REPROVAR);
         auditService.registrar(adminId(auth), "REPROVAR_PRESTADOR", "provider", userId, null);
+        return ResponseEntity.ok().build();
+    }
+
+    // --- Canal de denúncia (Épico 7/9) ---
+
+    /** Fila de denúncias abertas — prestador ou avaliação reportados como fraudulentos. */
+    @GetMapping("/denuncias")
+    public ResponseEntity<List<DenunciaAdminDto>> denuncias() {
+        return ResponseEntity.ok(denunciaService.listarAbertas());
+    }
+
+    /** Marca a denúncia como resolvida — a ação de moderação em si (suspender, remover
+     *  avaliação) é feita pelos endpoints já existentes; isto só fecha a fila. */
+    @PostMapping("/denuncias/{id}/resolver")
+    public ResponseEntity<Void> resolverDenuncia(@PathVariable UUID id, Authentication auth) {
+        UUID adminId = adminId(auth);
+        denunciaService.resolver(id, adminId);
+        auditService.registrar(adminId, "RESOLVER_DENUNCIA", "denuncia", id, null);
         return ResponseEntity.ok().build();
     }
 }

@@ -46,6 +46,7 @@ public class ProviderPublicService {
 
         List<ProviderPublicDto.Avaliacao> avaliacoes = reviews.stream()
                 .map(r -> new ProviderPublicDto.Avaliacao(
+                        r.getId(),
                         userRepository.findById(r.getAvaliadorId())
                                 .map(u -> u.getNome())
                                 .orElse("Cliente"),

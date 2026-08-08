@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import DisputesPage from './pages/DisputesPage';
 import DisputeDetailPage from './pages/DisputeDetailPage';
+import DenunciasPage from './pages/DenunciasPage';
 import ProvidersPage from './pages/ProvidersPage';
 import UsersPage from './pages/UsersPage';
 import FinancePage from './pages/FinancePage';
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/disputes" element={<DisputesPage />} />
             <Route path="/disputes/:id" element={<DisputeDetailPage />} />
+            <Route path="/denuncias" element={<DenunciasPage />} />
             <Route path="/providers" element={<ProvidersPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/finance" element={<FinancePage />} />

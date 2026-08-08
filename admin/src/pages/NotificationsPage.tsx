@@ -9,6 +9,7 @@ const LABELS: Record<string, { titulo: string; descricao: string }> = {
   SOS: { titulo: 'Emergência SOS acionada', descricao: 'Botão SOS acionado durante um atendimento — verificar imediatamente.' },
   DISPUTA: { titulo: 'Disputa aberta', descricao: 'Uma disputa foi aberta e aguarda mediação.' },
   VERIFICACAO: { titulo: 'Verificação de prestador pendente', descricao: 'Cadastro de prestador reprovado ou inconclusivo — revisar documentação.' },
+  DENUNCIA: { titulo: 'Nova denúncia', descricao: 'Prestador ou avaliação reportado como fraudulento — ver fila de moderação.' },
 };
 function labelFor(tipo: string) {
   return LABELS[tipo] ?? { titulo: 'Alerta operacional', descricao: `Evento do tipo ${tipo}.` };
@@ -18,6 +19,7 @@ function iconFor(tipo: string) {
   if (tipo === 'SOS') return { bg: '#C0392B', el: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> };
   if (tipo === 'DISPUTA') return { bg: '#F7E3D6', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C2572A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> };
   if (tipo === 'VERIFICACAO') return { bg: '#FDF3D6', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B5810A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><line x1="12" y1="9" x2="12" y2="12.5"/><line x1="12" y1="15" x2="12.01" y2="15"/></svg> };
+  if (tipo === 'DENUNCIA') return { bg: '#E8EEFA', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#244C86" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg> };
   return { bg: '#DDF0EC', el: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15756E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg> };
 }
 

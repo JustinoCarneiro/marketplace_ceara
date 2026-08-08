@@ -1,7 +1,7 @@
 import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
+  View, Text, StyleSheet, ScrollView, Modal, TextInput, Alert,
   ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { useAuthStore } from '../../store/auth';
 
 type RouteProps = RouteProp<ClientStackParams, 'ProviderProfile'>;
 
-interface Review { autorNome: string; nota: number; comentario: string; }
+interface Review { id: string; autorNome: string; nota: number; comentario: string; }
 interface ProviderProfile {
   userId: string;
   nome: string;
@@ -41,12 +41,53 @@ function avatarBg(nome: string) { return AVATAR_COLORS[nome.charCodeAt(0) % AVAT
 const REVIEW_AVATAR_COLORS = [color.institutional2, color.catJardinagem, color.warmTerra, color.catLimpeza];
 function reviewAvatarBg(nome: string) { return REVIEW_AVATAR_COLORS[nome.charCodeAt(0) % REVIEW_AVATAR_COLORS.length]; }
 
+const MOTIVOS_DENUNCIA = ['Perfil falso', 'Comportamento inadequado', 'Conteúdo ofensivo', 'Golpe ou fraude', 'Outro'];
+
 export default function ProviderProfileScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
   const [profile, setProfile] = useState<ProviderProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [reportAlvo, setReportAlvo] = useState<{ tipo: 'PRESTADOR' | 'AVALIACAO'; alvoId: string } | null>(null);
+  const [reportMotivo, setReportMotivo] = useState('');
+  const [reportDetalhes, setReportDetalhes] = useState('');
+  const [reportEnviando, setReportEnviando] = useState(false);
+  const [reportError, setReportError] = useState('');
+
+  function abrirDenuncia(tipo: 'PRESTADOR' | 'AVALIACAO', alvoId: string) {
+    setReportAlvo({ tipo, alvoId });
+    setReportMotivo('');
+    setReportDetalhes('');
+    setReportError('');
+  }
+
+  async function enviarDenuncia() {
+    if (!reportAlvo) return;
+    if (!reportMotivo) { setReportError('Selecione um motivo.'); return; }
+    setReportEnviando(true);
+    setReportError('');
+    try {
+      const res = await fetch(`${API_BASE}/denuncias`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          tipo: reportAlvo.tipo,
+          alvoId: reportAlvo.alvoId,
+          motivo: reportMotivo,
+          detalhes: reportDetalhes.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error('Erro ao enviar denúncia');
+      setReportAlvo(null);
+      Alert.alert('Denúncia enviada', 'Nossa equipe vai analisar. Obrigado por ajudar a manter o Onda seguro.');
+    } catch {
+      setReportError('Não foi possível enviar a denúncia. Tente de novo.');
+    } finally {
+      setReportEnviando(false);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -124,6 +165,14 @@ export default function ProviderProfileScreen() {
                 {profile.tempoRespostaMin ? ` · ~${profile.tempoRespostaMin} min` : ''}
               </Text>
             </View>
+            <TouchableOpacity
+              onPress={() => abrirDenuncia('PRESTADOR', profile.userId)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Reportar prestador"
+            >
+              <Text style={styles.reportLink}>Reportar prestador</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -179,6 +228,14 @@ export default function ProviderProfileScreen() {
                           </Text>
                         ))}
                       </View>
+                      <TouchableOpacity
+                        onPress={() => abrirDenuncia('AVALIACAO', r.id)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Reportar avaliação"
+                      >
+                        <Feather name="flag" size={14} color={color.textFaint} />
+                      </TouchableOpacity>
                     </View>
                     <Text style={styles.reviewText}>{r.comentario}</Text>
                   </View>
@@ -201,6 +258,53 @@ export default function ProviderProfileScreen() {
           <Feather name="arrow-right" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
+
+      <Modal visible={!!reportAlvo} transparent animationType="fade" onRequestClose={() => setReportAlvo(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {reportAlvo?.tipo === 'PRESTADOR' ? 'Reportar prestador' : 'Reportar avaliação'}
+            </Text>
+            <Text style={styles.modalSubtitle}>Motivo</Text>
+            <View style={styles.motivoGrid}>
+              {MOTIVOS_DENUNCIA.map(m => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.motivoChip, reportMotivo === m && styles.motivoChipAtivo]}
+                  onPress={() => setReportMotivo(m)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.motivoChipText, reportMotivo === m && styles.motivoChipTextAtivo]}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.modalSubtitle}>Detalhes (opcional)</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Conte o que aconteceu…"
+              placeholderTextColor={color.textFaint}
+              value={reportDetalhes}
+              onChangeText={setReportDetalhes}
+              multiline
+              numberOfLines={3}
+              maxLength={500}
+            />
+            {reportError ? <Text style={styles.modalError}>{reportError}</Text> : null}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setReportAlvo(null)} disabled={reportEnviando}>
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, reportEnviando && { opacity: 0.7 }]}
+                onPress={enviarDenuncia}
+                disabled={reportEnviando}
+              >
+                <Text style={styles.modalSubmitText}>{reportEnviando ? 'Enviando…' : 'Enviar denúncia'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -255,6 +359,7 @@ const styles = StyleSheet.create({
   starRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ratingVal: { fontSize: 15, fontWeight: font.weight.black, color: color.text },
   metaText: { fontSize: 14, color: color.textSoft },
+  reportLink: { fontSize: 12.5, color: color.textFaint, textDecorationLine: 'underline' },
 
   statsRow: {
     flexDirection: 'row',
@@ -342,4 +447,70 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   ctaBtnText: { fontSize: 16, fontWeight: font.weight.bold, color: color.textOnAccent },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(14,42,51,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space[5],
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: color.surface,
+    borderRadius: radius.card,
+    padding: space[5],
+    gap: 10,
+  },
+  modalTitle: { fontSize: 18, fontWeight: font.weight.black, color: color.text },
+  modalSubtitle: {
+    fontSize: font.size.eyebrow,
+    fontWeight: font.weight.semibold,
+    color: color.institutional2,
+    marginTop: 6,
+  },
+  motivoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  motivoChip: {
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: color.bg,
+  },
+  motivoChipAtivo: { borderColor: color.primary, backgroundColor: color.skyTint },
+  motivoChipText: { fontSize: 12.5, color: color.textSoft, fontWeight: font.weight.semibold },
+  motivoChipTextAtivo: { color: color.institutional },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    borderRadius: radius.field,
+    padding: 12,
+    minHeight: 72,
+    fontSize: font.size.bodySm,
+    color: color.text,
+    textAlignVertical: 'top',
+  },
+  modalError: { fontSize: font.size.caption, color: color.danger },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  modalCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: { fontSize: 14, fontWeight: font.weight.bold, color: color.textSoft },
+  modalSubmitBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: color.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitText: { fontSize: 14, fontWeight: font.weight.bold, color: color.textOnAccent },
 });

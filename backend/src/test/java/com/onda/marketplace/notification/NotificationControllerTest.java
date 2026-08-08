@@ -41,6 +41,7 @@ class NotificationControllerTest {
     @MockBean com.onda.marketplace.admin.UserAdminService    userAdminService;
     @MockBean com.onda.marketplace.admin.ProviderAdminService providerAdminService;
     @MockBean com.onda.marketplace.audit.AuditService        auditService;
+    @MockBean com.onda.marketplace.denuncia.DenunciaService   denunciaService;
 
     // ----- GET /notifications -----
 

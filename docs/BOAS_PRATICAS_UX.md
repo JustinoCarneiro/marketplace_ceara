@@ -58,8 +58,11 @@ micro-interações visíveis.
   proposta ACEITA). Qualquer CLIENT/PROVIDER autenticado avaliava pedido de
   terceiros e fabricava reputação. Corrigido em `ReviewService.avaliar()`
   (`FORBIDDEN` se `avaliadorId` não é o cliente/prestador real do pedido).
-- ⬜ **Canal de denúncia** de avaliação/prestador fraudulento (UI simples de
-  "Reportar"). Requer moderação no painel admin (Épico 9).
+- ✅ **Canal de denúncia** de avaliação/prestador fraudulento — 2026-08-08.
+  `POST /api/v1/denuncias` (tipo `PRESTADOR`/`AVALIACAO`, motivo + detalhes opcionais),
+  fila de moderação no admin (`/denuncias`, resolver marca `RESOLVIDA`), alerta operacional
+  ao admin (mesma central do SOS/disputa/verificação). Mobile: link "Reportar prestador" no
+  topo do `ProviderProfileScreen` e ícone de bandeira em cada avaliação exibida.
 
 ## 4. Estados de Tela: Loading / Vazio / Erro (consistência)
 

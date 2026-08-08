@@ -55,6 +55,11 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/>
     </svg>
   ),
+  denuncias: (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+    </svg>
+  ),
   logout: (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16 17l5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
@@ -66,6 +71,7 @@ const NAV: { icon: keyof typeof ICONS; label: string; to: string; badge?: string
   { icon: 'dashboard',     label: 'Dashboard',    to: '/' },
   { icon: 'disputes',      label: 'Disputas',     to: '/disputes',      badge: 'terra' },
   { icon: 'moderation',    label: 'Moderação',    to: '/providers' },
+  { icon: 'denuncias',     label: 'Denúncias',    to: '/denuncias' },
   { icon: 'users',         label: 'Usuários',     to: '/users' },
   { icon: 'finance',       label: 'Financeiro',   to: '/finance' },
   { icon: 'categories',    label: 'Categorias',   to: '/categories' },

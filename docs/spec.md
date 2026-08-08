@@ -122,11 +122,27 @@ Como **Prestador**, quero atualizar o andamento do serviço, para refletir o sta
 Como **Cliente**, quero dar 1–5 estrelas e comentar, para ajudar outros a escolher.
 - **Dado** pedido `CONCLUIDO`, **quando** avalio, **então** a nota entra no cálculo da nota média do prestador **assim que for revelada** (ver US31).
 - **Dado** pedido não concluído, **quando** tento avaliar, **então** recebo 422.
+- **Dado** que não sou o cliente dono do pedido, **quando** tento avaliar, **então** recebo 422
+  `FORBIDDEN` — avaliar exige ser de fato quem participou do serviço, não só um pedido `CONCLUIDO`
+  qualquer (senão qualquer conta fabrica reputação avaliando pedido de terceiros).
 
 ### US20 — Prestador avalia Cliente
 Como **Prestador**, quero avaliar o Cliente após o serviço, para sinalizar bons/maus contratantes.
 - **Dado** pedido `CONCLUIDO`, **quando** avalio o cliente (1–5 + comentário), **então** a nota entra na reputação dele.
 - Avaliações são liberadas para ambos somente após `CONCLUIDO` (sem retaliação durante o serviço).
+- **Dado** que não sou o prestador com proposta `ACEITA` do pedido, **quando** tento avaliar,
+  **então** recebo 422 `FORBIDDEN` (mesma regra de participação do US08).
+
+### US32 — Canal de denúncia
+Como **Cliente ou Prestador**, quero reportar um prestador ou uma avaliação que pareça
+fraudulenta, para que a moderação analise.
+- **Dado** que denuncio, **então** escolho um motivo (perfil falso, comportamento inadequado,
+  conteúdo ofensivo, golpe/fraude ou outro) e posso adicionar detalhes opcionais.
+- **Dado** que a denúncia é registrada, **então** ela entra na fila de moderação do admin
+  (Épico 9) e dispara um alerta operacional — mesma central do SOS/disputa/verificação.
+- **Dado** que o alvo (prestador ou avaliação) não existe, **então** recebo 422.
+- A denúncia em si não pune ninguém automaticamente — só o admin resolve, pelos mecanismos de
+  moderação já existentes (suspender usuário, reprovar prestador).
 
 ### US31 — Avaliação double-blind (reveal simultâneo)
 Como **plataforma**, quero que as duas avaliações só apareçam ao mesmo tempo, para que ninguém

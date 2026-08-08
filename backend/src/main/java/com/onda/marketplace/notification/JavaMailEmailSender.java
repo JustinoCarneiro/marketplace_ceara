@@ -52,6 +52,7 @@ public class JavaMailEmailSender implements EmailSender {
             case "SOS"         -> "SOS acionado durante atendimento";
             case "DISPUTA"     -> "Disputa aberta — requer mediação";
             case "VERIFICACAO" -> "Verificação de prestador inconclusiva";
+            case "DENUNCIA"    -> "Nova denúncia — requer moderação";
             default            -> tipo;
         };
     }

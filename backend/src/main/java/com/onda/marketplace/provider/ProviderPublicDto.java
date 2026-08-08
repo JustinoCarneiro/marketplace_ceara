@@ -19,5 +19,5 @@ public record ProviderPublicDto(
         String     statusVerificacao,
         List<Avaliacao> avaliacoes
 ) {
-    public record Avaliacao(String autorNome, int nota, String comentario) {}
+    public record Avaliacao(UUID id, String autorNome, int nota, String comentario) {}
 }

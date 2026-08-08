@@ -46,6 +46,7 @@ class AdminControllerTest {
     @MockBean UserAdminService     userAdminService;
     @MockBean ProviderAdminService providerAdminService;
     @MockBean AuditService         auditService;
+    @MockBean com.onda.marketplace.denuncia.DenunciaService denunciaService;
 
     @Test
     void resolverDisputa_retorna200_eDelegaAoServico() throws Exception {
@@ -262,5 +263,31 @@ class AdminControllerTest {
                 .andExpect(status().isOk());
 
         verify(moderationService).moderar(userId, ModerationAction.REPROVAR);
+    }
+
+    // --- canal de denúncia ---
+
+    @Test
+    void denuncias_retorna200_comLista() throws Exception {
+        when(denunciaService.listarAbertas()).thenReturn(List.of(
+                new com.onda.marketplace.denuncia.DenunciaAdminDto(
+                        UUID.randomUUID(), "PRESTADOR", UUID.randomUUID(), "Zé Elétrica",
+                        "Maria", "Perfil falso", null, "ABERTA", Instant.now())));
+
+        mvc.perform(get("/api/v1/admin/denuncias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].alvoLabel").value("Zé Elétrica"))
+                .andExpect(jsonPath("$[0].motivo").value("Perfil falso"));
+    }
+
+    @Test
+    void resolverDenuncia_retorna200_eDelega() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/denuncias/{id}/resolver", id).with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(denunciaService).resolver(eq(id), any());
+        verify(auditService).registrar(any(), eq("RESOLVER_DENUNCIA"), eq("denuncia"), eq(id), any());
     }
 }
