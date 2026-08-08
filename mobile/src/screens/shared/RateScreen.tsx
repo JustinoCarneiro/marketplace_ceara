@@ -102,7 +102,7 @@ export default function RateScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backBtn}
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14} style={styles.backBtn}
             accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
@@ -149,7 +149,14 @@ export default function RateScreen() {
               </View>
             </View>
 
-            <TouchableOpacity testID="btn-adicionar-foto" style={styles.photoBtn} activeOpacity={0.75} onPress={escolherFoto}>
+            <TouchableOpacity
+              testID="btn-adicionar-foto"
+              style={styles.photoBtn}
+              activeOpacity={0.75}
+              onPress={escolherFoto}
+              accessibilityRole="button"
+              accessibilityLabel={foto ? 'Foto anexada, toque para trocar' : 'Adicionar foto, opcional'}
+            >
               <View style={styles.photoBox}>
                 {foto ? (
                   <Image source={{ uri: foto.uri }} style={styles.photoThumb} />

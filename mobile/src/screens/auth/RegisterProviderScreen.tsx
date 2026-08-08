@@ -52,7 +52,7 @@ export default function RegisterProviderScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
           {/* Back */}
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.back}
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14} style={styles.back}
             accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
           </TouchableOpacity>

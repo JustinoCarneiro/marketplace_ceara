@@ -82,14 +82,21 @@ todas as telas que dependem de rede.
 
 ## 5. Acessibilidade (AA — exigência do projeto)
 
-- ⬜ **Área de toque mínima 48×48 dp** em todos os alvos. Auditar ícones com
-  `hitSlop` pequeno e chips. (Já usamos `hitSlop` em vários botões — falta
-  padronizar e revisar os menores.)
+- ✅ **Área de toque mínima 48×48 dp** nos alvos isolados de navegação —
+  padronizado `hitSlop={14}` nos 16 botões "voltar" ícone-só (22px de ícone +
+  28px de hitSlop = 50dp) em todas as telas que têm um. Duas telas
+  (`EscrowHeldScreen`, `PaymentCardScreen`) tinham passado batido do audit de
+  labels anterior — sem `hitSlop` e sem `accessibilityLabel` nenhum; corrigidas
+  junto. **Exceção deliberada, não pendência:** grupos densos e repetidos
+  (estrelas de `StarRating`, grid de categorias/chips) mantêm `hitSlop`
+  pequeno de propósito — inflar o alvo aí causa toque ambíguo no vizinho, e a
+  diretriz AA aceita alvos menores quando o espaçamento entre eles compensa.
 - ✅ **Labels acessíveis** (`accessibilityLabel`) em ícones-botão sem texto —
   auditados todos os `TouchableOpacity` com `<Feather>` sem texto acompanhante
-  em `mobile/src/screens/`; os 6 botões de "voltar" ainda sem rótulo
+  em `mobile/src/screens/`; os 8 botões de "voltar" sem rótulo
   (`NewRequestScreen`, `PaymentPixScreen`, `ProviderProfileScreen` ×2,
-  `CompareProposalsScreen`, `AiAssistantScreen`) receberam
+  `CompareProposalsScreen`, `AiAssistantScreen`, `EscrowHeldScreen`,
+  `PaymentCardScreen` — os 2 últimos achados só nesta rodada) receberam
   `accessibilityLabel="Voltar"` + `accessibilityRole="button"` +
   `accessibilityElementsHidden` no ícone. Os demais ícones clicáveis já tinham
   texto ao lado (ex.: "Foto", "Filtros", "Copiar") ou já eram rotulados.
@@ -110,7 +117,7 @@ todas as telas que dependem de rede.
 
 ---
 
-## Priorização sugerida (atualizado 2026-08-07)
+## Priorização sugerida (atualizado 2026-08-08)
 
 Os 3 itens 🔴 Alta da rodada anterior já estavam implementados no código real
 (achado ao auditar o backlog contra o estado atual do app — mesmo padrão do
@@ -121,6 +128,7 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🔴 Alta~~ | Barra de status do escrow no `RequestDetail` | 5/6 | Médio | ✅ Feito |
 | ~~🔴 Alta~~ | Estados Loading/Vazio/Erro padronizados + `<ScreenState>` | todos | Médio | ✅ Feito |
 | ~~🔴 Alta~~ | Labels de acessibilidade em ícones-botão | todos | Baixo | ✅ Feito |
+| ~~🔴 Alta~~ | Área de toque mínima 48×48dp (16 botões "voltar") | todos | Baixo | ✅ Feito (2026-08-08) |
 | ~~🟡 Média~~ | Avaliação double-blind | 7 | Médio | ✅ Feito |
 | ~~🟡 Média~~ | CPF no 1º pagamento (onboarding progressivo) | 1/5 | Médio (back) | ✅ Feito |
 | ~~🟢 Baixa~~ | Skeleton screens nas listas | 2/4 | Médio | ✅ Feito |

@@ -105,7 +105,7 @@ export default function ResultsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.stickyHeader}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12} style={styles.backBtn}
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14} style={styles.backBtn}
             accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
           </TouchableOpacity>

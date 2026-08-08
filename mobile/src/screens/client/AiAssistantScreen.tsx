@@ -72,7 +72,7 @@ export default function AiAssistantScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}
+            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14}
               accessibilityLabel="Voltar" accessibilityRole="button">
               <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
             </TouchableOpacity>

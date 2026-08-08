@@ -143,7 +143,7 @@ export default function NewRequestScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={12}
+            <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14}
               accessibilityLabel="Voltar" accessibilityRole="button">
               <Feather name="chevron-left" size={22} color={color.text} accessibilityElementsHidden />
             </TouchableOpacity>
@@ -201,7 +201,14 @@ export default function NewRequestScreen() {
             <View style={styles.field}>
               <Text style={styles.label}>ANEXOS</Text>
               <View style={styles.anexosRow}>
-                <TouchableOpacity testID="btn-anexo-foto" style={[styles.anexoBtn, foto && styles.anexoBtnFilled]} onPress={escolherFoto} activeOpacity={0.8}>
+                <TouchableOpacity
+                  testID="btn-anexo-foto"
+                  style={[styles.anexoBtn, foto && styles.anexoBtnFilled]}
+                  onPress={escolherFoto}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={foto ? 'Foto anexada, toque para trocar' : 'Anexar foto'}
+                >
                   {foto ? (
                     <>
                       <Image source={{ uri: foto.uri }} style={styles.anexoThumb} />
@@ -228,6 +235,12 @@ export default function NewRequestScreen() {
                   style={[styles.anexoBtn, (recorderState.isRecording || audioUri) && styles.anexoBtnFilled]}
                   onPress={alternarGravacao}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    recorderState.isRecording ? 'Gravando áudio, toque para parar'
+                      : audioUri ? 'Áudio gravado, toque para regravar'
+                      : 'Gravar áudio'
+                  }
                 >
                   {recorderState.isRecording ? (
                     <>

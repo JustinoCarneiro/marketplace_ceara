@@ -57,8 +57,9 @@ export default function PaymentCardScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.screen}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7}>
-              <Feather name="chevron-left" size={22} color={C.text} />
+            <TouchableOpacity onPress={() => nav.goBack()} activeOpacity={0.7} hitSlop={14}
+              accessibilityLabel="Voltar" accessibilityRole="button">
+              <Feather name="chevron-left" size={22} color={C.text} accessibilityElementsHidden />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Cartão de crédito</Text>
           </View>

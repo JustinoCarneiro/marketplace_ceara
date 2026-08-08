@@ -372,7 +372,7 @@ export default function RequestDetailScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8}
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14}
             accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={COLORS.text} accessibilityElementsHidden />
           </TouchableOpacity>
@@ -400,7 +400,7 @@ export default function RequestDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={8} style={styles.backRow}
+          <TouchableOpacity onPress={() => nav.goBack()} hitSlop={14} style={styles.backRow}
             accessibilityLabel="Voltar" accessibilityRole="button">
             <Feather name="chevron-left" size={22} color={COLORS.text} />
             <View style={{ marginLeft: 12 }}>
