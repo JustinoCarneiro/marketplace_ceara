@@ -31,6 +31,9 @@ public class TermsAcceptance {
     @Column(name = "accepted_at", nullable = false, updatable = false)
     private Instant acceptedAt = Instant.now();
 
+    // Vem de HttpServletRequest.getRemoteAddr() — IP real hoje (sem proxy na frente), mas vira
+    // sempre o IP do proxy no dia em que nginx/ALB/Cloudflare for adicionado; exige leitura
+    // validada de X-Forwarded-For contra proxies confiáveis nesse momento (não antes).
     @Column(name = "ip_address", nullable = false, length = 45)
     private String ipAddress;
 
