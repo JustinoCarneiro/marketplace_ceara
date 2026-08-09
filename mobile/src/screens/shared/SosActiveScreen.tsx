@@ -18,7 +18,9 @@ export default function SosActiveScreen() {
   const route = useRoute<any>();
   const [pulse] = useState(new Animated.Value(1));
 
-  const activatedAt = new Date();
+  // Vem do criadoEm real do SosAlertDto (POST /sos) — antes usava new Date() no render,
+  // então reabrir a tela mudava o horário mostrado, mesmo o SOS já tendo sido acionado antes.
+  const activatedAt = route.params?.criadoEm ? new Date(route.params.criadoEm) : new Date();
   const timeStr = activatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const dateStr = activatedAt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 
@@ -49,7 +51,7 @@ export default function SosActiveScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Feather name="map-pin" size={18} color={COLORS.white} />
-              <Text style={styles.infoText}>Localização registrada · Aldeota, Fortaleza</Text>
+              <Text style={styles.infoText}>Localização enviada ao acionar</Text>
             </View>
             <View style={styles.infoRow}>
               <Feather name="clock" size={18} color={COLORS.white} />

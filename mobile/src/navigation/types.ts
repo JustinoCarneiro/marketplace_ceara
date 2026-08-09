@@ -38,7 +38,7 @@ export type ClientStackParams = {
   Rate: { requestId: string; avaliadoId: string; avaliadoNome: string };
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };
-  SosActive: { alertId: string };
+  SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
 };
 
@@ -53,7 +53,7 @@ export type ProviderStackParams = {
   Rate: { requestId: string; avaliadoId: string; avaliadoNome: string };
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };
-  SosActive: { alertId: string };
+  SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
 };
 

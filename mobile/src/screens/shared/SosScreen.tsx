@@ -44,7 +44,7 @@ export default function SosScreen() {
         return;
       }
       const data = await res.json();
-      nav.replace('SosActive', { alertId: data.id });
+      nav.replace('SosActive', { alertId: data.id, criadoEm: data.criadoEm });
     } catch {
       Alert.alert('Sem conexão', 'Verifique sua internet e tente acionar novamente.');
     } finally {

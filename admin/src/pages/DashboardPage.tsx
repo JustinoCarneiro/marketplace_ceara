@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, downloadFile } from '../api/client';
+
+interface OperationalAlert { tipo: string; quantidade: number; }
+
+const ALERT_CONFIG: Record<string, { label: (n: number) => string; bg: string; color: string; route: string }> = {
+  SOS_ATIVO: { label: n => `${n} SOS ativo${n !== 1 ? 's' : ''}`, bg: '#FBE6E2', color: '#C0392B', route: '/notifications' },
+  DISPUTA_ABERTA: { label: n => `${n} disputa${n !== 1 ? 's' : ''} aberta${n !== 1 ? 's' : ''}`, bg: '#F7E3D6', color: '#A94C25', route: '/disputes' },
+  VERIFICACAO_INCONCLUSIVA: { label: n => `${n} verificação${n !== 1 ? 'ões' : ''} pendente${n !== 1 ? 's' : ''}`, bg: '#FDF3D6', color: '#8E6508', route: '/providers' },
+};
 
 interface Metrics {
   gmv: number;
@@ -36,10 +45,17 @@ const PERIODOS = [
 ] as const;
 
 export default function DashboardPage() {
+  const nav = useNavigate();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [dias, setDias] = useState<number | null>(30);
   const [exporting, setExporting] = useState(false);
+
+  // Independente do período do dashboard — é "o que precisa de mim agora", não histórico.
+  useEffect(() => {
+    api.get<OperationalAlert[]>('/admin/alerts').then(setAlerts).catch(() => setAlerts([]));
+  }, []);
 
   async function exportar() {
     setExporting(true);
@@ -101,6 +117,24 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {alerts.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {alerts.map(a => {
+              const cfg = ALERT_CONFIG[a.tipo];
+              if (!cfg) return null;
+              return (
+                <div
+                  key={a.tipo}
+                  onClick={() => nav(cfg.route)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: cfg.bg, color: cfg.color, fontSize: 13, fontWeight: 700, padding: '9px 14px', borderRadius: 100, cursor: 'pointer' }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: cfg.color }} />
+                  {cfg.label(a.quantidade)}
+                </div>
+              );
+            })}
+          </div>
+        )}
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> :
          !metrics ? <div style={{ padding: 40, textAlign: 'center', color: 'var(--danger)' }}>Erro ao carregar métricas.</div> : (
           <>
