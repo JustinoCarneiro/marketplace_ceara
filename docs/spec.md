@@ -256,8 +256,11 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
 
 - `admin_audit_log` (id, admin_id, acao, recurso, recurso_id, detalhe, criado_em) — trilha imutável de ações administrativas (US22/TS09). Migration `V8__admin_audit_log.sql`; registrada em `AuditService` e consultada em `GET /api/v1/admin/audit`.
-- `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
+- `users.cpf_hash` — hash determinístico HMAC-SHA256 (antifraude Camada 2, unicidade de CPF de cliente sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado em `POST /api/v1/auth/verify-identity`.
 - `service_requests.motivo_disputa` / `detalhes_disputa` — motivo informado ao abrir a disputa (US18), migration `V10__dispute_reason.sql`.
+- `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
+- `denuncias` (id, tipo, alvo_id, denunciante_id, motivo, detalhes, status, resolvido_por_id, resolvido_em, criado_em) — canal de denúncia de prestador/avaliação fraudulenta (US32), migration `V12__denuncia.sql`.
+- `terms_acceptance` (id, user_id, doc_version, accepted_at, ip_address) — prova de aceite dos Termos/Privacidade no cadastro (`docs/PENDENCIAS_JURIDICAS.md` item 3), migration `V13__terms_acceptance.sql`; gravada em `POST /api/v1/auth/register/{client|provider}`, que rejeita (422) sem `aceitouTermos:true`.
 
 ---
 

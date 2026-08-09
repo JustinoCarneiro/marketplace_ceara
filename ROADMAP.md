@@ -32,6 +32,7 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | email | varchar UNIQUE | |
 | senha_hash | varchar | BCrypt/Argon2 — **nunca texto puro** (US01) |
 | cpf_cifrado | bytea NULL | criptografado em repouso, LGPD (TS04) |
+| cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: unicidade de pessoa sem guardar CPF em claro do cliente (preenchido no 1º pagamento) |
 | role | enum | `ROLE_CLIENT` · `ROLE_PROVIDER` · `ROLE_ADMIN` |
 | created_at / updated_at | timestamptz | |
 
@@ -99,6 +100,12 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 **`admin_audit_log`** — auditoria de ações administrativas (US22, TS09)
 | id · admin_id FK→users · acao · entidade · entidade_id · detalhe jsonb · created_at | — imutável (append-only).
 
+**`denuncias`** — canal de denúncia, prestador ou avaliação fraudulenta (US32, V12)
+| id · tipo (`PRESTADOR`\|`AVALIACAO`) · alvo_id · denunciante_id · motivo · detalhes · status (`ABERTA`\|...) · resolvido_por_id · resolvido_em · criado_em | — fila de moderação admin (`/admin/denuncias`).
+
+**`terms_acceptance`** — prova de consentimento informado no cadastro (docs/PENDENCIAS_JURIDICAS.md item 3, V13)
+| id · user_id FK→users · doc_version · accepted_at · ip_address | — imutável (append-only); gravada em todo `POST /auth/register/{client|provider}`, que rejeita (422) sem aceite.
+
 > Métricas do dashboard (US23) são **derivadas por agregação** sobre `transactions`, `service_requests`, `providers_profile`, `disputes`, `sos_events` — sem tabela própria de verdade financeira (TS09). Cache/materialização é otimização opcional.
 
 ### Diagrama de relacionamentos (texto)
@@ -113,6 +120,8 @@ service_requests 1─N disputes
 service_requests 1─N reviews (avaliador/avaliado → users)
 service_requests 1─N sos_events N─1 users
 users(admin) 1─N admin_audit_log
+users(denunciante) 1─N denuncias
+users 1─N terms_acceptance
 ```
 
 ---
@@ -206,14 +215,16 @@ Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação ad
 - `GET /api/v1/transactions/{serviceRequestId}` (US07/M06) — visão da transação para participantes do pedido.
 - `POST /api/v1/services/ai/suggest` (US14/M04) — endpoint de IA com fallback manual obrigatório.
 
-Alinhados ao projetado: `nearby`, `payments/webhook`, `admin/metrics`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf`.
+Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf` (`admin/metrics` aceita `de=`/`ate=`, mas não `bairro=` — ver US23 pendente). `nearby` **não** está alinhado: o parâmetro real é `raio` (metros, não `raioKm`) — corrigido no mobile em 2026-08-08 (ver M03 abaixo).
+
+**Corrigido em 2026-08-09** (docs/PENDENCIAS_JURIDICAS.md item 3): `register/client` e `register/provider` agora exigem `aceitouTermos:true` no corpo (422 sem isso) e gravam prova de aceite em `terms_acceptance` (ver tabela na seção 1).
 
 ### M01 — Identidade & Auth
 ```
 POST /api/v1/auth/register/client
-  req:  { nome, email, senha }
+  req:  { nome, email, senha, aceitouTermos }   # aceitouTermos:true obrigatório (V13)
   201:  { accessToken, refreshToken, role: "ROLE_CLIENT" }
-  422:  { code:"EMAIL_IN_USE", message }
+  422:  { code:"EMAIL_IN_USE", message } | { code:"VALIDATION_ERROR" }   # sem aceite dos termos
 
 POST /api/v1/auth/login           req:{ email, senha } → 200 { accessToken, refreshToken, role }
 POST /api/v1/auth/refresh         req:{ refreshToken } → 200 { accessToken, refreshToken } | 401
@@ -230,7 +241,9 @@ GET  /api/v1/providers/{id}       200 { id, nome, categoria, statusVerificacao, 
 
 ### M03 — Descoberta & Geobusca
 ```
-GET /api/v1/providers/nearby?lat=&lng=&categoria=&raioKm=&notaMin=
+GET /api/v1/providers/nearby?lat=&lng=&categoria=&raio=&limite=
+  # raio em METROS (default 5000), não raioKm — mobile mandava raioKm até 2026-08-08
+  # (Spring ignora parâmetro desconhecido: filtro de raio nunca tinha efeito nenhum)
   200: [ { id, nome, categoria, notaMedia, distanciaKm } ]   # ordenado por distância (PostGIS)
   200: []                                                     # raio vazio = estado tratado, não erro
   SLA: p95 < 300ms
