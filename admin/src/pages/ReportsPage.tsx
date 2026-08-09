@@ -40,7 +40,7 @@ export default function ReportsPage() {
                 <span style={{ width: 44, height: 44, borderRadius: '50%', border: '3.5px solid #B7DCE3', borderTopColor: '#10847D', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
                 <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A33' }}>Gerando relatório…</span>
-                  <span style={{ fontSize: 13, color: '#4C636A' }}>{format.toUpperCase()} · pedidos, transações e disputas</span>
+                  <span style={{ fontSize: 13, color: '#4C636A' }}>{format === 'csv' ? 'CSV · pedidos (inclui os em disputa)' : 'PDF · resumo de métricas'}</span>
                 </div>
               </div>
               <div style={{ height: 6, borderRadius: 100, background: '#E6DDC9', overflow: 'hidden' }}>
@@ -67,7 +67,7 @@ export default function ReportsPage() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>CSV</div>
-                    <div style={{ fontSize: 12, color: '#4C636A' }}>Listagens (pedidos, transações, disputas)</div>
+                    <div style={{ fontSize: 12, color: '#4C636A' }}>Listagem de pedidos (inclui os em disputa)</div>
                   </div>
                   {format === 'csv' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#10847D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
                 </div>
@@ -85,7 +85,9 @@ export default function ReportsPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#E2EEF2', borderRadius: 10, padding: '9px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
-                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Respeita o período e bairro selecionados.</span>
+                {/* Não existe seletor de período nem de bairro nesta tela — o export
+                    sempre traz o histórico completo. Texto antigo afirmava o contrário. */}
+                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Traz o histórico completo (sem filtro de período ou bairro).</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#606E71" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>

@@ -1,5 +1,7 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
@@ -7,6 +9,8 @@ import com.onda.marketplace.payment.PaymentMethod;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.proposal.ProposalRepository;
+import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -35,6 +39,9 @@ class AdminQueryServiceTest {
     @Mock TransactionRepository     transactionRepository;
     @Mock OutboxEventRepository     outboxRepository;
     @Mock DisputeResolutionRepository resolutionRepository;
+    @Mock ProposalRepository        proposalRepository;
+    @Mock ServiceMediaRepository    mediaRepository;
+    @Mock UserRepository            userRepository;
 
     AdminQueryService service;
 
@@ -44,7 +51,8 @@ class AdminQueryServiceTest {
     @BeforeEach
     void setUp() {
         service = new AdminQueryService(
-                srRepository, transactionRepository, outboxRepository, resolutionRepository);
+                srRepository, transactionRepository, outboxRepository, resolutionRepository,
+                proposalRepository, mediaRepository, userRepository);
     }
 
     // --- findDisputas ---
@@ -176,10 +184,13 @@ class AdminQueryServiceTest {
     // (ex: findDisputas não chama getStatus(), mas findDetalheDisputa chama).
     private ServiceRequest srMock(UUID id, ServiceRequestStatus status) {
         var sr = mock(ServiceRequest.class);
+        var cliente = mock(User.class);
+        lenient().when(cliente.getNome()).thenReturn("Cliente Teste");
         lenient().when(sr.getId()).thenReturn(id);
         lenient().when(sr.getStatus()).thenReturn(status);
         lenient().when(sr.getCategoria()).thenReturn("ENCANADOR");
         lenient().when(sr.getCreatedAt()).thenReturn(Instant.now());
+        lenient().when(sr.getCliente()).thenReturn(cliente);
         return sr;
     }
 

@@ -73,6 +73,7 @@ export default function CompareProposalsScreen() {
         requestId: route.params.requestId,
         proposalId: p.id,
         valor: p.valor,
+        prestadorNome: p.prestadorNome,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao aceitar proposta.');

@@ -1,6 +1,7 @@
 import { API_BASE } from '../../api/config';
+import { getCurrentCoords } from '../../api/location';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -28,20 +29,24 @@ export default function SosScreen() {
   async function triggerSos() {
     setLoading(true);
     try {
+      const { lat, lng } = await getCurrentCoords();
       const res = await fetch(`${API_BASE}/sos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           serviceRequestId: route.params.requestId,
-          latitude: -3.7319,
-          longitude: -38.5267,
+          latitude: lat,
+          longitude: lng,
         }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        nav.replace('SosActive', { alertId: data.id });
+      if (!res.ok) {
+        Alert.alert('Não foi possível acionar', 'Tente novamente ou ligue para a emergência.');
+        return;
       }
+      const data = await res.json();
+      nav.replace('SosActive', { alertId: data.id });
     } catch {
+      Alert.alert('Sem conexão', 'Verifique sua internet e tente acionar novamente.');
     } finally {
       setLoading(false);
     }

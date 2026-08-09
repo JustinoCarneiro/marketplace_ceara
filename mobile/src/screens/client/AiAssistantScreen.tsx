@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator,
-  TouchableOpacity, TextInput, KeyboardAvoidingView, Platform,
+  TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -54,14 +54,20 @@ export default function AiAssistantScreen() {
   async function publish() {
     setPublishing(true);
     try {
-      await fetch(`${API_BASE}/service-requests/${route.params.requestId}/publish`, {
+      const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ descricao }),
       });
-    } catch { /* best effort */ } finally {
-      setPublishing(false);
+      if (!res.ok) {
+        Alert.alert('Não foi possível publicar', 'Tente novamente em instantes.');
+        return;
+      }
       nav.navigate('RequestCreated', { requestId: route.params.requestId });
+    } catch {
+      Alert.alert('Sem conexão', 'Verifique sua internet e tente publicar novamente.');
+    } finally {
+      setPublishing(false);
     }
   }
 

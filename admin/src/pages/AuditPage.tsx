@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 
-interface AuditLog { id: string; adminNome: string; acao: string; entidade: string; criadoEm: string; }
+interface AuditLog { id: string; adminNome: string; acao: string; entidade: string; criadoEm: string; detalhe?: string; }
 
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -32,14 +32,15 @@ export default function AuditPage() {
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px' }}>
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr 1.2fr 1fr', background: '#F3ECDC', padding: '13px 20px', borderBottom: '1px solid #E6DDC9' }}>
-              {['Admin', 'Ação', 'Entidade', 'Quando'].map(h => <span key={h} style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>{h}</span>)}
+            <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr 0.9fr 1.4fr 0.9fr', background: '#F3ECDC', padding: '13px 20px', borderBottom: '1px solid #E6DDC9' }}>
+              {['Admin', 'Ação', 'Entidade', 'Detalhe', 'Quando'].map(h => <span key={h} style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#15596E' }}>{h}</span>)}
             </div>
             {logs.map(l => (
-              <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr 1.2fr 1fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center' }}>
+              <div key={l.id} style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr 0.9fr 1.4fr 0.9fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#0E2A33', fontWeight: 600 }}>{l.adminNome}</span>
                 <span style={{ fontSize: 13, color: '#4C636A' }}>{l.acao}</span>
                 <span style={{ fontSize: 13, color: '#4C636A', fontFamily: 'monospace' }}>{l.entidade}</span>
+                <span style={{ fontSize: 12.5, color: '#606E71' }}>{l.detalhe ?? '—'}</span>
                 <span style={{ fontSize: 12.5, color: '#606E71' }}>{fmtDate(l.criadoEm)}</span>
               </div>
             ))}

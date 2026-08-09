@@ -97,11 +97,17 @@ public class ServiceExecutionService {
                 .ifPresent(tx -> outboxRepository.save(outboxEvent(tx, "PAYMENT_RELEASED")));
     }
 
-    /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte autenticada pode abrir disputa. */
+    /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte que participa do pedido pode abrir disputa. */
     @Transactional
-    public void openDispute(UUID srId, String motivo, String detalhes) {
+    public void openDispute(UUID srId, UUID userId, String motivo, String detalhes) {
         ServiceRequest sr = srRepository.findById(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+
+        // Sem isto, qualquer usuário autenticado congelava o escrow de pedido alheio —
+        // "qualquer parte" tinha virado "qualquer pessoa", não checava participação nenhuma.
+        if (!srRepository.isParticipante(srId, userId)) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
 
         if (sr.getStatus() != ServiceRequestStatus.EM_ANDAMENTO) {
             throw new BusinessException("INVALID_STATE_TRANSITION",
@@ -119,9 +125,15 @@ public class ServiceExecutionService {
 
     /** ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED). */
     @Transactional
-    public void cancel(UUID srId) {
+    public void cancel(UUID srId, UUID userId) {
         ServiceRequest sr = srRepository.findById(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+
+        // Sem isto, qualquer usuário autenticado cancelava (e disparava reembolso de) pedido
+        // alheio — o endpoint mais sensível do arquivo (move dinheiro) não checava ninguém.
+        if (!srRepository.isParticipante(srId, userId)) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
 
         if (!CANCELAVEIS.contains(sr.getStatus())) {
             throw new BusinessException("INVALID_STATE_TRANSITION",

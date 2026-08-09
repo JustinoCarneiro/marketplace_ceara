@@ -297,7 +297,7 @@ POST /api/v1/services/requests/{id}/sos   (usuário em atendimento)
 
 ### M10 — Painel Admin: Métricas & Gestão  *(web · todas exigem `ROLE_ADMIN` → 403 caso contrário)*
 ```
-GET  /api/v1/admin/metrics?de=&ate=&bairro=
+GET  /api/v1/admin/metrics?de=&ate=   # bairro: pendente, não implementado (US23 parcial)
   200: { gmv, receitaComissao, ticketMedio, pedidosPorStatus:{...},
          taxaConclusao, disputasAbertas, tempoMedioResolucaoH,
          prestadoresVerificados, prestadoresAtivos, clientesAtivos, sosAcionados }
@@ -334,8 +334,8 @@ GET  /api/v1/admin/notifications?lida=           200 [ { id, tipo:"SOS"|"DISPUTA
 POST /api/v1/admin/notifications/{id}/read       200
 # alertas SOS/DISPUTA também disparam push/e-mail fora do painel (garantido p/ SOS)
 
-GET  /api/v1/admin/reports/metrics.pdf?de=&ate=&bairro=     200  application/pdf   # resumo de métricas
-GET  /api/v1/admin/reports/{recurso}.csv?...               200  text/csv          # recurso: transactions|disputes|requests
+GET  /api/v1/admin/reports/metrics.pdf                      200  application/pdf   # resumo de métricas, histórico completo; de=/ate=/bairro= pendentes, não implementados
+GET  /api/v1/admin/reports/{recurso}.csv                    200  text/csv          # recurso: transactions|requests ("requests" cobre pedidos e disputas, que são pedidos em EM_DISPUTA); sem filtro de período/bairro
 # relatórios NUNCA expõem CPF (TS04/LGPD)
 ```
 

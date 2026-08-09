@@ -11,6 +11,7 @@ import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import { ProviderData } from '../../components/ProviderCard';
 import { API_BASE } from '../../api/config';
+import { getCurrentCoords } from '../../api/location';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import ScreenState from '../../components/ScreenState';
 import { SkeletonList } from '../../components/Skeleton';
@@ -81,8 +82,11 @@ export default function HomeScreen() {
     setNearbyError(null);
     setLoading(true);
     try {
+      const { lat, lng } = await getCurrentCoords();
       const res = await fetch(
-        `${API_BASE}/providers/nearby?lat=-3.7319&lng=-38.5267&raioKm=8`,
+        // raio é em METROS no backend (ST_DWithin), não km — nome e unidade errados aqui
+        // faziam a busca sempre cair no default de 5000m, ignorando qualquer raio pedido.
+        `${API_BASE}/providers/nearby?lat=${lat}&lng=${lng}&raio=8000`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) throw new HttpError(res.status);

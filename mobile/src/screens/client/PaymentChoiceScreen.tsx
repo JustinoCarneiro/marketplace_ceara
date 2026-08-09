@@ -20,7 +20,7 @@ export default function PaymentChoiceScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
-  const { requestId, valor } = route.params;
+  const { requestId, valor, prestadorNome } = route.params;
   const comissao = Math.round(valor * COMISSAO * 100) / 100;
   const total = valor + comissao;
 
@@ -120,7 +120,7 @@ export default function PaymentChoiceScreen() {
         {/* Summary */}
         <View style={styles.summaryBox}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Serviço · José Wagner</Text>
+            <Text style={styles.summaryLabel}>{prestadorNome ? `Serviço · ${prestadorNome}` : 'Serviço'}</Text>
             <Text style={styles.summaryVal}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
           </View>
           <View style={styles.summaryRow}>

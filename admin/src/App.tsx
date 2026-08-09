@@ -10,6 +10,7 @@ import DisputesPage from './pages/DisputesPage';
 import DisputeDetailPage from './pages/DisputeDetailPage';
 import DenunciasPage from './pages/DenunciasPage';
 import ProvidersPage from './pages/ProvidersPage';
+import ProviderDetailPage from './pages/ProviderDetailPage';
 import UsersPage from './pages/UsersPage';
 import FinancePage from './pages/FinancePage';
 import CategoriesPage from './pages/CategoriesPage';
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/disputes/:id" element={<DisputeDetailPage />} />
             <Route path="/denuncias" element={<DenunciasPage />} />
             <Route path="/providers" element={<ProvidersPage />} />
+            <Route path="/providers/:id" element={<ProviderDetailPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/finance" element={<FinancePage />} />
             <Route path="/categories" element={<CategoriesPage />} />

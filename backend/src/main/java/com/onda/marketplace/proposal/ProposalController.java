@@ -2,6 +2,7 @@ package com.onda.marketplace.proposal;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ public class ProposalController {
 
     @PostMapping("/api/v1/service-requests/{id}/proposals")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('PROVIDER')")
     public ProposalDto create(
             @PathVariable UUID id,
             @Valid @RequestBody CreateProposalRequest req,
@@ -33,12 +35,14 @@ public class ProposalController {
     }
 
     @PutMapping("/api/v1/proposals/{id}/accept")
+    @PreAuthorize("hasRole('CLIENT')")
     public ProposalDto accept(@PathVariable UUID id, Authentication auth) {
         UUID clienteId = auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
         return proposalService.accept(id, clienteId);
     }
 
     @PutMapping("/api/v1/proposals/{id}/reject")
+    @PreAuthorize("hasRole('CLIENT')")
     public ProposalDto reject(@PathVariable UUID id, Authentication auth) {
         UUID clienteId = auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
         return proposalService.reject(id, clienteId);

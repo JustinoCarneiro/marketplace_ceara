@@ -38,6 +38,12 @@
           "microphonePermission": "O Onda usa o microfone para gravar um áudio descrevendo o problema.",
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O Onda usa sua localização para buscar prestadores próximos e registrar onde o pedido foi feito."
+        }
       ]
     ],
     "extra": {

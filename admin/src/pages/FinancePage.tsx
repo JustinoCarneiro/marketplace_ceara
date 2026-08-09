@@ -24,24 +24,40 @@ export default function FinancePage() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [outbox, setOutbox] = useState<OutboxEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [exportErr, setExportErr] = useState('');
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
+  const [reprocessErr, setReprocessErr] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [statuses, o] = await Promise.all([
-          Promise.all(RECONCILE_STATUSES.map(s =>
-            api.get<Transaction[]>(`/admin/transactions?status=${s}`).catch(() => []))),
-          api.get<OutboxEvent[]>('/admin/outbox?status=FALHA').catch(() => []),
-        ]);
-        setTxs(statuses.flat());
-        setOutbox(Array.isArray(o) ? o : []);
-      } finally { setLoading(false); }
-    })();
-  }, []);
+  async function load() {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      let anyFailed = false;
+      const [statuses, o] = await Promise.all([
+        Promise.all(RECONCILE_STATUSES.map(s =>
+          api.get<Transaction[]>(`/admin/transactions?status=${s}`).catch(() => { anyFailed = true; return []; }))),
+        api.get<OutboxEvent[]>('/admin/outbox?status=FALHA').catch(() => { anyFailed = true; return []; }),
+      ]);
+      setTxs(statuses.flat());
+      setOutbox(Array.isArray(o) ? o : []);
+      setLoadError(anyFailed);
+    } finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
 
   async function reprocess(id: string) {
-    try { await api.post(`/admin/outbox/${id}/reprocess`, {}); } catch {}
+    setReprocessErr('');
+    setReprocessingId(id);
+    try {
+      await api.post(`/admin/outbox/${id}/reprocess`, {});
+      await load();
+    } catch (e: unknown) {
+      setReprocessErr(e instanceof Error ? e.message : 'Erro ao reprocessar.');
+    } finally {
+      setReprocessingId(null);
+    }
   }
 
   async function exportar() {
@@ -69,6 +85,16 @@ export default function FinancePage() {
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
           <>
+            {loadError && (
+              <div style={{ background: '#FDF3D6', border: '1px solid #F2B015', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#8E6508' }}>
+                Alguns dados financeiros não puderam ser carregados. Os números abaixo podem estar incompletos.
+              </div>
+            )}
+            {reprocessErr && (
+              <div style={{ background: '#FBE6E2', border: '1px solid #C0392B', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#C0392B' }}>
+                {reprocessErr}
+              </div>
+            )}
             {/* KPI cards */}
             <div style={{ display: 'flex', gap: 12 }}>
               {[
@@ -97,7 +123,7 @@ export default function FinancePage() {
                       <div style={{ fontSize: 12, color: '#606E71' }}>{e.entidade} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
-                    <button onClick={() => reprocess(e.id)} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Reprocessar</button>
+                    <button onClick={() => reprocess(e.id)} disabled={reprocessingId === e.id} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: reprocessingId === e.id ? 'default' : 'pointer', opacity: reprocessingId === e.id ? 0.6 : 1 }}>{reprocessingId === e.id ? 'Reprocessando…' : 'Reprocessar'}</button>
                   </div>
                 ))}
                 <span style={{ fontSize: 12, color: '#9A4A22' }}>Reprocessamento é idempotente — seguro repetir.</span>

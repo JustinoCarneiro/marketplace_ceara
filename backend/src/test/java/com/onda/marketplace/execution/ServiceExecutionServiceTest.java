@@ -176,10 +176,11 @@ class ServiceExecutionServiceTest {
     void openDispute_emAndamento_moveParaEmDisputa_e_criaAlertaDisputa() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(notificationService.criarAlerta(any(), any())).thenReturn(null);
 
-        service.openDispute(SR_ID, "Serviço não foi concluído", "detalhes do ocorrido");
+        service.openDispute(SR_ID, CLIENTE_ID, "Serviço não foi concluído", "detalhes do ocorrido");
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.EM_DISPUTA);
         assertThat(sr.getMotivoDisputa()).isEqualTo("Serviço não foi concluído");
@@ -189,11 +190,26 @@ class ServiceExecutionServiceTest {
     }
 
     @Test
+    void openDispute_naoParticipaDoPedido_lancaForbidden() {
+        // Antes, "qualquer parte autenticada" era literal: nenhuma checagem de
+        // participação existia, então qualquer conta congelava o escrow alheio.
+        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, "motivo", "detalhes"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(srRepository, never()).save(any());
+    }
+
+    @Test
     void openDispute_statusInvalido_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.openDispute(SR_ID, null, null))
+        assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION");
     }
@@ -205,11 +221,12 @@ class ServiceExecutionServiceTest {
         var sr = sr(ServiceRequestStatus.ACEITO);
         var tx = transaction(TransactionStatus.RETIDO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.cancel(SR_ID);
+        service.cancel(SR_ID, CLIENTE_ID);
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -218,13 +235,29 @@ class ServiceExecutionServiceTest {
     }
 
     @Test
+    void cancel_naoParticipaDoPedido_lancaForbidden_eNaoDisparaReembolso() {
+        // Este é o endpoint mais sensível do arquivo — dispara reembolso. Sem a checagem,
+        // qualquer conta autenticada cancelava (e reembolsava) pedido de terceiros.
+        var sr = sr(ServiceRequestStatus.ACEITO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(srRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
     void cancel_emAndamento_semTransacao_moveParaCancelado_semOutbox() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.cancel(SR_ID);
+        service.cancel(SR_ID, CLIENTE_ID);
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
         verify(outboxRepository, never()).save(any());
@@ -234,8 +267,9 @@ class ServiceExecutionServiceTest {
     void cancel_statusInvalido_lancaException() {
         var sr = sr(ServiceRequestStatus.CONCLUIDO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.cancel(SR_ID))
+        assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION");
     }

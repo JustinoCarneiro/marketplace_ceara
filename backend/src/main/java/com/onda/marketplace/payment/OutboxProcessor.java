@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Set;
@@ -23,15 +22,18 @@ public class OutboxProcessor {
     private final TransactionRepository transactionRepository;
     private final GatewayService        gatewayService;
     private final NotificationService   notificationService;
+    private final OutboxEventWriter     eventWriter;
 
     public OutboxProcessor(OutboxEventRepository outboxRepository,
                            TransactionRepository transactionRepository,
                            GatewayService gatewayService,
-                           NotificationService notificationService) {
+                           NotificationService notificationService,
+                           OutboxEventWriter eventWriter) {
         this.outboxRepository      = outboxRepository;
         this.transactionRepository = transactionRepository;
         this.gatewayService        = gatewayService;
         this.notificationService   = notificationService;
+        this.eventWriter           = eventWriter;
     }
 
     /**
@@ -57,11 +59,11 @@ public class OutboxProcessor {
         transactionRepository.findById(event.getAgregadoId()).ifPresent(tx -> {
             try {
                 despacharParaGateway(event.getTipoEvento(), tx);
-                salvarResultadoPagamento(tx, event, true);
+                eventWriter.salvarResultadoPagamento(tx, event, true);
             } catch (Exception ex) {
                 log.warn("Falha ao processar {} para tx={}: {}", event.getTipoEvento(),
                         tx.getId(), ex.getMessage());
-                salvarResultadoPagamento(tx, event, false);
+                eventWriter.salvarResultadoPagamento(tx, event, false);
             }
         });
     }
@@ -78,17 +80,6 @@ public class OutboxProcessor {
         }
     }
 
-    @Transactional
-    protected void salvarResultadoPagamento(Transaction tx, OutboxEvent event, boolean sucesso) {
-        if (sucesso) {
-            transactionRepository.save(tx);
-            event.marcarProcessado();
-        } else {
-            event.marcarFalha();
-        }
-        outboxRepository.save(event);
-    }
-
     // Eventos não-financeiros. SOS_TRIGGERED entrega o alerta de verdade — antes daqui só
     // saía um log.warn e o evento era marcado como processado, ou seja, o caminho durável
     // do SOS existia e não fazia nada (US30: o aviso não pode depender só do painel).
@@ -98,30 +89,18 @@ public class OutboxProcessor {
             return;
         }
         log.info("Evento outbox não reconhecido: tipo={}", event.getTipoEvento());
-        marcarProcessado(event);
+        eventWriter.marcarProcessado(event);
     }
 
     private void entregarSos(OutboxEvent event) {
         try {
             notificationService.entregar("SOS", event.getAgregadoId());
-            marcarProcessado(event);
+            eventWriter.marcarProcessado(event);
         } catch (RuntimeException ex) {
             // Fica FALHA: aparece na reconciliação do painel (US27) e pode ser reprocessado.
             log.error("SOS acionado e NÃO avisado ao admin (evento={}, ref={}): {}",
                     event.getId(), event.getAgregadoId(), ex.getMessage(), ex);
-            salvarFalha(event);
+            eventWriter.salvarFalha(event);
         }
-    }
-
-    @Transactional
-    protected void salvarFalha(OutboxEvent event) {
-        event.marcarFalha();
-        outboxRepository.save(event);
-    }
-
-    @Transactional
-    protected void marcarProcessado(OutboxEvent event) {
-        event.marcarProcessado();
-        outboxRepository.save(event);
     }
 }

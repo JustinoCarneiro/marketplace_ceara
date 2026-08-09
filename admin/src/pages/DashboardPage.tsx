@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, downloadFile } from '../api/client';
 
 interface Metrics {
   gmv: number;
@@ -39,6 +39,13 @@ export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [dias, setDias] = useState<number | null>(30);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportar() {
+    setExporting(true);
+    try { await downloadFile('/admin/reports/metrics.pdf', 'metrics.pdf'); }
+    catch {} finally { setExporting(false); }
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -85,8 +92,8 @@ export default function DashboardPage() {
               {PERIODOS.map(p => <option key={p.label} value={String(p.dias)}>{p.label}</option>)}
             </select>
           </label>
-          <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>Exportar
+          <button onClick={exportar} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 14, cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.7 : 1, boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>{exporting ? 'Exportando…' : 'Exportar'}
           </button>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: '#15596E', color: '#fff', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>GM</div>
         </div>

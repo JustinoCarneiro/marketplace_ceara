@@ -28,8 +28,11 @@ public class ProposalService {
         ServiceRequest sr = requestRepository.findById(serviceRequestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
-        if (sr.getStatus() == ServiceRequestStatus.CANCELADO
-                || sr.getStatus() == ServiceRequestStatus.CONCLUIDO) {
+        // Só PENDENTE/PROPOSTO aceitam proposta nova — ACEITO/EM_ANDAMENTO/EM_DISPUTA já têm
+        // prestador definido; sem este check dava pra empilhar proposta ATIVA num serviço em
+        // execução (US15).
+        if (sr.getStatus() != ServiceRequestStatus.PENDENTE
+                && sr.getStatus() != ServiceRequestStatus.PROPOSTO) {
             throw new BusinessException("REQUEST_CLOSED", "Pedido não aceita mais propostas.");
         }
 
@@ -47,13 +50,18 @@ public class ProposalService {
     @Transactional
     public ProposalDto accept(UUID proposalId, UUID clienteId) {
         Proposal proposal = findAtiva(proposalId);
+        ServiceRequest sr = proposal.getServiceRequest();
+
+        // Sem isto, qualquer conta autenticada aceitava proposta de pedido alheio —
+        // clienteId nunca era conferido contra o dono real do pedido.
+        if (!clienteId.equals(sr.getCliente().getId())) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
 
         if (clienteId.equals(proposal.getPrestadorId())) {
             throw new BusinessException("SELF_HIRE_FORBIDDEN",
                     "Prestador não pode aceitar o próprio pedido.");
         }
-
-        ServiceRequest sr = proposal.getServiceRequest();
 
         proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA)
                 .stream()
@@ -75,6 +83,13 @@ public class ProposalService {
     @Transactional
     public ProposalDto reject(UUID proposalId, UUID clienteId) {
         Proposal proposal = findAtiva(proposalId);
+
+        // Antes, clienteId chegava até aqui e nunca era usado — qualquer conta autenticada
+        // recusava proposta de prestador em pedido alheio.
+        if (!clienteId.equals(proposal.getServiceRequest().getCliente().getId())) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
+
         proposal.recusar();
         proposalRepository.save(proposal);
         return ProposalDto.from(proposal);

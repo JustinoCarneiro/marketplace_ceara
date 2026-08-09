@@ -1,4 +1,5 @@
 import { API_BASE } from '../../api/config';
+import { getCurrentCoords } from '../../api/location';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState } from 'react';
 import {
@@ -12,6 +13,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
+import { useFiltersStore } from '../../store/filters';
 import ScreenState from '../../components/ScreenState';
 import { SkeletonList } from '../../components/Skeleton';
 
@@ -42,24 +44,29 @@ function initials(nome: string) {
   return nome.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
 }
 
+const RAIO_STEPS = [5, 8, 15];
+
 export default function ResultsScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
-  const [raio, setRaio] = useState(1);
-  const [notaMin, setNotaMin] = useState(0);
+  const [maisProximos, setMaisProximos] = useState(false);
+
+  const raioKm = useFiltersStore(s => s.raioKm);
+  const notaMin = useFiltersStore(s => s.notaMin);
+  const setRaioKm = useFiltersStore(s => s.setRaioKm);
+  const setNotaMin = useFiltersStore(s => s.setNotaMin);
 
   const categoria = route.params?.categoria;
-  const raioKm = [5, 8, 15][raio];
   const titulo = categoria
     ? categoria.charAt(0).toUpperCase() + categoria.slice(1) + 'istas'
     : 'Todos os prestadores';
 
   useEffect(() => {
     load();
-  }, [categoria, raio]);
+  }, [categoria, raioKm]);
 
   const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
 
@@ -67,9 +74,12 @@ export default function ResultsScreen() {
     setLoading(true);
     setHasError(null);
     try {
+      const { lat, lng } = await getCurrentCoords();
       const params = new URLSearchParams({
-        lat: '-3.7319', lng: '-38.5267',
-        raioKm: String(raioKm),
+        lat: String(lat), lng: String(lng),
+        // raio é em METROS no backend (ST_DWithin) — nome/unidade errados aqui faziam
+        // o filtro de raio da UI não ter nenhum efeito (sempre caía no default 5000m).
+        raio: String(raioKm * 1000),
         ...(categoria ? { categoria } : {}),
       });
       const res = await fetch(`${API_BASE}/providers/nearby?${params}`, {
@@ -86,21 +96,9 @@ export default function ResultsScreen() {
     }
   }
 
-  const filtered = providers.filter(p => {
-    if (notaMin === 1) return (p.notaMedia ?? 0) >= 4;
-    if (notaMin === 2) return (p.notaMedia ?? 0) >= 4.5;
-    return true;
-  });
-
-  const RAIO_CHIPS = [
-    { label: `Raio ${raioKm} km`, active: true },
-    { label: '★ 4+', active: notaMin === 1 },
-    { label: 'Mais próximos', active: false },
-  ];
-
-  function handleFilterChipPress(index: number) {
-    if (index === 1) setNotaMin(v => (v === 1 ? 0 : 1));
-  }
+  const filtered = providers
+    .filter(p => (p.notaMedia ?? 0) >= notaMin)
+    .sort((a, b) => (maisProximos ? a.distanciaKm - b.distanciaKm : 0));
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -133,23 +131,23 @@ export default function ResultsScreen() {
           <TouchableOpacity
             style={[styles.chip, styles.chipActive]}
             onPress={() => {
-              const next = [5, 8, 15][(([5, 8, 15].indexOf(raioKm) + 1) % 3)];
-              setRaio([5, 8, 15].indexOf(next));
+              const next = RAIO_STEPS[(RAIO_STEPS.indexOf(raioKm) + 1) % RAIO_STEPS.length] ?? RAIO_STEPS[0];
+              setRaioKm(next);
             }}
           >
             <Text style={[styles.chipText, styles.chipTextActive]}>Raio {raioKm} km</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.chip, notaMin === 1 && styles.chipActive]}
-            onPress={() => setNotaMin(v => (v === 1 ? 0 : 1))}
+            style={[styles.chip, notaMin >= 4 && styles.chipActive]}
+            onPress={() => setNotaMin(notaMin >= 4 ? 0 : 4)}
           >
-            <Text style={[styles.chipText, notaMin === 1 && styles.chipTextActive]}>★ 4+</Text>
+            <Text style={[styles.chipText, notaMin >= 4 && styles.chipTextActive]}>★ 4+</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.chip}
-            onPress={() => {}}
+            style={[styles.chip, maisProximos && styles.chipActive]}
+            onPress={() => setMaisProximos(v => !v)}
           >
-            <Text style={styles.chipText}>Mais próximos</Text>
+            <Text style={[styles.chipText, maisProximos && styles.chipTextActive]}>Mais próximos</Text>
           </TouchableOpacity>
         </View>
       </View>

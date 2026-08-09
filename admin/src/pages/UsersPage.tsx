@@ -11,6 +11,8 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [actionErr, setActionErr] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -23,7 +25,16 @@ export default function UsersPage() {
 
   async function toggleStatus(id: string, current: string) {
     const action = current === 'ATIVO' ? 'suspend' : 'reactivate';
-    try { await api.post(`/admin/users/${id}/${action}`, {}); load(); } catch {}
+    setActionErr('');
+    setTogglingId(id);
+    try {
+      await api.post(`/admin/users/${id}/${action}`, {});
+      await load();
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Erro ao atualizar o status do usuário.');
+    } finally {
+      setTogglingId(null);
+    }
   }
 
   const filtered = search ? users.filter(u => u.nome.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())) : users;
@@ -37,7 +48,10 @@ export default function UsersPage() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou e-mail…" style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13.5, color: '#0E2A33', flex: 1 }} />
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {actionErr && (
+          <div style={{ background: '#FBE6E2', border: '1px solid #C0392B', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#C0392B' }}>{actionErr}</div>
+        )}
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> : (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--line-soft)', borderRadius: 12, overflow: 'hidden' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', background: '#F3ECDC', padding: '14px 20px', borderBottom: '1px solid #E6DDC9' }}>
@@ -56,7 +70,7 @@ export default function UsersPage() {
                   </div>
                   <span style={{ fontSize: 13, color: '#4C636A' }}>{u.role === 'ROLE_PROVIDER' ? 'Prestador' : 'Cliente'}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: isSuspended ? '#C0392B' : '#15756E', background: isSuspended ? '#fff' : '#DDF0EC', border: isSuspended ? '1px solid #E6BFA6' : 'none', padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{isSuspended ? 'SUSPENSO' : 'ATIVO'}</span>
-                  <button onClick={() => toggleStatus(u.id, u.status)} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#10847D' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: 'pointer', justifySelf: 'end' }}>{isSuspended ? 'Reativar' : 'Suspender'}</button>
+                  <button onClick={() => toggleStatus(u.id, u.status)} disabled={togglingId === u.id} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#10847D' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: togglingId === u.id ? 'default' : 'pointer', opacity: togglingId === u.id ? 0.6 : 1, justifySelf: 'end' }}>{togglingId === u.id ? '...' : isSuspended ? 'Reativar' : 'Suspender'}</button>
                 </div>
               );
             })}

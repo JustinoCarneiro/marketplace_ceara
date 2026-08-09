@@ -39,8 +39,9 @@ class OutboxSosDeliveryTest {
 
     @BeforeEach
     void setUp() {
+        var eventWriter = new OutboxEventWriter(outboxRepository, transactionRepository);
         processor = new OutboxProcessor(outboxRepository, transactionRepository,
-                gatewayService, notificationService);
+                gatewayService, notificationService, eventWriter);
     }
 
     private OutboxEvent eventoSos() {

@@ -4,7 +4,8 @@ import { api } from '../api/client';
 
 // Contrato real do backend (DisputaDetalheDto): serviceRequestId, categoria, status,
 // valorTotal, statusPagamento, motivoDisputa/detalhesDisputa (quem abriu a disputa
-// informou na hora), decisao (null até resolvida), criadoEm.
+// informou na hora), decisao (null até resolvida), criadoEm, clienteNome, prestadorNome,
+// midias (US24: antes o mediador decidia sem ver as partes nem as fotos anexadas).
 interface DisputeDetail {
   serviceRequestId: string;
   categoria: string;
@@ -15,6 +16,9 @@ interface DisputeDetail {
   detalhesDisputa?: string;
   decisao?: string;
   criadoEm: string;
+  clienteNome?: string;
+  prestadorNome?: string;
+  midias: { tipo: string; url: string }[];
 }
 
 const S = {
@@ -76,6 +80,13 @@ export default function DisputeDetailPage() {
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', gap: 20 }}>
         <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={S.card}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Partes</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Cliente</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.clienteNome ?? '—'}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Prestador</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.prestadorNome ?? '—'}</span></div>
+            </div>
+          </div>
+          <div style={S.card}>
             <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Pedido</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: 13, color: '#606E71' }}>Categoria</span><span style={{ fontSize: 13.5, color: '#0E2A33', fontWeight: 600 }}>{d.categoria}</span></div>
@@ -89,6 +100,18 @@ export default function DisputeDetailPage() {
               <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Motivo informado</span>
               {d.motivoDisputa && <span style={S.badge}>{d.motivoDisputa}</span>}
               {d.detalhesDisputa && <span style={{ fontSize: 13.5, color: '#4C636A', lineHeight: 1.5 }}>{d.detalhesDisputa}</span>}
+            </div>
+          )}
+          {d.midias.length > 0 && (
+            <div style={S.card}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>Mídias anexadas</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {d.midias.map((m, i) => (
+                  m.tipo === 'FOTO'
+                    ? <a key={i} href={m.url} target="_blank" rel="noreferrer"><img src={m.url} alt="Anexo do pedido" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line-soft)' }} /></a>
+                    : <a key={i} href={m.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 700, color: '#10847D' }}>{m.tipo === 'AUDIO' ? '🔊 Áudio' : m.tipo}</a>
+                ))}
+              </div>
             </div>
           )}
         </div>

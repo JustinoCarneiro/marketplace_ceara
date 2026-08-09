@@ -1,11 +1,16 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.proposal.ProposalRepository;
+import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -28,15 +33,24 @@ public class AdminQueryService {
     private final TransactionRepository       transactionRepository;
     private final OutboxEventRepository       outboxRepository;
     private final DisputeResolutionRepository resolutionRepository;
+    private final ProposalRepository          proposalRepository;
+    private final ServiceMediaRepository      mediaRepository;
+    private final UserRepository              userRepository;
 
     public AdminQueryService(ServiceRequestRepository srRepository,
                              TransactionRepository transactionRepository,
                              OutboxEventRepository outboxRepository,
-                             DisputeResolutionRepository resolutionRepository) {
+                             DisputeResolutionRepository resolutionRepository,
+                             ProposalRepository proposalRepository,
+                             ServiceMediaRepository mediaRepository,
+                             UserRepository userRepository) {
         this.srRepository         = srRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository     = outboxRepository;
         this.resolutionRepository = resolutionRepository;
+        this.proposalRepository   = proposalRepository;
+        this.mediaRepository      = mediaRepository;
+        this.userRepository       = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -61,6 +75,16 @@ public class AdminQueryService {
         var tx          = transactionRepository.findByServiceRequestId(serviceRequestId).orElse(null);
         var resolution  = resolutionRepository.findByServiceRequestId(serviceRequestId).orElse(null);
 
+        String prestadorNome = proposalRepository.findByServiceRequestIdAndStatus(serviceRequestId, ProposalStatus.ACEITA)
+                .stream().findFirst()
+                .flatMap(p -> userRepository.findById(p.getPrestadorId()))
+                .map(User::getNome)
+                .orElse(null);
+
+        var midias = mediaRepository.findByServiceRequest_Id(serviceRequestId).stream()
+                .map(m -> new DisputaDetalheDto.MidiaDto(m.getTipo().name(), m.getUrl()))
+                .toList();
+
         return new DisputaDetalheDto(
                 sr.getId(),
                 sr.getCategoria(),
@@ -70,7 +94,10 @@ public class AdminQueryService {
                 sr.getMotivoDisputa(),
                 sr.getDetalhesDisputa(),
                 resolution != null ? resolution.getDecisao().name() : null,
-                sr.getCreatedAt());
+                sr.getCreatedAt(),
+                sr.getCliente().getNome(),
+                prestadorNome,
+                midias);
     }
 
     @Transactional(readOnly = true)

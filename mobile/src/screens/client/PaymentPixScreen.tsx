@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -34,7 +35,8 @@ export default function PaymentPixScreen() {
   const [confirming, setConfirming] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
 
-  function copyPix() {
+  async function copyPix() {
+    await Clipboard.setStringAsync(PIX_KEY);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

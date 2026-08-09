@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
 interface Provider {
@@ -29,9 +30,11 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function ProvidersPage() {
+  const nav = useNavigate();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'EM_VERIFICACAO' | ''>('EM_VERIFICACAO');
+  const [actionErr, setActionErr] = useState('');
 
   async function load() {
     setLoading(true);
@@ -45,10 +48,14 @@ export default function ProvidersPage() {
   useEffect(() => { load(); }, []);
 
   async function verify(id: string) {
-    try { await api.post(`/admin/providers/${id}/verify`, {}); load(); } catch {}
+    setActionErr('');
+    try { await api.post(`/admin/providers/${id}/verify`, {}); load(); }
+    catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao verificar prestador.'); }
   }
   async function reject(id: string) {
-    try { await api.post(`/admin/providers/${id}/reject`, {}); load(); } catch {}
+    setActionErr('');
+    try { await api.post(`/admin/providers/${id}/reject`, {}); load(); }
+    catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao reprovar prestador.'); }
   }
 
   const filtered = filter ? providers.filter(p => p.statusVerificacao === filter) : providers;
@@ -64,6 +71,9 @@ export default function ProvidersPage() {
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', background: '#F6EEDC', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {actionErr && (
+          <div style={{ background: '#FBE6E2', border: '1px solid #C0392B', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#C0392B' }}>{actionErr}</div>
+        )}
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><div className="spinner" /></div> :
          filtered.length === 0 ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-soft)' }}>Nenhum prestador encontrado.</div> :
          filtered.map(p => {
@@ -85,7 +95,7 @@ export default function ProvidersPage() {
                   <button onClick={() => reject(p.id)} style={{ height: 42, padding: '0 18px', border: '1.5px solid #C0392B', borderRadius: 100, background: 'transparent', color: '#C0392B', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Reprovar</button>
                 </>
               ) : (
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#606E71', flexShrink: 0 }}>Ver perfil →</span>
+                <span onClick={() => nav(`/providers/${p.id}`)} style={{ fontSize: 13.5, fontWeight: 700, color: '#606E71', flexShrink: 0, cursor: 'pointer' }}>Ver perfil →</span>
               )}
             </div>
           );

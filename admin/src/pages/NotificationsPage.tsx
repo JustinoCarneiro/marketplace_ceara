@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
 // Contrato real do backend (AdminNotificationDto): id, tipo, refId, criadoEm, lida.
@@ -32,10 +33,19 @@ function timeAgo(s: string) {
   return `há ${Math.floor(h / 24)} d`;
 }
 
+function routeFor(n: Notification): string {
+  if (n.tipo === 'SOS' || n.tipo === 'DISPUTA') return `/disputes/${n.refId}`;
+  if (n.tipo === 'VERIFICACAO') return '/providers';
+  if (n.tipo === 'DENUNCIA') return '/denuncias';
+  return '/';
+}
+
 export default function NotificationsPage() {
+  const nav = useNavigate();
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [markErr, setMarkErr] = useState('');
 
   async function load() {
     setLoading(true);
@@ -47,7 +57,9 @@ export default function NotificationsPage() {
   useEffect(() => { load(); }, []);
 
   async function markAllRead() {
-    try { await api.post('/admin/notifications/mark-all-read', {}); load(); } catch {}
+    setMarkErr('');
+    try { await api.post('/admin/notifications/mark-all-read', {}); load(); }
+    catch (e: unknown) { setMarkErr(e instanceof Error ? e.message : 'Erro ao marcar como lidas.'); }
   }
 
   const unreadCount = notifs.filter(n => !n.lida).length;
@@ -68,9 +80,12 @@ export default function NotificationsPage() {
         {/* Filter tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span onClick={() => setFilter('all')} style={{ fontSize: 13, fontWeight: 700, color: filter === 'all' ? '#fff' : '#15596E', background: filter === 'all' ? '#0E3F52' : '#E2EEF2', padding: '8px 16px', borderRadius: 100, cursor: 'pointer' }}>Todas</span>
-          <span onClick={() => setFilter('unread')} style={{ fontSize: 13, fontWeight: 700, color: '#15596E', background: '#E2EEF2', padding: '8px 16px', borderRadius: 100, cursor: 'pointer' }}>Não lidas · {unreadCount}</span>
+          <span onClick={() => setFilter('unread')} style={{ fontSize: 13, fontWeight: 700, color: filter === 'unread' ? '#fff' : '#15596E', background: filter === 'unread' ? '#0E3F52' : '#E2EEF2', padding: '8px 16px', borderRadius: 100, cursor: 'pointer' }}>Não lidas · {unreadCount}</span>
           <span onClick={markAllRead} style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: '#10847D', cursor: 'pointer' }}>Marcar todas como lidas</span>
         </div>
+        {markErr && (
+          <div style={{ background: '#FBE6E2', border: '1px solid #C0392B', borderRadius: 12, padding: '10px 14px', fontSize: 13, color: '#C0392B' }}>{markErr}</div>
+        )}
 
         {loading ? <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}><div className="spinner" /></div> :
          filtered.length === 0 ? (
@@ -99,9 +114,9 @@ export default function NotificationsPage() {
               </div>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: isSOS ? '#9A2820' : '#606E71', flexShrink: 0 }}>{timeAgo(n.criadoEm)}</span>
               {isSOS ? (
-                <button style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
+                <button onClick={() => nav(routeFor(n))} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
               ) : (
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: n.lida ? '#606E71' : '#10847D', flexShrink: 0, cursor: 'pointer' }}>Ver →</span>
+                <span onClick={() => nav(routeFor(n))} style={{ fontSize: 13.5, fontWeight: 700, color: n.lida ? '#606E71' : '#10847D', flexShrink: 0, cursor: 'pointer' }}>Ver →</span>
               )}
             </div>
           );

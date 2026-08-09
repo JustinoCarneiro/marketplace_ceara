@@ -65,7 +65,7 @@ class AdminControllerTest {
     @Test
     void moderarPrestador_retorna200_eDelegaAoServico() throws Exception {
         UUID userId = UUID.randomUUID();
-        var body = new ModerateRequest(ModerationAction.SUSPENDER);
+        var body = new ModerateRequest(ModerationAction.SUSPENDER, "Reclamações recorrentes de clientes");
 
         mvc.perform(post("/api/v1/admin/providers/{userId}/moderate", userId)
                         .with(csrf())
@@ -160,7 +160,8 @@ class AdminControllerTest {
         UUID srId = UUID.randomUUID();
         when(adminQueryService.findDetalheDisputa(srId)).thenReturn(
                 new DisputaDetalheDto(srId, "ELETRICISTA", "EM_DISPUTA",
-                        BigDecimal.valueOf(500), TransactionStatus.RETIDO, null, null, null, Instant.now()));
+                        BigDecimal.valueOf(500), TransactionStatus.RETIDO, null, null, null, Instant.now(),
+                        "Cliente Teste", "Prestador Teste", List.of()));
 
         mvc.perform(get("/api/v1/admin/disputes/{id}", srId))
                 .andExpect(status().isOk())

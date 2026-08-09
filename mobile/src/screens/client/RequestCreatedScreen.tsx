@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { Feather } from '@expo/vector-icons';
+import { API_BASE } from '../../api/config';
+import { useAuthStore } from '../../store/auth';
 
 type RouteProps = RouteProp<ClientStackParams, 'RequestCreated'>;
 
@@ -24,6 +26,24 @@ const C = {
 export default function RequestCreatedScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
+  const token = useAuthStore(s => s.accessToken);
+  const [summary, setSummary] = useState<{ categoria: string; descricao: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSummary({ categoria: data.categoria, descricao: data.descricao });
+        }
+      } catch {
+        // Card do pedido só não aparece — o essencial (navegar pra "Meus pedidos") não depende disso.
+      }
+    })();
+  }, [route.params.requestId]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -49,15 +69,17 @@ export default function RequestCreatedScreen() {
               <Text style={styles.statusText}>PENDENTE · AGUARDANDO PROPOSTAS</Text>
             </View>
 
-            <View style={styles.serviceCard}>
-              <View style={styles.serviceIconWrap}>
-                <Feather name="zap" size={22} color="#8E6508" />
+            {summary && (
+              <View style={styles.serviceCard}>
+                <View style={styles.serviceIconWrap}>
+                  <Feather name="zap" size={22} color="#8E6508" />
+                </View>
+                <View style={styles.serviceInfo}>
+                  <Text style={styles.serviceTitle} numberOfLines={1}>{summary.descricao}</Text>
+                  <Text style={styles.serviceSubtitle}>{summary.categoria}</Text>
+                </View>
               </View>
-              <View style={styles.serviceInfo}>
-                <Text style={styles.serviceTitle}>Troca de tomada com faísca</Text>
-                <Text style={styles.serviceSubtitle}>Elétrica · Aldeota · R$ 180–320</Text>
-              </View>
-            </View>
+            )}
           </View>
         </ScrollView>
 

@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
-import type { AuthStackParams } from '../../navigation/types';
+import type { AuthNavProp, AuthStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 
@@ -38,6 +38,7 @@ function VerificationPending() {
 }
 
 function VerificationSuccess() {
+  const nav = useNavigation<AuthNavProp>();
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: color.institutional }]}>
       <View style={styles.container}>
@@ -55,6 +56,7 @@ function VerificationSuccess() {
         <TouchableOpacity
           style={[styles.cta, { backgroundColor: color.primary }]}
           activeOpacity={0.85}
+          onPress={() => nav.navigate('Login')}
         >
           <Text style={styles.ctaText}>Começar a trabalhar</Text>
         </TouchableOpacity>
@@ -82,7 +84,11 @@ function VerificationRejected() {
             Não foi possível confirmar seus dados. Entre em contato com o suporte para entender o motivo e tentar novamente.
           </Text>
         </View>
-        <TouchableOpacity style={[styles.cta, { backgroundColor: color.danger }]} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={[styles.cta, { backgroundColor: color.danger }]}
+          activeOpacity={0.85}
+          onPress={() => Linking.openURL('mailto:suporte@onda.app?subject=Verifica%C3%A7%C3%A3o%20n%C3%A3o%20aprovada')}
+        >
           <Text style={styles.ctaText}>Falar com suporte</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.ghostBtn} onPress={logout}>

@@ -3,7 +3,7 @@ import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/err
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity,
+  TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -308,11 +308,17 @@ export default function RequestDetailScreen() {
   async function startService() {
     setActionLoading(true);
     try {
-      await fetch(`${API_BASE}/service-requests/${requestId}/start`, {
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}/start`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        Alert.alert('Não foi possível iniciar', 'Tente novamente em instantes.');
+        return;
+      }
       load();
+    } catch {
+      Alert.alert('Sem conexão', 'Verifique sua internet e tente novamente.');
     } finally {
       setActionLoading(false);
     }
@@ -321,11 +327,17 @@ export default function RequestDetailScreen() {
   async function confirmCompletion() {
     setActionLoading(true);
     try {
-      await fetch(`${API_BASE}/service-requests/${requestId}/confirm-completion`, {
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}/confirm-completion`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        Alert.alert('Não foi possível confirmar', 'Tente novamente em instantes.');
+        return;
+      }
       load();
+    } catch {
+      Alert.alert('Sem conexão', 'Verifique sua internet e tente novamente.');
     } finally {
       setActionLoading(false);
     }

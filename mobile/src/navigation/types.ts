@@ -29,7 +29,7 @@ export type ClientStackParams = {
   AiAssistant: { requestId: string };
   RequestCreated: { requestId: string };
   CompareProposals: { requestId: string };
-  PaymentChoice: { requestId: string; proposalId: string; valor: number };
+  PaymentChoice: { requestId: string; proposalId: string; valor: number; prestadorNome?: string };
   PaymentPix: { requestId: string; valor: number };
   PaymentCard: { requestId: string; valor: number };
   EscrowConfirmed: { requestId: string };

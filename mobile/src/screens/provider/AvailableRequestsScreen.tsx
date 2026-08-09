@@ -3,7 +3,7 @@ import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/err
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, RefreshControl,
+  TouchableOpacity, RefreshControl, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -61,6 +61,8 @@ export default function AvailableRequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
+  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [showFilter, setShowFilter] = useState(false);
 
   const load = useCallback(async () => {
     setHasError(null);
@@ -98,15 +100,21 @@ export default function AvailableRequestsScreen() {
     return `R$ ${r.orcamentoMin ?? r.orcamentoMax}`;
   };
 
+  const categorias = Array.from(new Set(requests.map(catKey))).filter(Boolean);
+  const filtered = selectedCat ? requests.filter(r => catKey(r) === selectedCat) : requests;
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Sticky header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Pedidos disponíveis</Text>
-          <Text style={styles.headerSub}>Elétrica · até 10 km</Text>
+          <Text style={styles.headerSub}>
+            {filtered.length} pedido{filtered.length !== 1 ? 's' : ''}
+            {selectedCat ? ` · ${catLabel({ categoria: selectedCat } as ServiceRequest)}` : ''}
+          </Text>
         </View>
-        <TouchableOpacity style={styles.filterBtn} hitSlop={8}
+        <TouchableOpacity style={styles.filterBtn} hitSlop={8} onPress={() => setShowFilter(true)}
           accessibilityLabel="Filtros" accessibilityRole="button">
           <Feather name="sliders" size={20} color={color.text} accessibilityElementsHidden />
         </TouchableOpacity>
@@ -125,7 +133,7 @@ export default function AvailableRequestsScreen() {
         />
       ) : (
         <FlatList
-          data={requests}
+          data={filtered}
           keyExtractor={r => r.id}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: space[3] + 2 }} />}
@@ -185,6 +193,34 @@ export default function AvailableRequestsScreen() {
           }}
         />
       )}
+
+      <Modal visible={showFilter} transparent animationType="slide" onRequestClose={() => setShowFilter(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDim} activeOpacity={1} onPress={() => setShowFilter(false)} />
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Filtrar por categoria</Text>
+            <View style={styles.modalChips}>
+              <TouchableOpacity
+                style={[styles.modalChip, !selectedCat && styles.modalChipActive]}
+                onPress={() => { setSelectedCat(null); setShowFilter(false); }}
+              >
+                <Text style={[styles.modalChipText, !selectedCat && styles.modalChipTextActive]}>Todas</Text>
+              </TouchableOpacity>
+              {categorias.map(ck => (
+                <TouchableOpacity
+                  key={ck}
+                  style={[styles.modalChip, selectedCat === ck && styles.modalChipActive]}
+                  onPress={() => { setSelectedCat(ck); setShowFilter(false); }}
+                >
+                  <Text style={[styles.modalChipText, selectedCat === ck && styles.modalChipTextActive]}>
+                    {catLabel({ categoria: ck } as ServiceRequest)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -263,4 +299,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   proposalBtnText: { fontSize: 14, fontWeight: font.weight.bold, color: color.textOnAccent },
+
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalDim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(14,42,51,0.55)' },
+  modalSheet: {
+    backgroundColor: color.surface,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    padding: space[5],
+    gap: space[4],
+  },
+  modalTitle: { fontSize: font.size.h3, fontWeight: font.weight.black, color: color.text },
+  modalChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  modalChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: color.bg,
+    borderWidth: 1,
+    borderColor: color.lineSoft,
+  },
+  modalChipActive: { backgroundColor: color.skyTint, borderColor: color.institutional2 },
+  modalChipText: { fontSize: 13, fontWeight: font.weight.semibold, color: color.textSoft },
+  modalChipTextActive: { color: color.institutional2, fontWeight: font.weight.bold },
 });

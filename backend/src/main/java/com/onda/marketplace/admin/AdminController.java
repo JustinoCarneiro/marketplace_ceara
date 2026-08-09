@@ -87,8 +87,10 @@ public class AdminController {
             Authentication auth) {
 
         moderationService.moderar(userId, request.action());
-        auditService.registrar(adminId(auth), "MODERAR_PRESTADOR", "provider", userId,
-                request.action().name());
+        String detalhe = request.justificativa() != null && !request.justificativa().isBlank()
+                ? request.action().name() + ": " + request.justificativa()
+                : request.action().name();
+        auditService.registrar(adminId(auth), "MODERAR_PRESTADOR", "provider", userId, detalhe);
         return ResponseEntity.ok().build();
     }
 

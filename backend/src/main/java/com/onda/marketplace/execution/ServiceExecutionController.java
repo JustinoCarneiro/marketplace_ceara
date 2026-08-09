@@ -36,17 +36,20 @@ public class ServiceExecutionController {
     @PostMapping("/dispute")
     @PreAuthorize("hasAnyRole('CLIENT','PROVIDER')")
     public ResponseEntity<Void> openDispute(@PathVariable UUID id,
-                                             @RequestBody(required = false) OpenDisputeRequest body) {
+                                             @RequestBody(required = false) OpenDisputeRequest body,
+                                             Authentication auth) {
+        UUID userId = auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
         String motivo   = body != null ? body.motivo()   : null;
         String detalhes = body != null ? body.detalhes() : null;
-        executionService.openDispute(id, motivo, detalhes);
+        executionService.openDispute(id, userId, motivo, detalhes);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/cancel")
     @PreAuthorize("hasAnyRole('CLIENT','PROVIDER')")
-    public ResponseEntity<Void> cancel(@PathVariable UUID id) {
-        executionService.cancel(id);
+    public ResponseEntity<Void> cancel(@PathVariable UUID id, Authentication auth) {
+        UUID userId = auth != null ? UUID.fromString(auth.getName()) : UUID.randomUUID();
+        executionService.cancel(id, userId);
         return ResponseEntity.ok().build();
     }
 }

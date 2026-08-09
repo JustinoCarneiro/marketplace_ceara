@@ -1,5 +1,6 @@
 import { API_BASE } from '../../api/config';
 import { uploadMedia } from '../../api/media';
+import { getCurrentCoords } from '../../api/location';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, Alert,
@@ -103,6 +104,7 @@ export default function NewRequestScreen() {
     setLoading(true);
     try {
       const idempotencyKey = `req-${Date.now()}`;
+      const { lat, lng } = await getCurrentCoords();
       const res = await fetch(`${API_BASE}/service-requests`, {
         method: 'POST',
         headers: {
@@ -110,7 +112,7 @@ export default function NewRequestScreen() {
           Authorization: `Bearer ${token}`,
           'X-Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify({ categoria, descricao, lat: -3.7319, lng: -38.5267 }),
+        body: JSON.stringify({ categoria, descricao, lat, lng }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao criar pedido');

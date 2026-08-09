@@ -1,5 +1,7 @@
 package com.onda.marketplace.proposal;
 
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -48,6 +50,20 @@ class ProposalServiceTest {
     }
 
     @Test
+    void create_pedidoJaAceito_lancaRequestClosed() {
+        // US15: só PENDENTE/PROPOSTO aceitam proposta nova — antes, ACEITO/EM_ANDAMENTO/
+        // EM_DISPUTA passavam batido e dava pra empilhar proposta num serviço em execução.
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() ->
+                service.create(sr.getId(), new CreateProposalRequest(BigDecimal.valueOf(200), 2), UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "REQUEST_CLOSED");
+        verify(proposalRepository, never()).save(any());
+    }
+
+    @Test
     void accept_transicionaParaAceito_eFechaOutras() {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var propAlvo = proposal(sr, ProposalStatus.ATIVA);
@@ -66,11 +82,30 @@ class ProposalServiceTest {
     }
 
     @Test
+    void accept_naoEhOClienteDoPedido_lancaForbidden() {
+        // Antes, clienteId nunca era conferido contra o dono real do pedido — qualquer
+        // conta autenticada aceitava proposta de pedido alheio.
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var prop = proposal(sr, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+
+        UUID alheio = UUID.randomUUID();
+        assertThatThrownBy(() -> service.accept(prop.getId(), alheio))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(proposalRepository, never()).save(any());
+    }
+
+    @Test
     void accept_prestadorTentaAceitarOProprioPedido_lancaSelfHireForbidden() {
         // Antifraude Camada 1 (PENDENCIAS_INTEGRIDADE.md): impede auto-contratação — sem
         // isto, o mesmo usuário (dono do pedido = prestador da proposta) fabrica reputação.
-        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        // No self-hire de verdade, quem aceita É o dono do pedido — por isso sr.cliente
+        // também recebe o id do "prestador" aqui, senão o check de posse (novo) dispararia
+        // FORBIDDEN antes de chegar no SELF_HIRE_FORBIDDEN que este teste quer travar.
         UUID prestadorId = UUID.randomUUID();
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        setClienteId(sr, prestadorId);
         var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
 
@@ -93,6 +128,21 @@ class ProposalServiceTest {
     }
 
     @Test
+    void reject_naoEhOClienteDoPedido_lancaForbidden() {
+        // Antes, o parâmetro clienteId chegava até aqui e nunca era usado — qualquer conta
+        // autenticada recusava proposta de prestador em pedido alheio.
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var prop = proposal(sr, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+
+        UUID alheio = UUID.randomUUID();
+        assertThatThrownBy(() -> service.reject(prop.getId(), alheio))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verify(proposalRepository, never()).save(any());
+    }
+
+    @Test
     void create_pedidoNaoExistente_lancaBusinessException() {
         UUID randomId = UUID.randomUUID();
         when(requestRepository.findById(randomId)).thenReturn(Optional.empty());
@@ -108,10 +158,26 @@ class ProposalServiceTest {
         var sr = new ServiceRequest();
         sr.setStatus(status);
         sr.setCategoria("ELETRICISTA");
+        setClienteId(sr, CLIENTE_ID);
         return sr;
     }
 
     private Proposal proposal(ServiceRequest sr, ProposalStatus status) {
         return new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(200), 2, status);
+    }
+
+    /** Constrói um cliente com id fixo (User.id é @GeneratedValue) e associa ao pedido. */
+    private static void setClienteId(ServiceRequest sr, UUID clienteId) {
+        User cliente = User.builder()
+                .nome("Cliente Teste").email("cliente@test.com")
+                .senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
+        try {
+            var field = User.class.getDeclaredField("id");
+            field.setAccessible(true);
+            field.set(cliente, clienteId);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+        sr.setCliente(cliente);
     }
 }

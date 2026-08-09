@@ -39,7 +39,7 @@ PENDENTE ──(prestador envia proposta)──► PROPOSTO
 PROPOSTO ──(cliente aceita + paga/escrow)──► ACEITO
 PROPOSTO ──(cliente recusa / expira)──► CANCELADO
 ACEITO ──(prestador inicia)──► EM_ANDAMENTO
-EM_ANDAMENTO ──(prestador conclui + cliente confirma)──► CONCLUIDO  → split/repasse
+EM_ANDAMENTO ──(cliente confirma conclusão)──► CONCLUIDO  → split/repasse
 EM_ANDAMENTO ──(qualquer parte abre disputa)──► EM_DISPUTA
 EM_DISPUTA ──(mediação)──► CONCLUIDO | CANCELADO(reembolso)
 ACEITO | EM_ANDAMENTO ──(cancelamento permitido)──► CANCELADO(reembolso)

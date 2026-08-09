@@ -2,4 +2,4 @@ package com.onda.marketplace.admin;
 
 import jakarta.validation.constraints.NotNull;
 
-public record ModerateRequest(@NotNull ModerationAction action) {}
+public record ModerateRequest(@NotNull ModerationAction action, String justificativa) {}

@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity, PanResponder,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { ClientNavProp } from '../../navigation/types';
 import { color, font, radius } from '../../theme';
+import { useFiltersStore } from '../../store/filters';
 
 const RATING_CHIPS = [
   { label: 'Todas', value: 0 },
@@ -14,10 +15,34 @@ const RATING_CHIPS = [
   { label: '4,5+', value: 4.5 },
 ];
 
+const RAIO_MIN = 1;
+const RAIO_MAX = 20;
+
 export default function FiltersScreen() {
   const nav = useNavigation<ClientNavProp>();
-  const [raioKm, setRaioKm] = useState(8);
-  const [notaMin, setNotaMin] = useState(4);
+  const storeRaioKm = useFiltersStore(s => s.raioKm);
+  const storeNotaMin = useFiltersStore(s => s.notaMin);
+  const setStoreRaioKm = useFiltersStore(s => s.setRaioKm);
+  const setStoreNotaMin = useFiltersStore(s => s.setNotaMin);
+
+  const [raioKm, setRaioKm] = useState(storeRaioKm);
+  const [notaMin, setNotaMin] = useState(storeNotaMin);
+
+  const trackWidth = useRef(0);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: e => updateFromX(e.nativeEvent.locationX),
+      onPanResponderMove: e => updateFromX(e.nativeEvent.locationX),
+    }),
+  ).current;
+
+  function updateFromX(x: number) {
+    if (trackWidth.current <= 0) return;
+    const pct = Math.min(1, Math.max(0, x / trackWidth.current));
+    setRaioKm(Math.round(RAIO_MIN + pct * (RAIO_MAX - RAIO_MIN)));
+  }
 
   function handleClear() {
     setRaioKm(8);
@@ -25,10 +50,12 @@ export default function FiltersScreen() {
   }
 
   function apply() {
+    setStoreRaioKm(raioKm);
+    setStoreNotaMin(notaMin);
     nav.goBack();
   }
 
-  const sliderPct = Math.round(((raioKm - 1) / 19) * 100);
+  const sliderPct = Math.round(((raioKm - RAIO_MIN) / (RAIO_MAX - RAIO_MIN)) * 100);
 
   return (
     <View style={styles.container}>
@@ -48,7 +75,12 @@ export default function FiltersScreen() {
             <Text style={styles.sectionTitle}>Raio de busca</Text>
             <Text style={styles.sectionValue}>{raioKm} km</Text>
           </View>
-          <View style={styles.sliderTrack}>
+          <View
+            style={styles.sliderTrack}
+            onLayout={e => { trackWidth.current = e.nativeEvent.layout.width; }}
+            hitSlop={{ top: 14, bottom: 14 }}
+            {...panResponder.panHandlers}
+          >
             <View style={[styles.sliderFill, { width: `${sliderPct}%` }]} />
             <View style={[styles.sliderThumb, { left: `${sliderPct}%` }]} />
           </View>
