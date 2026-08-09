@@ -45,7 +45,7 @@ export default function RegisterClientScreen() {
       const res = await fetch(`${API_BASE}/auth/register/client`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, senha }),
+        body: JSON.stringify({ nome, email, senha, aceitouTermos: acceptedTerms }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');

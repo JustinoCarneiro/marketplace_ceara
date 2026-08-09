@@ -1,6 +1,7 @@
 package com.onda.marketplace.provider;
 
 import com.onda.marketplace.auth.AuthResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,7 @@ public class ProviderController {
 
     @PostMapping("/register/provider")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse register(@Valid @RequestBody RegisterProviderRequest req) {
-        return providerService.register(req);
+    public AuthResponse register(@Valid @RequestBody RegisterProviderRequest req, HttpServletRequest httpReq) {
+        return providerService.register(req, httpReq.getRemoteAddr());
     }
 }

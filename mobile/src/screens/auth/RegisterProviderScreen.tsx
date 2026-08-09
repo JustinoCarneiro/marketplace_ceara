@@ -22,19 +22,22 @@ export default function RegisterProviderScreen() {
   const [senha, setSenha] = useState('');
   const [bio, setBio] = useState('');
   const [categoria, setCategoria] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   async function handleRegister() {
     setError('');
     if (!categoria) { setError('Selecione uma categoria.'); return; }
+    // docs/PENDENCIAS_JURIDICAS.md item 3: backend exige aceitouTermos=true (422 sem isso).
+    if (!acceptedTerms) { setError('É preciso aceitar os Termos de Uso e a Política de Privacidade.'); return; }
     setLoading(true);
     try {
       // Backend aceita 1 categoria por prestador (RegisterProviderRequest.categoria: String).
       const res = await fetch(`${API_BASE}/auth/register/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, cpf, email, senha, categoria, bio }),
+        body: JSON.stringify({ nome, cpf, email, senha, categoria, bio, aceitouTermos: acceptedTerms }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao cadastrar');
@@ -163,6 +166,32 @@ export default function RegisterProviderScreen() {
                 <Text style={styles.locText}>Aldeota · raio 10 km</Text>
               </View>
             </View>
+
+            {/* Termos */}
+            <TouchableOpacity
+              testID="checkbox-termos"
+              style={styles.termsRow}
+              onPress={() => setAcceptedTerms(v => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+                {acceptedTerms && <Feather name="check" size={13} color={color.textOnAccent} />}
+              </View>
+              <Text style={styles.termsText}>
+                Li e aceito os{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => nav.navigate('Legal', { doc: 'terms' })}
+                  suppressHighlighting
+                >Termos de Uso</Text>
+                {' '}e a{' '}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => nav.navigate('Legal', { doc: 'privacy' })}
+                  suppressHighlighting
+                >Política de Privacidade</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {error ? (
@@ -259,6 +288,18 @@ const styles = StyleSheet.create({
     padding: space[3] + 2,
   },
   locText: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.text },
+
+  termsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4 },
+  checkbox: {
+    width: 20, height: 20, borderRadius: 5,
+    borderWidth: 1.5, borderColor: color.lineSoft,
+    backgroundColor: color.surface,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: { backgroundColor: color.primary, borderColor: color.primary },
+  termsText: { flex: 1, fontSize: font.size.caption + 0.5, color: color.textSoft, lineHeight: 18 },
+  termsLink: { color: color.primaryInk, fontWeight: font.weight.semibold },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: space[3] },
   errorText: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },

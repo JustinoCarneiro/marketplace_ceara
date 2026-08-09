@@ -89,7 +89,8 @@ class E2EFluxoPrincipalTest {
                         {
                           "nome":  "Maria Fortaleza",
                           "email": "maria.e2e@onda.test",
-                          "senha": "Senha@123"
+                          "senha": "Senha@123",
+                          "aceitouTermos": true
                         }
                         """)
                 .when()
@@ -113,7 +114,8 @@ class E2EFluxoPrincipalTest {
                           "senha":     "Senha@123",
                           "cpf":       "123.456.789-09",
                           "categoria": "eletrica",
-                          "bio":       "Eletricista há 12 anos em Fortaleza."
+                          "bio":       "Eletricista há 12 anos em Fortaleza.",
+                          "aceitouTermos": true
                         }
                         """)
                 .when()

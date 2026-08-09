@@ -3,6 +3,7 @@ package com.onda.marketplace.provider;
 import com.onda.marketplace.auth.AuthResponse;
 import com.onda.marketplace.auth.JwtService;
 import com.onda.marketplace.auth.RefreshTokenRepository;
+import com.onda.marketplace.auth.TermsAcceptanceRepository;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +27,7 @@ class ProviderServiceTest {
     @Mock RefreshTokenRepository   refreshTokenRepository;
     @Mock JwtService               jwtService;
     @Mock BackgroundCheckService   backgroundCheckService;
+    @Mock TermsAcceptanceRepository termsAcceptanceRepository;
 
     ProviderService providerService;
 
@@ -35,29 +37,30 @@ class ProviderServiceTest {
         var encryptor = new CpfEncryptor("01234567890123456789012345678901");
         providerService = new ProviderService(
                 userRepository, profileRepository, refreshTokenRepository,
-                jwtService, encoder, encryptor, backgroundCheckService, 30L);
+                jwtService, encoder, encryptor, backgroundCheckService, termsAcceptanceRepository, 30L);
     }
 
     @Test
     void register_createsUserWithRoleProvider() {
         var req = new RegisterProviderRequest(
-                "Carlos", "carlos@test.com", "Senha@123", "999.999.999-99", "ELETRICISTA", null);
+                "Carlos", "carlos@test.com", "Senha@123", "999.999.999-99", "ELETRICISTA", null, true);
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(jwtService.generateAccessToken(any())).thenReturn("tok");
 
-        AuthResponse resp = providerService.register(req);
+        AuthResponse resp = providerService.register(req, "203.0.113.5");
 
         assertThat(resp.role()).isEqualTo("ROLE_PROVIDER");
         verify(backgroundCheckService).scheduleCheck(any());
+        verify(termsAcceptanceRepository).save(any());
     }
 
     @Test
     void register_cpfNeverStoredAsPlainText() {
         var req = new RegisterProviderRequest(
-                "Carlos", "c2@test.com", "Senha@123", "123.456.789-09", "ELETRICISTA", null);
+                "Carlos", "c2@test.com", "Senha@123", "123.456.789-09", "ELETRICISTA", null, true);
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> {
@@ -68,7 +71,7 @@ class ProviderServiceTest {
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(jwtService.generateAccessToken(any())).thenReturn("tok");
 
-        providerService.register(req);
+        providerService.register(req, "203.0.113.5");
         verify(profileRepository).save(any());
     }
 
@@ -77,7 +80,7 @@ class ProviderServiceTest {
         when(userRepository.existsByEmail("dup@test.com")).thenReturn(true);
 
         assertThatThrownBy(() -> providerService.register(
-                new RegisterProviderRequest("X", "dup@test.com", "P@ss1", "000", "EL", null)))
+                new RegisterProviderRequest("X", "dup@test.com", "P@ss1", "000", "EL", null, true), "203.0.113.5"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "EMAIL_IN_USE");
     }

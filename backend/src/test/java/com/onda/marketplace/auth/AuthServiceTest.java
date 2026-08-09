@@ -25,6 +25,7 @@ class AuthServiceTest {
     @Mock JwtService            jwtService;
     @Mock PasswordEncoder       passwordEncoder;
     @Mock CpfHashService        cpfHashService;
+    @Mock TermsAcceptanceRepository termsAcceptanceRepository;
 
     AuthService authService;
 
@@ -32,19 +33,19 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, jwtService,
-                passwordEncoder, cpfHashService, 30L);
+                passwordEncoder, cpfHashService, termsAcceptanceRepository, 30L);
     }
 
     @Test
     void registerClient_passwordNeverStoredAsPlainText() {
-        var req = new RegisterClientRequest("Ana", "ana@example.com", "Senha@123");
+        var req = new RegisterClientRequest("Ana", "ana@example.com", "Senha@123", true);
         when(userRepository.existsByEmail("ana@example.com")).thenReturn(false);
         when(passwordEncoder.encode("Senha@123")).thenReturn("$2a$hash");
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(jwtService.generateAccessToken(any())).thenReturn("access");
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        authService.registerClient(req);
+        authService.registerClient(req, "203.0.113.5");
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
@@ -57,12 +58,31 @@ class AuthServiceTest {
     }
 
     @Test
+    void registerClient_gravaProvaDeAceite() {
+        // docs/PENDENCIAS_JURIDICAS.md item 3 — prova de consentimento informado.
+        var req = new RegisterClientRequest("Ana", "ana@example.com", "Senha@123", true);
+        when(userRepository.existsByEmail("ana@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("Senha@123")).thenReturn("$2a$hash");
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jwtService.generateAccessToken(any())).thenReturn("access");
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.registerClient(req, "203.0.113.5");
+
+        ArgumentCaptor<TermsAcceptance> captor = ArgumentCaptor.forClass(TermsAcceptance.class);
+        verify(termsAcceptanceRepository).save(captor.capture());
+        TermsAcceptance saved = captor.getValue();
+        assertThat(saved.getDocVersion()).isEqualTo(TermsAcceptance.CURRENT_DOC_VERSION);
+        assertThat(saved.getIpAddress()).isEqualTo("203.0.113.5");
+    }
+
+    @Test
     void registerClient_duplicateEmail_throwsBusinessException() {
         when(userRepository.existsByEmail("dup@example.com")).thenReturn(true);
 
         assertThatThrownBy(() ->
                 authService.registerClient(
-                        new RegisterClientRequest("X", "dup@example.com", "Senha@123")))
+                        new RegisterClientRequest("X", "dup@example.com", "Senha@123", true), "203.0.113.5"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "EMAIL_IN_USE");
     }

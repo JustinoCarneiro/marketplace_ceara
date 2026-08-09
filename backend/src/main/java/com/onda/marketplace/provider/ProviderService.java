@@ -4,6 +4,8 @@ import com.onda.marketplace.auth.AuthResponse;
 import com.onda.marketplace.auth.JwtService;
 import com.onda.marketplace.auth.RefreshToken;
 import com.onda.marketplace.auth.RefreshTokenRepository;
+import com.onda.marketplace.auth.TermsAcceptance;
+import com.onda.marketplace.auth.TermsAcceptanceRepository;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
@@ -25,14 +27,15 @@ import java.util.UUID;
 @SuppressWarnings("null")
 public class ProviderService {
 
-    private final UserRepository           userRepository;
+    private final UserRepository            userRepository;
     private final ProviderProfileRepository profileRepository;
-    private final RefreshTokenRepository   refreshTokenRepository;
-    private final JwtService               jwtService;
-    private final PasswordEncoder          passwordEncoder;
-    private final CpfEncryptor             cpfEncryptor;
-    private final BackgroundCheckService   backgroundCheckService;
-    private final long                     refreshTokenDays;
+    private final RefreshTokenRepository    refreshTokenRepository;
+    private final JwtService                jwtService;
+    private final PasswordEncoder           passwordEncoder;
+    private final CpfEncryptor              cpfEncryptor;
+    private final BackgroundCheckService    backgroundCheckService;
+    private final TermsAcceptanceRepository termsAcceptanceRepository;
+    private final long                      refreshTokenDays;
 
     public ProviderService(
             UserRepository userRepository,
@@ -42,19 +45,21 @@ public class ProviderService {
             PasswordEncoder passwordEncoder,
             CpfEncryptor cpfEncryptor,
             BackgroundCheckService backgroundCheckService,
+            TermsAcceptanceRepository termsAcceptanceRepository,
             @Value("${jwt.refresh-token-days:30}") long refreshTokenDays) {
-        this.userRepository         = userRepository;
-        this.profileRepository      = profileRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.jwtService             = jwtService;
-        this.passwordEncoder        = passwordEncoder;
-        this.cpfEncryptor           = cpfEncryptor;
-        this.backgroundCheckService = backgroundCheckService;
-        this.refreshTokenDays       = refreshTokenDays;
+        this.userRepository            = userRepository;
+        this.profileRepository         = profileRepository;
+        this.refreshTokenRepository    = refreshTokenRepository;
+        this.jwtService                = jwtService;
+        this.passwordEncoder           = passwordEncoder;
+        this.cpfEncryptor              = cpfEncryptor;
+        this.backgroundCheckService    = backgroundCheckService;
+        this.termsAcceptanceRepository = termsAcceptanceRepository;
+        this.refreshTokenDays          = refreshTokenDays;
     }
 
     @Transactional
-    public AuthResponse register(RegisterProviderRequest req) {
+    public AuthResponse register(RegisterProviderRequest req, String ipAddress) {
         if (userRepository.existsByEmail(req.email())) {
             throw new BusinessException("EMAIL_IN_USE", "E-mail já cadastrado.");
         }
@@ -65,6 +70,8 @@ public class ProviderService {
                 .role(UserRole.ROLE_PROVIDER)
                 .build();
         userRepository.save(user);
+        termsAcceptanceRepository.save(
+                new TermsAcceptance(user.getId(), TermsAcceptance.CURRENT_DOC_VERSION, ipAddress));
 
         String cpfCifrado = cpfEncryptor.encrypt(req.cpf());
         ProviderProfile profile = new ProviderProfile(user, req.categoria(), cpfCifrado);

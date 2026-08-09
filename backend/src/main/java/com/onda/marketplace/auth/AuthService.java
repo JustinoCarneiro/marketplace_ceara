@@ -18,12 +18,13 @@ import java.util.UUID;
 @SuppressWarnings("null")
 public class AuthService {
 
-    private final UserRepository        userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final JwtService            jwtService;
-    private final PasswordEncoder       passwordEncoder;
-    private final CpfHashService        cpfHashService;
-    private final long                  refreshTokenDays;
+    private final UserRepository            userRepository;
+    private final RefreshTokenRepository    refreshTokenRepository;
+    private final JwtService                jwtService;
+    private final PasswordEncoder           passwordEncoder;
+    private final CpfHashService            cpfHashService;
+    private final TermsAcceptanceRepository termsAcceptanceRepository;
+    private final long                      refreshTokenDays;
 
     public AuthService(
             UserRepository userRepository,
@@ -31,13 +32,15 @@ public class AuthService {
             JwtService jwtService,
             PasswordEncoder passwordEncoder,
             CpfHashService cpfHashService,
+            TermsAcceptanceRepository termsAcceptanceRepository,
             @Value("${jwt.refresh-token-days:30}") long refreshTokenDays) {
-        this.userRepository         = userRepository;
-        this.refreshTokenRepository = refreshTokenRepository;
-        this.jwtService             = jwtService;
-        this.passwordEncoder        = passwordEncoder;
-        this.cpfHashService         = cpfHashService;
-        this.refreshTokenDays       = refreshTokenDays;
+        this.userRepository            = userRepository;
+        this.refreshTokenRepository    = refreshTokenRepository;
+        this.jwtService                = jwtService;
+        this.passwordEncoder           = passwordEncoder;
+        this.cpfHashService            = cpfHashService;
+        this.termsAcceptanceRepository = termsAcceptanceRepository;
+        this.refreshTokenDays          = refreshTokenDays;
     }
 
     /**
@@ -65,7 +68,7 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse registerClient(RegisterClientRequest req) {
+    public AuthResponse registerClient(RegisterClientRequest req, String ipAddress) {
         if (userRepository.existsByEmail(req.email())) {
             throw new BusinessException("EMAIL_IN_USE", "E-mail já cadastrado.");
         }
@@ -76,6 +79,10 @@ public class AuthService {
                 .role(UserRole.ROLE_CLIENT)
                 .build();
         userRepository.save(user);
+        // Prova de consentimento informado (docs/PENDENCIAS_JURIDICAS.md item 3) — validação
+        // @AssertTrue no request já barra cadastro sem aceite; isto é o registro da prova.
+        termsAcceptanceRepository.save(
+                new TermsAcceptance(user.getId(), TermsAcceptance.CURRENT_DOC_VERSION, ipAddress));
         return buildAuthResponse(user);
     }
 

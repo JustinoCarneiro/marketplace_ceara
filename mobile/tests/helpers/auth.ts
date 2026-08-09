@@ -47,6 +47,7 @@ export async function registerPrestador(page: Page, p: PrestadorSeed) {
   await page.getByPlaceholder('jose@email.com').fill(p.email);
   await page.getByPlaceholder('mínimo 8 caracteres').fill(p.senha);
   await page.getByText(p.categoria, { exact: true }).click();
+  await page.getByText(/Li e aceito os/i).click();
   await page.getByText('Enviar para verificação', { exact: true }).click();
 
   // "EM VERIFICAÇÃO" sozinho é ambíguo: o rodapé do PRÓPRIO formulário já promete esse badge

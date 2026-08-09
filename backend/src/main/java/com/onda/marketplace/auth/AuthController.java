@@ -1,5 +1,6 @@
 package com.onda.marketplace.auth;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -21,8 +22,8 @@ public class AuthController {
     /** US01 — Cadastro do Cliente */
     @PostMapping("/register/client")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse registerClient(@Valid @RequestBody RegisterClientRequest req) {
-        return authService.registerClient(req);
+    public AuthResponse registerClient(@Valid @RequestBody RegisterClientRequest req, HttpServletRequest httpReq) {
+        return authService.registerClient(req, httpReq.getRemoteAddr());
     }
 
     /** US12 — Login */

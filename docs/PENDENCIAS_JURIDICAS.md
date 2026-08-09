@@ -38,7 +38,12 @@ Pontos que precisam de validação jurídica:
 
 ## 3. Registro de Aceite (backend)
 
-- [ ] O backend deve registrar no banco: `user_id`, `doc_version`, `accepted_at` (timestamp UTC), `ip_address` no momento do cadastro — prova do consentimento informado.
+- [x] **Concluído em 2026-08-09.** Tabela `terms_acceptance` (`user_id`, `doc_version`,
+  `accepted_at` UTC, `ip_address`) gravada em `POST /auth/register/client` e
+  `/auth/register/provider`; o backend rejeita o cadastro (422) se `aceitouTermos` não vier
+  `true`. `doc_version` atual: `TermsAcceptance.CURRENT_DOC_VERSION` = `"v1-rascunho"` —
+  **atualizar essa constante** quando o conteúdo de Termos/Privacidade for validado
+  juridicamente (item 1/2 abaixo), para que o aceite antigo não seja confundido com o novo.
 
 ---
 

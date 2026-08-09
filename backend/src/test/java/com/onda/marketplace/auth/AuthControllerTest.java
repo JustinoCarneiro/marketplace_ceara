@@ -43,7 +43,7 @@ class AuthControllerTest {
 
     @Test
     void registerClient_validData_returns201WithTokens() throws Exception {
-        when(authService.registerClient(any())).thenReturn(FAKE_RESPONSE);
+        when(authService.registerClient(any(), any())).thenReturn(FAKE_RESPONSE);
 
         mvc.perform(post("/api/v1/auth/register/client")
                         .with(csrf())
@@ -51,7 +51,8 @@ class AuthControllerTest {
                         .content(mapper.writeValueAsString(Map.of(
                                 "nome", "João Silva",
                                 "email", "joao@example.com",
-                                "senha", "Senha@123"
+                                "senha", "Senha@123",
+                                "aceitouTermos", true
                         ))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").isString())
@@ -61,7 +62,7 @@ class AuthControllerTest {
 
     @Test
     void registerClient_duplicateEmail_returns422EmailInUse() throws Exception {
-        when(authService.registerClient(any()))
+        when(authService.registerClient(any(), any()))
                 .thenThrow(new BusinessException("EMAIL_IN_USE", "E-mail já cadastrado."));
 
         mvc.perform(post("/api/v1/auth/register/client")
@@ -70,7 +71,8 @@ class AuthControllerTest {
                         .content(mapper.writeValueAsString(Map.of(
                                 "nome", "Maria",
                                 "email", "duplicado@example.com",
-                                "senha", "Senha@123"
+                                "senha", "Senha@123",
+                                "aceitouTermos", true
                         ))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("EMAIL_IN_USE"));
@@ -82,6 +84,22 @@ class AuthControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void registerClient_termosNaoAceitos_returns422ValidationError() throws Exception {
+        // docs/PENDENCIAS_JURIDICAS.md item 3 — sem aceite não há cadastro.
+        mvc.perform(post("/api/v1/auth/register/client")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of(
+                                "nome", "João Silva",
+                                "email", "joao@example.com",
+                                "senha", "Senha@123",
+                                "aceitouTermos", false
+                        ))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
