@@ -343,6 +343,37 @@ export default function RequestDetailScreen() {
     }
   }
 
+  async function cancelRequest() {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/service-requests/${requestId}/cancel`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        Alert.alert('Não foi possível cancelar', 'Tente novamente em instantes.');
+        return;
+      }
+      load();
+    } catch {
+      Alert.alert('Sem conexão', 'Verifique sua internet e tente novamente.');
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Cancelar move dinheiro (dispara reembolso do escrow) e não tem desfazer — confirma antes.
+  function confirmarCancelamento() {
+    Alert.alert(
+      'Cancelar este pedido?',
+      'O serviço será cancelado e o valor retido volta para você. Não dá para desfazer.',
+      [
+        { text: 'Voltar', style: 'cancel' },
+        { text: 'Cancelar pedido', style: 'destructive', onPress: cancelRequest },
+      ],
+    );
+  }
+
   const isProvider = role === 'ROLE_PROVIDER';
   const isClient = role === 'ROLE_CLIENT';
   const st = request?.status ?? '';
@@ -527,11 +558,12 @@ export default function RequestDetailScreen() {
         <View style={styles.footerRow}>
           {showCancel && (
             <TouchableOpacity
-              style={styles.btnGhost}
-              onPress={() => nav.goBack()}
+              style={[styles.btnGhost, actionLoading && { opacity: 0.6 }]}
+              onPress={confirmarCancelamento}
+              disabled={actionLoading}
               activeOpacity={0.75}
             >
-              <Text style={styles.btnGhostText}>Cancelar</Text>
+              <Text style={styles.btnGhostText}>Cancelar pedido</Text>
             </TouchableOpacity>
           )}
           {showDispute && (

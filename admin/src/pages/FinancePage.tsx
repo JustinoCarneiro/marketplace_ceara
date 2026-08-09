@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, downloadFile } from '../api/client';
 
-interface Transaction { id: string; serviceRequestId: string; prestadorNome?: string; valorTotal: number; statusPagamento: string; criadaEm: string; }
-interface OutboxEvent { id: string; tipo: string; entidade: string; tentativas: number; status: string; }
+// Espelham TransacaoAdminDto e OutboxAdminDto do backend, campo a campo. O outbox declarava
+// `tipo`/`entidade` — os nomes reais são `tipoEvento`/`agregado`, então toda linha da fila de
+// falhas renderizava em branco e o admin reprocessava sem saber o que era.
+interface Transaction { id: string; serviceRequestId: string; valorTotal: number; statusPagamento: string; }
+interface OutboxEvent { id: string; agregado: string; tipoEvento: string; tentativas: number; status: string; }
 
 // GET /admin/transactions filtra por 1 status só (?status=, default RETIDO) — sem essas 3
 // chamadas em paralelo, os KPIs "Liberado"/"Reembolsado" e a tabela nunca mostravam nada
@@ -119,8 +122,8 @@ export default function FinancePage() {
                 {outbox.map(e => (
                   <div key={e.id} style={{ background: '#fff', borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33', fontFamily: 'monospace' }}>{e.tipo}</div>
-                      <div style={{ fontSize: 12, color: '#606E71' }}>{e.entidade} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33', fontFamily: 'monospace' }}>{e.tipoEvento}</div>
+                      <div style={{ fontSize: 12, color: '#606E71' }}>{e.agregado} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
                     <button onClick={() => reprocess(e.id)} disabled={reprocessingId === e.id} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: reprocessingId === e.id ? 'default' : 'pointer', opacity: reprocessingId === e.id ? 0.6 : 1 }}>{reprocessingId === e.id ? 'Reprocessando…' : 'Reprocessar'}</button>
@@ -138,7 +141,7 @@ export default function FinancePage() {
               {txs.slice(0, 20).map(t => (
                 <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 0.9fr', padding: '13px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center' }}>
                   <span style={{ fontSize: 13, color: '#4C636A', fontFamily: 'monospace' }}>tx_{t.id.slice(-4)}</span>
-                  <span style={{ fontSize: 13, color: '#0E2A33' }}>#{t.serviceRequestId?.slice(-4)}{t.prestadorNome ? ` · ${t.prestadorNome}` : ''}</span>
+                  <span style={{ fontSize: 13, color: '#0E2A33' }}>#{t.serviceRequestId?.slice(-4)}</span>
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0E2A33' }}>{fmt(t.valorTotal)}</span>
                   {statusBadge(t.statusPagamento)}
                 </div>

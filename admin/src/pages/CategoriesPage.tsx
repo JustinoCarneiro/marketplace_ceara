@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from '../api/client';
 
-interface Category { id: string; nome: string; slug: string; cor?: string; ativa: boolean; totalPrestadores?: number; }
+// Espelha CategoryDto do backend. Não existe totalPrestadores — a tela exibia
+// "{c.totalPrestadores ?? 0} prestadores", ou seja, "0 prestadores" fixo para toda
+// categoria, mesmo as com prestadores ativos, parecendo dado real.
+interface Category { id: string; nome: string; slug: string; ativa: boolean; }
 
 const CAT_COLORS: Record<string, string> = { eletrica: '#F2B015', hidraulica: '#15596E', limpeza: '#1B8C84', pintura: '#DA6A32', reforma: '#244C86', jardinagem: '#3C7A4E', geral: '#10847D' };
 
@@ -95,7 +98,7 @@ export default function CategoriesPage() {
                   <>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: '#0E2A33' }}>{c.nome}</div>
-                      <div style={{ fontSize: 12.5, color: '#606E71' }}>{c.totalPrestadores ?? 0} prestadores</div>
+                      <div style={{ fontSize: 12.5, color: '#606E71' }}>{c.slug}</div>
                     </div>
                     <span
                       onClick={() => toggleAtiva(c)}

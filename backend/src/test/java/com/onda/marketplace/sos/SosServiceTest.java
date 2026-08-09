@@ -4,6 +4,7 @@ import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.payment.OutboxEvent;
 import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.OutboxStatus;
+import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,9 +24,10 @@ import static org.mockito.Mockito.*;
 @SuppressWarnings("null")
 class SosServiceTest {
 
-    @Mock SosAlertRepository    alertRepository;
-    @Mock OutboxEventRepository outboxRepository;
-    @Mock NotificationService   notificationService;
+    @Mock SosAlertRepository       alertRepository;
+    @Mock OutboxEventRepository    outboxRepository;
+    @Mock NotificationService      notificationService;
+    @Mock ServiceRequestRepository srRepository;
 
     SosService service;
 
@@ -34,7 +36,7 @@ class SosServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SosService(alertRepository, outboxRepository, notificationService);
+        service = new SosService(alertRepository, outboxRepository, notificationService, srRepository);
     }
 
     @Test
@@ -68,12 +70,35 @@ class SosServiceTest {
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         UUID srId = UUID.randomUUID();
+        when(srRepository.isParticipante(srId, USER_ID)).thenReturn(true);
+
         service.acionarSos(USER_ID, new AcionarSosRequest(srId,
                 BigDecimal.valueOf(-3.71), BigDecimal.valueOf(-38.54)));
 
         ArgumentCaptor<SosAlert> captor = ArgumentCaptor.forClass(SosAlert.class);
         verify(alertRepository).save(captor.capture());
         assertThat(captor.getValue().getServiceRequestId()).isEqualTo(srId);
+        assertThat(captor.getValue().getLatitude()).isEqualByComparingTo(BigDecimal.valueOf(-3.71));
+    }
+
+    @Test
+    void acionarSos_pedidoAlheio_registraAlertaSemOVinculo() {
+        // Botão de pânico: o acionamento NUNCA é recusado (quem está em risco tem que
+        // conseguir acionar). Mas um vínculo não conferido apontaria o admin para o pedido
+        // de outra pessoa no meio da emergência — então o alerta é salvo sem ele.
+        when(alertRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        UUID srAlheio = UUID.randomUUID();
+        when(srRepository.isParticipante(srAlheio, USER_ID)).thenReturn(false);
+
+        SosAlertDto dto = service.acionarSos(USER_ID, new AcionarSosRequest(srAlheio,
+                BigDecimal.valueOf(-3.71), BigDecimal.valueOf(-38.54)));
+
+        assertThat(dto.status()).isEqualTo("ATIVO");   // acionou, não foi recusado
+        ArgumentCaptor<SosAlert> captor = ArgumentCaptor.forClass(SosAlert.class);
+        verify(alertRepository).save(captor.capture());
+        assertThat(captor.getValue().getServiceRequestId()).isNull();
         assertThat(captor.getValue().getLatitude()).isEqualByComparingTo(BigDecimal.valueOf(-3.71));
     }
 

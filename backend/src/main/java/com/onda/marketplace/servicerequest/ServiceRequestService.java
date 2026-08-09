@@ -51,7 +51,10 @@ public class ServiceRequestService {
 
     @Transactional
     public ServiceRequestDto create(UUID clienteId, CreateServiceRequestRequest req, String idempotencyKey) {
-        return requestRepository.findByIdempotencyKey(idempotencyKey)
+        // Escopada ao cliente: a chave vem do app (`req-<timestamp>`) e colide de verdade
+        // entre usuários diferentes no mesmo milissegundo. Buscando só pela chave, o segundo
+        // cliente recebia de volta o pedido do primeiro — id e descrição do problema (V14).
+        return requestRepository.findByIdempotencyKeyAndCliente_Id(idempotencyKey, clienteId)
                 .map(ServiceRequestDto::from)
                 .orElseGet(() -> criarNovo(clienteId, req, idempotencyKey));
     }

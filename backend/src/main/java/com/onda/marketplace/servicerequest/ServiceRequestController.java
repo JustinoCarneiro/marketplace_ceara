@@ -2,6 +2,7 @@ package com.onda.marketplace.servicerequest;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,8 +20,11 @@ public class ServiceRequestController {
         this.service = service;
     }
 
+    // Só cliente origina/edita pedido (US04). Sem isto, uma conta ROLE_PROVIDER criava e
+    // publicava pedidos como se fosse cliente — a posse já era checada, mas o papel não.
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('CLIENT')")
     public ServiceRequestDto create(
             @RequestHeader("X-Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody CreateServiceRequestRequest req,
@@ -32,6 +36,7 @@ public class ServiceRequestController {
 
     @PostMapping("/{id}/media")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('CLIENT')")
     public MediaUploadResponse addMedia(
             @PathVariable UUID id,
             @RequestParam("file") MultipartFile file,
@@ -66,6 +71,7 @@ public class ServiceRequestController {
 
     /** Confirma a descrição final do pedido depois da revisão com a IA. */
     @PostMapping("/{id}/publish")
+    @PreAuthorize("hasRole('CLIENT')")
     public ServiceRequestDto publicar(
             @PathVariable UUID id,
             @Valid @RequestBody PublishRequest req,

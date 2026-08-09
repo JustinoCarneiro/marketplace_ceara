@@ -62,6 +62,18 @@ export default function NotificationsPage() {
     catch (e: unknown) { setMarkErr(e instanceof Error ? e.message : 'Erro ao marcar como lidas.'); }
   }
 
+  /**
+   * Abrir o alerta marca ele como lido (POST /notifications/{id}/read já existia no backend
+   * e nenhuma tela chamava): sem isso, item já tratado seguia contando como não lido para
+   * sempre, e só "marcar todas" zerava — apagando também o que ninguém viu.
+   */
+  async function abrir(n: Notification) {
+    if (!n.lida) {
+      await api.post(`/admin/notifications/${n.id}/read`, {}).catch(() => { /* navegar é o que importa */ });
+    }
+    nav(routeFor(n));
+  }
+
   const unreadCount = notifs.filter(n => !n.lida).length;
   const filtered = filter === 'unread' ? notifs.filter(n => !n.lida) : notifs;
 
@@ -114,9 +126,9 @@ export default function NotificationsPage() {
               </div>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: isSOS ? '#9A2820' : '#606E71', flexShrink: 0 }}>{timeAgo(n.criadoEm)}</span>
               {isSOS ? (
-                <button onClick={() => nav(routeFor(n))} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
+                <button onClick={() => abrir(n)} style={{ height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#C0392B', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', flexShrink: 0, boxShadow: '0 12px 22px -12px rgba(192,57,43,.8)' }}>Ver pedido</button>
               ) : (
-                <span onClick={() => nav(routeFor(n))} style={{ fontSize: 13.5, fontWeight: 700, color: n.lida ? '#606E71' : '#10847D', flexShrink: 0, cursor: 'pointer' }}>Ver →</span>
+                <span onClick={() => abrir(n)} style={{ fontSize: 13.5, fontWeight: 700, color: n.lida ? '#606E71' : '#10847D', flexShrink: 0, cursor: 'pointer' }}>Ver →</span>
               )}
             </div>
           );

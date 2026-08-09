@@ -1,8 +1,11 @@
 import { getToken, clearToken } from '../store/auth';
 
-const BASE =
+/** Exportado para o login usar a MESMA base — ele tinha a URL fixa e ignorava a env var. */
+export const API_BASE =
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
   'http://localhost:8080/api/v1';
+
+const BASE = API_BASE;
 
 export async function apiFetch<T = unknown>(
   path: string,

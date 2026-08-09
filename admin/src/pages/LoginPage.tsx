@@ -2,8 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setToken } from '../store/auth';
-
-const BASE = 'http://localhost:8080/api/v1';
+import { API_BASE as BASE } from '../api/client';
 
 function WaveLogo() {
   return (

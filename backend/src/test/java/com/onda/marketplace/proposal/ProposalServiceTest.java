@@ -1,7 +1,10 @@
 package com.onda.marketplace.proposal;
 
 import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
+import com.onda.marketplace.provider.ProviderProfileRepository;
+import com.onda.marketplace.review.ReviewRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -25,8 +28,11 @@ import static org.mockito.Mockito.*;
 @SuppressWarnings("null")
 class ProposalServiceTest {
 
-    @Mock ProposalRepository       proposalRepository;
-    @Mock ServiceRequestRepository requestRepository;
+    @Mock ProposalRepository        proposalRepository;
+    @Mock ServiceRequestRepository  requestRepository;
+    @Mock UserRepository            userRepository;
+    @Mock ProviderProfileRepository profileRepository;
+    @Mock ReviewRepository          reviewRepository;
 
     ProposalService service;
 
@@ -34,7 +40,8 @@ class ProposalServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProposalService(proposalRepository, requestRepository);
+        service = new ProposalService(proposalRepository, requestRepository,
+                userRepository, profileRepository, reviewRepository);
     }
 
     @Test

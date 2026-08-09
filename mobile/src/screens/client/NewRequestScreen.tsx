@@ -1,4 +1,4 @@
-import { API_BASE } from '../../api/config';
+import { API_BASE, newIdempotencyKey } from '../../api/config';
 import { uploadMedia } from '../../api/media';
 import { getCurrentCoords } from '../../api/location';
 import React, { useState } from 'react';
@@ -103,7 +103,7 @@ export default function NewRequestScreen() {
     setError('');
     setLoading(true);
     try {
-      const idempotencyKey = `req-${Date.now()}`;
+      const idempotencyKey = newIdempotencyKey('req');
       const { lat, lng } = await getCurrentCoords();
       const res = await fetch(`${API_BASE}/service-requests`, {
         method: 'POST',

@@ -15,20 +15,27 @@ export default function DisputesPage() {
   const navigate = useNavigate();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter] = useState('ABERTA');
+  const [loadErr, setLoadErr] = useState('');
+
   async function load() {
     setLoading(true);
+    setLoadErr('');
     try {
-      const data = await api.get<Dispute[]>(`/admin/disputes?status=${statusFilter}`);
+      // GET /admin/disputes não aceita ?status= (sempre retorna os EM_DISPUTA) — o filtro
+      // que existia aqui era ignorado pelo servidor e passava a impressão de ser real.
+      const data = await api.get<Dispute[]>('/admin/disputes');
       setDisputes(Array.isArray(data) ? data : []);
-    } catch {
+    } catch (e: unknown) {
+      // Falha de carga mostrava o estado vazio "Nenhuma disputa aberta 🎉" — parecia
+      // boa notícia justamente quando a fila de mediação não pôde ser lida.
+      setLoadErr(e instanceof Error ? e.message : 'Erro ao carregar as disputas.');
       setDisputes([]);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [statusFilter]);
+  useEffect(() => { load(); }, []);
 
   function fmt(n: number) {
     return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -80,8 +87,12 @@ export default function DisputesPage() {
                 <path d="M3 7h2c2 0 4-1 6-2 2 1 4 2 6 2h2"/>
               </svg>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>Nenhuma disputa aberta</div>
-            <div style={{ fontSize: 14, color: 'var(--text-soft)' }}>Ótimo! Não há disputas pendentes de mediação.</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: loadErr ? '#C0392B' : 'var(--text)' }}>
+              {loadErr ? 'Não foi possível carregar as disputas' : 'Nenhuma disputa aberta'}
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--text-soft)' }}>
+              {loadErr || 'Ótimo! Não há disputas pendentes de mediação.'}
+            </div>
           </div>
         ) : (
           <div style={S.tableWrap}>

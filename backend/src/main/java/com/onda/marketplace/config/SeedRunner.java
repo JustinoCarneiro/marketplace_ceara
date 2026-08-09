@@ -59,6 +59,7 @@ public class SeedRunner implements CommandLineRunner {
         User maria = seedUsuario("Maria Teste", "maria@teste.com", "Senha@123", UserRole.ROLE_CLIENT);
 
         seedPrestadorInconclusivo();
+        seedPrestadorVerificado();
         seedDisputaAberta(maria);
     }
 
@@ -94,12 +95,38 @@ public class SeedRunner implements CommandLineRunner {
     }
 
     /**
+     * Prestador VERIFICADO e COM localização — sem ele, `GET /providers/nearby` devolvia
+     * lista vazia em todo ambiente semeado (a query exige VERIFICADO + localizacao NOT NULL),
+     * ou seja, a busca por proximidade, que é o Épico 2, não dava para demonstrar nem testar.
+     * Fica fora da fila de moderação do admin, que filtra EM_VERIFICACAO por padrão.
+     */
+    private void seedPrestadorVerificado() {
+        User provedor = seedUsuario("Ana Eletricista", "ana.eletricista@teste.com",
+                "Senha@123", UserRole.ROLE_PROVIDER);
+
+        if (providerProfileRepository.findByUserId(provedor.getId()).isPresent()) {
+            log.info("[seed] perfil de prestador de {} já existe — ignorando", provedor.getEmail());
+            return;
+        }
+        ProviderProfile perfil = new ProviderProfile(provedor, "Elétrica", "seed-cpf-cifrado-placeholder");
+        perfil.aprovar();
+        // Aldeota, Fortaleza — mesma referência usada como fallback no app.
+        var fabrica = new org.locationtech.jts.geom.GeometryFactory(
+                new org.locationtech.jts.geom.PrecisionModel(), 4326);
+        perfil.setLocalizacao(fabrica.createPoint(
+                new org.locationtech.jts.geom.Coordinate(-38.5267, -3.7319)));
+        providerProfileRepository.save(perfil);
+        log.info("[seed] ProviderProfile de {} criado (VERIFICADO, com localização)", provedor.getEmail());
+    }
+
+    /**
      * Pedido EM_DISPUTA + transação RETIDO — alvo do teste de mediação (resolver disputa)
      * do painel. Sem Proposal/prestador associado: a fila de disputas do admin
      * (DisputaAdminDto/DisputaDetalheDto) não referencia prestador, só o pedido e a transação.
      */
     private void seedDisputaAberta(User cliente) {
-        if (serviceRequestRepository.findByIdempotencyKey(DISPUTE_SEED_KEY).isPresent()) {
+        if (serviceRequestRepository
+                .findByIdempotencyKeyAndCliente_Id(DISPUTE_SEED_KEY, cliente.getId()).isPresent()) {
             log.info("[seed] disputa de exemplo já existe — ignorando");
             return;
         }

@@ -42,7 +42,7 @@ public class ServiceRequest {
     @Column(name = "ai_faixa_max")
     private BigDecimal aiFaixaMax;
 
-    @Column(name = "idempotency_key", unique = true)
+    @Column(name = "idempotency_key")
     private String idempotencyKey;
 
     @Column(name = "motivo_disputa")

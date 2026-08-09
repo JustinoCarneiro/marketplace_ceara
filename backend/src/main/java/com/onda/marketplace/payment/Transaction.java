@@ -39,7 +39,7 @@ public class Transaction {
     @Column(name = "gateway_transaction_id")
     private String gatewayTransactionId;
 
-    @Column(name = "idempotency_key", nullable = false, unique = true)
+    @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
     @Column(name = "created_at", nullable = false, updatable = false)

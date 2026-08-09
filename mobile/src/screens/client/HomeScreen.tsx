@@ -9,10 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { ClientNavProp } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
-import { ProviderData } from '../../components/ProviderCard';
-import { API_BASE } from '../../api/config';
-import { getCurrentCoords } from '../../api/location';
-import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
+import { fetchNearby, isVerificado, distanciaKm as toKm, type NearbyProvider } from '../../api/nearby';
+import { screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import ScreenState from '../../components/ScreenState';
 import { SkeletonList } from '../../components/Skeleton';
 
@@ -71,7 +69,7 @@ export default function HomeScreen() {
   const nav = useNavigation<ClientNavProp>();
   const nome = useAuthStore(s => s.nome);
   const token = useAuthStore(s => s.accessToken);
-  const [nearby, setNearby] = useState<ProviderData[]>([]);
+  const [nearby, setNearby] = useState<NearbyProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [nearbyError, setNearbyError] = useState<ScreenErrorInfo | null>(null);
 
@@ -82,16 +80,7 @@ export default function HomeScreen() {
     setNearbyError(null);
     setLoading(true);
     try {
-      const { lat, lng } = await getCurrentCoords();
-      const res = await fetch(
-        // raio é em METROS no backend (ST_DWithin), não km — nome e unidade errados aqui
-        // faziam a busca sempre cair no default de 5000m, ignorando qualquer raio pedido.
-        `${API_BASE}/providers/nearby?lat=${lat}&lng=${lng}&raio=8000`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!res.ok) throw new HttpError(res.status);
-      const data = await res.json();
-      setNearby(Array.isArray(data) ? data.slice(0, 4) : []);
+      setNearby((await fetchNearby(token, { raioMetros: 8000 })).slice(0, 4));
     } catch (e) {
       setNearbyError(screenStateError(e));
       setNearby([]);
@@ -192,13 +181,11 @@ export default function HomeScreen() {
   );
 }
 
-function ProviderCardInline({ data, onPress }: { data: ProviderData; onPress: () => void }) {
-  const bgColor = data.avatarColor ?? avatarBgColor(data.nome);
+function ProviderCardInline({ data, onPress }: { data: NearbyProvider; onPress: () => void }) {
+  const bgColor = avatarBgColor(data.nome);
   const init = initials(data.nome);
-  const nota = data.nota ?? 0;
-  const precoStr = data.precoMin && data.precoMax
-    ? `R$ ${data.precoMin} – R$ ${data.precoMax}`
-    : null;
+  const nota = data.notaMedia ?? 0;
+  const km = toKm(data);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
@@ -208,7 +195,10 @@ function ProviderCardInline({ data, onPress }: { data: ProviderData; onPress: ()
       <View style={styles.cardInfo}>
         <View style={styles.cardNameRow}>
           <Text style={styles.cardName} numberOfLines={1}>{data.nome}</Text>
-          {data.verificado !== false && (
+          {/* Antes era `data.verificado !== false` sobre um campo que o backend NUNCA envia:
+              undefined !== false = true, então TODO prestador exibia o selo, inclusive os
+              EM_VERIFICACAO/REPROVADO — selo de confiança falso, o oposto da promessa do app. */}
+          {isVerificado(data) && (
             <View style={styles.verifiedBadge}>
               <Feather name="shield" size={11} color="#fff" />
               <Text style={styles.verifiedBadgeText}>VERIFICADO</Text>
@@ -224,14 +214,13 @@ function ProviderCardInline({ data, onPress }: { data: ProviderData; onPress: ()
           )}
           {nota > 0 && <Text style={styles.dot}>·</Text>}
           <Text style={styles.metaText}>{data.categoria}</Text>
-          {data.distanciaKm != null && (
+          {km != null && (
             <>
               <Text style={styles.dot}>·</Text>
-              <Text style={styles.metaText}>{data.distanciaKm.toFixed(1)} km</Text>
+              <Text style={styles.metaText}>{km.toFixed(1)} km</Text>
             </>
           )}
         </View>
-        {precoStr && <Text style={styles.cardPreco}>{precoStr}</Text>}
       </View>
     </TouchableOpacity>
   );

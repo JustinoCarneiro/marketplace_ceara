@@ -35,6 +35,9 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     double calcularMediaNota(@Param("prestadorId") UUID prestadorId,
                              @Param("tipo") ReviewType tipo);
 
+    /** Quantas avaliações já reveladas o prestador tem (double-blind: as ocultas não contam). */
+    long countByAvaliadoIdAndTipoAndReveladaTrue(UUID avaliadoId, ReviewType tipo);
+
     /** Avaliações ocultas cujo prazo de reciprocidade já venceu (job de revelação). */
     List<Review> findByReveladaFalseAndCriadoEmBefore(Instant limite);
 }

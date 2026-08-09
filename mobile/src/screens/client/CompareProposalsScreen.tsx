@@ -14,12 +14,14 @@ import { useAuthStore } from '../../store/auth';
 
 type RouteProps = RouteProp<ClientStackParams, 'CompareProposals'>;
 
+// Espelha ProposalDto (backend: proposal/ProposalDto.java). prestadorNome/prestadorNota
+// podem vir null (prestador sem perfil ou sem avaliação revelada), mas os campos existem.
 interface Proposal {
   id: string;
   prestadorId: string;
-  prestadorNome?: string;
-  prestadorNota?: number;
-  prestadorAvaliacoes?: number;
+  prestadorNome: string | null;
+  prestadorNota: number | null;
+  prestadorAvaliacoes: number;
   valor: number;
   prazoDias: number;
 }
@@ -73,7 +75,7 @@ export default function CompareProposalsScreen() {
         requestId: route.params.requestId,
         proposalId: p.id,
         valor: p.valor,
-        prestadorNome: p.prestadorNome,
+        prestadorNome: p.prestadorNome ?? undefined,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao aceitar proposta.');

@@ -18,6 +18,7 @@ export default function DenunciasPage() {
   const [denuncias, setDenuncias] = useState<Denuncia[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvendo, setResolvendo] = useState<string | null>(null);
+  const [actionErr, setActionErr] = useState('');
 
   async function load() {
     setLoading(true);
@@ -38,8 +39,8 @@ export default function DenunciasPage() {
     try {
       await api.post(`/admin/denuncias/${id}/resolver`);
       setDenuncias(prev => prev.filter(d => d.id !== id));
-    } catch {
-      // fica na lista — moderador tenta de novo
+    } catch (e: unknown) {
+      setActionErr(e instanceof Error ? e.message : 'Erro ao resolver a denúncia.');
     } finally {
       setResolvendo(null);
     }
@@ -60,6 +61,9 @@ export default function DenunciasPage() {
       </div>
 
       <div style={S.content}>
+        {actionErr && (
+          <div style={{ background: '#FBE6E2', border: '1px solid #C0392B', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#C0392B' }}>{actionErr}</div>
+        )}
         {denuncias.length > 0 && (
           <span style={S.summary}>
             {denuncias.length} denúncia{denuncias.length !== 1 ? 's' : ''} em aberto

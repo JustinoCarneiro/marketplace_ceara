@@ -10,7 +10,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
-    Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
+    /**
+     * Idempotência escopada ao pedido — a chave sozinha é do solicitante, não global.
+     * Buscar só por chave devolvia a transação de outro cliente numa colisão (V14).
+     */
+    Optional<Transaction> findByServiceRequestIdAndIdempotencyKey(UUID serviceRequestId,
+                                                                  String idempotencyKey);
     Optional<Transaction> findByGatewayTransactionId(String gatewayTransactionId);
     Optional<Transaction> findByServiceRequestId(UUID serviceRequestId);
 

@@ -80,7 +80,7 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | metodo | enum(`PIX`,`CARTAO`) | |
 | status_pagamento | enum | `PENDENTE`→`RETIDO`→(`LIBERADO`/`REEMBOLSADO`); falha→`PENDENTE` |
 | gateway_transaction_id | varchar NULL | |
-| idempotency_key | varchar UNIQUE | **obrigatório** (US05, TS02) |
+| idempotency_key | varchar | **obrigatório** (US05, TS02). UNIQUE **por pedido**, não global (V14): a chave é do solicitante — global, uma colisão devolvia a transação de outro cliente |
 | created_at / updated_at | timestamptz | |
 
 **`outbox_events`** — motor do Escrow (Saga + Outbox, TS02)
@@ -232,11 +232,16 @@ POST /api/v1/auth/refresh         req:{ refreshToken } → 200 { accessToken, re
 
 ### M02 — Verificação de Prestador
 ```
-POST /api/v1/providers            (ROLE_PROVIDER)
-  req:  { nome, email, senha, cpf, categoria, bio, lat, lng }
-  201:  { id, statusVerificacao:"EM_VERIFICACAO" }
-GET  /api/v1/providers/{id}       200 { id, nome, categoria, statusVerificacao, notaMedia }
-# callback interno do background check muda status → VERIFICADO|REPROVADO (assíncrono)
+POST /api/v1/auth/register/provider          # projetado como POST /api/v1/providers
+  req:  { nome, email, senha, cpf, categoria, bio, aceitouTermos }
+        # aceitouTermos:true obrigatório (V13). NÃO existem lat/lng aqui — a
+        # localização do prestador nunca foi coletada neste endpoint.
+  201:  { accessToken, refreshToken, role:"ROLE_PROVIDER" }
+  422:  { code:"EMAIL_IN_USE" } | { code:"VALIDATION_ERROR" }   # sem aceite dos termos
+GET  /api/v1/providers/{userId}   200 { userId, nome, categoria, bio, notaMedia,
+                                        totalAvaliacoes, totalServicos, statusVerificacao, avaliacoes[] }
+# hoje só o admin muda o status (verify/reject/moderate) — o callback automático do
+# background check ainda não existe (BackgroundCheckServiceImpl é stub).
 ```
 
 ### M03 — Descoberta & Geobusca
@@ -266,8 +271,11 @@ POST /api/v1/services/requests/{id}/proposals   (ROLE_PROVIDER)
   req:  { valor, prazoDias }
   201:  { id, status:"ATIVA" }  → pedido vai a PROPOSTO
   422:  { code:"REQUEST_UNAVAILABLE" }           # já aceito por outro
-GET  /api/v1/services/requests/{id}/proposals   200 [ { id, prestador, valor, prazoDias, status } ]
-POST /api/v1/proposals/{id}/accept  (ROLE_CLIENT) 200 { aceita:id, encerradas:[...] }
+GET  /api/v1/service-requests/{id}/proposals    200 [ { id, serviceRequestId, prestadorId,
+       prestadorNome, prestadorNota, prestadorAvaliacoes, valor, prazoDias, status, createdAt } ]
+     # nome/nota do prestador vêm no DTO: comparar propostas é decidir entre pessoas, não só
+     # preço. prestadorNota/Avaliacoes contam só avaliações reveladas (double-blind, US31).
+PUT  /api/v1/proposals/{id}/accept|reject  (ROLE_CLIENT) 200 ProposalDto
 ```
 
 ### M06 — Pagamento & Escrow  *(módulo crítico)*

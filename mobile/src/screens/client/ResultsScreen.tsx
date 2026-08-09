@@ -1,6 +1,5 @@
-import { API_BASE } from '../../api/config';
-import { getCurrentCoords } from '../../api/location';
-import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
+import { fetchNearby, isVerificado, distanciaKm as toKm, type NearbyProvider } from '../../api/nearby';
+import { screenStateError, type ScreenErrorInfo } from '../../api/errors';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -19,17 +18,7 @@ import { SkeletonList } from '../../components/Skeleton';
 
 type RouteProps = RouteProp<ClientStackParams, 'Results'>;
 
-interface Provider {
-  userId: string;
-  nome: string;
-  categoria: string;
-  notaMedia: number | null;
-  totalAvaliacoes?: number;
-  statusVerificacao: string;
-  distanciaKm: number;
-  precoMin?: number;
-  precoMax?: number;
-}
+type Provider = NearbyProvider;
 
 const AVATAR_COLORS = [
   color.warmTerra, color.catHidraulica, color.catLimpeza,
@@ -74,20 +63,7 @@ export default function ResultsScreen() {
     setLoading(true);
     setHasError(null);
     try {
-      const { lat, lng } = await getCurrentCoords();
-      const params = new URLSearchParams({
-        lat: String(lat), lng: String(lng),
-        // raio é em METROS no backend (ST_DWithin) — nome/unidade errados aqui faziam
-        // o filtro de raio da UI não ter nenhum efeito (sempre caía no default 5000m).
-        raio: String(raioKm * 1000),
-        ...(categoria ? { categoria } : {}),
-      });
-      const res = await fetch(`${API_BASE}/providers/nearby?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new HttpError(res.status);
-      const data = await res.json();
-      setProviders(Array.isArray(data) ? data : []);
+      setProviders(await fetchNearby(token, { raioMetros: raioKm * 1000, categoria }));
     } catch (e) {
       setHasError(screenStateError(e));
       setProviders([]);
@@ -96,9 +72,12 @@ export default function ResultsScreen() {
     }
   }
 
+  // Sem distância conhecida vai pro fim da lista, em vez de virar NaN e bagunçar a ordenação.
   const filtered = providers
     .filter(p => (p.notaMedia ?? 0) >= notaMin)
-    .sort((a, b) => (maisProximos ? a.distanciaKm - b.distanciaKm : 0));
+    .sort((a, b) => (maisProximos
+      ? (a.distanciaMetros ?? Infinity) - (b.distanciaMetros ?? Infinity)
+      : 0));
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -169,13 +148,13 @@ export default function ResultsScreen() {
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={i => i.userId}
+          keyExtractor={i => i.id}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
           renderItem={({ item }) => (
             <ResultProviderCard
               item={item}
-              onPress={() => nav.navigate('ProviderProfile', { providerId: item.userId })}
+              onPress={() => nav.navigate('ProviderProfile', { providerId: item.id })}
             />
           )}
         />
@@ -188,10 +167,8 @@ function ResultProviderCard({ item, onPress }: { item: Provider; onPress: () => 
   const bgColor = avatarBgColor(item.nome);
   const init = initials(item.nome);
   const nota = item.notaMedia ?? 0;
-  const precoStr = item.precoMin && item.precoMax
-    ? `R$ ${item.precoMin} – R$ ${item.precoMax}`
-    : null;
-  const isVerified = item.statusVerificacao === 'VERIFICADO';
+  const distanciaKm = toKm(item);
+  const isVerified = isVerificado(item);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
@@ -213,15 +190,13 @@ function ResultProviderCard({ item, onPress }: { item: Provider; onPress: () => 
             <View style={styles.ratingRow}>
               <Feather name="star" size={14} color={color.warmSun} />
               <Text style={styles.ratingVal}>{nota.toFixed(1)}</Text>
-              {item.totalAvaliacoes ? (
-                <Text style={styles.metaText}>({item.totalAvaliacoes})</Text>
-              ) : null}
             </View>
           )}
-          {nota > 0 && <Text style={styles.dot}>·</Text>}
-          <Text style={styles.metaText}>{item.distanciaKm.toFixed(1)} km</Text>
+          {nota > 0 && distanciaKm != null && <Text style={styles.dot}>·</Text>}
+          {distanciaKm != null && (
+            <Text style={styles.metaText}>{distanciaKm.toFixed(1)} km</Text>
+          )}
         </View>
-        {precoStr && <Text style={styles.cardPreco}>{precoStr}</Text>}
       </View>
     </TouchableOpacity>
   );

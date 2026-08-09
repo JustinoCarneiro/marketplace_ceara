@@ -59,7 +59,7 @@ class ServiceRequestServiceTest {
         var suggestion = new AiSuggestion("Instalação de chuveiro elétrico", BigDecimal.valueOf(150), BigDecimal.valueOf(300));
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
         when(aiService.suggest(any(), any())).thenReturn(Optional.of(suggestion));
-        when(requestRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var req = new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267);
@@ -73,7 +73,7 @@ class ServiceRequestServiceTest {
     void create_iaFalha_retornaSemSugestao() {
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
         when(aiService.suggest(any(), any())).thenReturn(Optional.empty());  // IA indisponível
-        when(requestRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var req = new CreateServiceRequestRequest("ENCANADOR", null, -3.7319, -38.5267);
@@ -87,16 +87,37 @@ class ServiceRequestServiceTest {
 
     @Test
     void create_chaveIdempotenteDuplicada_retornaExistente() {
+        UUID clienteId = UUID.randomUUID();
         var existing = new ServiceRequest();
         existing.setCategoria("ELETRICISTA");
         existing.setStatus(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findByIdempotencyKey("idem-dup")).thenReturn(Optional.of(existing));
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id("idem-dup", clienteId))
+                .thenReturn(Optional.of(existing));
 
         var req = new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5);
-        ServiceRequestDto dto = service.create(UUID.randomUUID(), req, "idem-dup");
+        ServiceRequestDto dto = service.create(clienteId, req, "idem-dup");
 
         assertThat(dto.status()).isEqualTo("PENDENTE");
         verify(requestRepository, never()).save(any());  // não salva de novo
+    }
+
+    @Test
+    void create_mesmaChaveDeOutroCliente_naoRetornaPedidoAlheio() {
+        // Regressão: a busca era só pela chave, global. O app gera `req-<timestamp>`, que
+        // colide entre usuários no mesmo milissegundo — o segundo cliente recebia de volta
+        // o pedido do primeiro (id + descrição do problema, dado pessoal).
+        UUID outroCliente = UUID.randomUUID();
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id("idem-colidida", outroCliente))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(outroCliente)).thenReturn(Optional.of(cliente));
+        when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var req = new CreateServiceRequestRequest("ELETRICISTA", "Meu próprio pedido", -3.7, -38.5);
+        ServiceRequestDto dto = service.create(outroCliente, req, "idem-colidida");
+
+        // Cria o pedido DELE em vez de devolver o de outra pessoa.
+        assertThat(dto.descricao()).isEqualTo("Meu próprio pedido");
+        verify(requestRepository).save(any());
     }
 
     @Test

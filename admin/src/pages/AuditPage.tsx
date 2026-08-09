@@ -6,11 +6,17 @@ interface AuditLog { id: string; adminNome: string; acao: string; entidade: stri
 export default function AuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState('');
 
   useEffect(() => {
     (async () => {
       try { const d = await api.get<AuditLog[]>('/admin/audit-logs'); setLogs(Array.isArray(d) ? d : []); }
-      catch { setLogs([]); }
+      catch (e: unknown) {
+        // Sem isto, falha de carga virava "Nenhum registro encontrado" — indistinguível
+        // de uma trilha realmente vazia, justo na tela que existe para auditar.
+        setLoadErr(e instanceof Error ? e.message : 'Erro ao carregar a trilha de auditoria.');
+        setLogs([]);
+      }
       finally { setLoading(false); }
     })();
   }, []);
@@ -44,7 +50,11 @@ export default function AuditPage() {
                 <span style={{ fontSize: 12.5, color: '#606E71' }}>{fmtDate(l.criadoEm)}</span>
               </div>
             ))}
-            {logs.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: '#606E71' }}>Nenhum registro encontrado.</div>}
+            {logs.length === 0 && (
+              <div style={{ padding: 28, textAlign: 'center', color: loadErr ? '#C0392B' : '#606E71' }}>
+                {loadErr || 'Nenhum registro encontrado.'}
+              </div>
+            )}
           </div>
         )}
       </div>

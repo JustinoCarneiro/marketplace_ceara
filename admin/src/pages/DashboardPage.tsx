@@ -51,6 +51,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [dias, setDias] = useState<number | null>(30);
   const [exporting, setExporting] = useState(false);
+  const [exportErr, setExportErr] = useState('');
 
   // Independente do período do dashboard — é "o que precisa de mim agora", não histórico.
   useEffect(() => {
@@ -59,8 +60,10 @@ export default function DashboardPage() {
 
   async function exportar() {
     setExporting(true);
+    setExportErr('');
     try { await downloadFile('/admin/reports/metrics.pdf', 'metrics.pdf'); }
-    catch {} finally { setExporting(false); }
+    catch (e: unknown) { setExportErr(e instanceof Error ? e.message : 'Erro ao exportar o PDF.'); }
+    finally { setExporting(false); }
   }
 
   useEffect(() => {
@@ -111,6 +114,7 @@ export default function DashboardPage() {
           <button onClick={exportar} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 14, cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.7 : 1, boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 20h16"/></svg>{exporting ? 'Exportando…' : 'Exportar'}
           </button>
+          {exportErr && <span style={{ fontSize: 12.5, color: '#C0392B' }}>{exportErr}</span>}
           <div style={{ width: 44, height: 44, borderRadius: 12, background: '#15596E', color: '#fff', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>GM</div>
         </div>
       </div>

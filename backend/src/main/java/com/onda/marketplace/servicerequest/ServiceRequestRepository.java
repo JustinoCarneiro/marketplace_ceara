@@ -8,7 +8,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, UUID> {
-    Optional<ServiceRequest> findByIdempotencyKey(String idempotencyKey);
+    /**
+     * Idempotência escopada ao cliente — a chave é do solicitante, não global. Buscar só
+     * por chave devolvia o pedido de OUTRO cliente quando as chaves colidiam (V14).
+     */
+    Optional<ServiceRequest> findByIdempotencyKeyAndCliente_Id(String idempotencyKey, UUID clienteId);
     Optional<ServiceRequest> findByIdAndCliente_Id(UUID id, UUID clienteId);
 
     // Métricas/alertas do painel admin (US23/US30)

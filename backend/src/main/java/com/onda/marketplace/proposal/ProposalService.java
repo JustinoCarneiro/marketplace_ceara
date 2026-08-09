@@ -1,5 +1,11 @@
 package com.onda.marketplace.proposal;
 
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
+import com.onda.marketplace.provider.ProviderProfile;
+import com.onda.marketplace.provider.ProviderProfileRepository;
+import com.onda.marketplace.review.ReviewRepository;
+import com.onda.marketplace.review.ReviewType;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -7,6 +13,7 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,13 +21,40 @@ import java.util.UUID;
 @SuppressWarnings("null")
 public class ProposalService {
 
-    private final ProposalRepository       proposalRepository;
-    private final ServiceRequestRepository requestRepository;
+    private final ProposalRepository        proposalRepository;
+    private final ServiceRequestRepository  requestRepository;
+    private final UserRepository            userRepository;
+    private final ProviderProfileRepository profileRepository;
+    private final ReviewRepository          reviewRepository;
 
     public ProposalService(ProposalRepository proposalRepository,
-                           ServiceRequestRepository requestRepository) {
+                           ServiceRequestRepository requestRepository,
+                           UserRepository userRepository,
+                           ProviderProfileRepository profileRepository,
+                           ReviewRepository reviewRepository) {
         this.proposalRepository = proposalRepository;
         this.requestRepository  = requestRepository;
+        this.userRepository     = userRepository;
+        this.profileRepository  = profileRepository;
+        this.reviewRepository   = reviewRepository;
+    }
+
+    /**
+     * Monta o DTO com nome/reputação do prestador. Ponto único de construção — se algum
+     * caminho montasse o DTO sem enriquecer, a tela de comparação voltaria a mostrar
+     * "Prestador"/0,0 só naquele fluxo, que é exatamente o bug que isto corrige.
+     */
+    private ProposalDto toDto(Proposal p) {
+        UUID prestadorId = p.getPrestadorId();
+        String nome = userRepository.findById(prestadorId)
+                .map(User::getNome)
+                .orElse(null);
+        BigDecimal nota = profileRepository.findByUserId(prestadorId)
+                .map(ProviderProfile::getNotaMedia)
+                .orElse(null);
+        int avaliacoes = (int) reviewRepository.countByAvaliadoIdAndTipoAndReveladaTrue(
+                prestadorId, ReviewType.CLIENTE_AVALIA_PRESTADOR);
+        return ProposalDto.from(p, nome, nota, avaliacoes);
     }
 
     @Transactional
@@ -44,7 +78,7 @@ public class ProposalService {
             requestRepository.save(sr);
         }
 
-        return ProposalDto.from(proposal);
+        return toDto(proposal);
     }
 
     @Transactional
@@ -77,7 +111,7 @@ public class ProposalService {
         sr.setStatus(ServiceRequestStatus.ACEITO);
         requestRepository.save(sr);
 
-        return ProposalDto.from(proposal);
+        return toDto(proposal);
     }
 
     @Transactional
@@ -92,14 +126,14 @@ public class ProposalService {
 
         proposal.recusar();
         proposalRepository.save(proposal);
-        return ProposalDto.from(proposal);
+        return toDto(proposal);
     }
 
     @Transactional(readOnly = true)
     public List<ProposalDto> listForRequest(UUID serviceRequestId) {
         return proposalRepository.findByServiceRequestId(serviceRequestId)
                 .stream()
-                .map(ProposalDto::from)
+                .map(this::toDto)
                 .toList();
     }
 

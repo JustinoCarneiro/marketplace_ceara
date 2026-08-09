@@ -1,4 +1,4 @@
-import { API_BASE } from '../../api/config';
+import { API_BASE, newIdempotencyKey } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -69,7 +69,7 @@ export default function PaymentChoiceScreen() {
     setLoading(true);
     setPayError('');
     try {
-      const idempotencyKey = `${requestId}-${Date.now()}`;
+      const idempotencyKey = newIdempotencyKey(requestId);
       const res = await fetch(`${API_BASE}/service-requests/${requestId}/payment`, {
         method: 'POST',
         headers: {

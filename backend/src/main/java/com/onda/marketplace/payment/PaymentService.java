@@ -44,7 +44,6 @@ public class PaymentService {
      * Inicia o pagamento: escreve Transaction + OutboxEvent em UMA transação de banco.
      * O gateway NÃO é chamado aqui — é chamado pelo OutboxProcessor (sem @Transactional).
      * Princípio Escrow/Saga (CLAUDE.md): gateway nunca dentro de @Transactional.
-     * clienteId é verificado via findByIdAndCliente_Id — acesso cruzado retorna 404.
      */
     @Transactional
     public TransactionDto initiate(UUID serviceRequestId, InitiatePaymentRequest req,
@@ -55,7 +54,15 @@ public class PaymentService {
                         "Confirme sua identidade antes de pagar.");
             }
         });
-        return transactionRepository.findByIdempotencyKey(idempotencyKey)
+
+        // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
+        // conferia: um hit de idempotência devolvia a transação (valores + status) sem
+        // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
+        requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId)
+                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+
+        return transactionRepository
+                .findByServiceRequestIdAndIdempotencyKey(serviceRequestId, idempotencyKey)
                 .map(TransactionDto::from)
                 .orElseGet(() -> criar(serviceRequestId, req, idempotencyKey, clienteId));
     }

@@ -261,6 +261,7 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
 - `denuncias` (id, tipo, alvo_id, denunciante_id, motivo, detalhes, status, resolvido_por_id, resolvido_em, criado_em) — canal de denúncia de prestador/avaliação fraudulenta (US32), migration `V12__denuncia.sql`.
 - `terms_acceptance` (id, user_id, doc_version, accepted_at, ip_address) — prova de aceite dos Termos/Privacidade no cadastro (`docs/PENDENCIAS_JURIDICAS.md` item 3), migration `V13__terms_acceptance.sql`; gravada em `POST /api/v1/auth/register/{client|provider}`, que rejeita (422) sem `aceitouTermos:true`.
+- `idempotency_key` (em `service_requests` e `transactions`) — UNIQUE **por dono** (`cliente_id`/`service_request_id`), não global, migration `V14__idempotency_key_por_dono.sql`. Antes era UNIQUE global e a busca ignorava o dono: chaves iguais entre usuários diferentes (o app gerava `req-<timestamp>`) devolviam o pedido/transação de outra pessoa.
 
 ---
 

@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearToken } from '../store/auth';
+import { api } from '../api/client';
 
 /* SVG icons extracted from prototype F29 sidebar */
 const ICONS: Record<string, React.ReactNode> = {
@@ -67,16 +69,19 @@ const ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-const NAV: { icon: keyof typeof ICONS; label: string; to: string; badge?: string }[] = [
+// `badge` diz QUAL contagem real o item mostra. Antes era só uma cor e o número vinha
+// fixo no JSX ("3" e "4"), então a sidebar exibia a mesma contagem para sempre — inclusive
+// com zero disputas abertas — em todas as telas.
+const NAV: { icon: keyof typeof ICONS; label: string; to: string; badge?: 'disputas' | 'naoLidas' }[] = [
   { icon: 'dashboard',     label: 'Dashboard',    to: '/' },
-  { icon: 'disputes',      label: 'Disputas',     to: '/disputes',      badge: 'terra' },
+  { icon: 'disputes',      label: 'Disputas',     to: '/disputes',      badge: 'disputas' },
   { icon: 'moderation',    label: 'Moderação',    to: '/providers' },
   { icon: 'denuncias',     label: 'Denúncias',    to: '/denuncias' },
   { icon: 'users',         label: 'Usuários',     to: '/users' },
   { icon: 'finance',       label: 'Financeiro',   to: '/finance' },
   { icon: 'categories',    label: 'Categorias',   to: '/categories' },
   { icon: 'audit',         label: 'Auditoria',    to: '/audit' },
-  { icon: 'notifications', label: 'Notificações', to: '/notifications', badge: 'primary' },
+  { icon: 'notifications', label: 'Notificações', to: '/notifications', badge: 'naoLidas' },
   { icon: 'reports',       label: 'Relatórios',   to: '/reports' },
 ];
 
@@ -89,8 +94,23 @@ function WaveLogo() {
   );
 }
 
+interface Notification { lida: boolean; }
+interface Disputa { serviceRequestId: string; }
+
 export default function Sidebar() {
   const navigate = useNavigate();
+  const [contagens, setContagens] = useState<{ disputas: number; naoLidas: number }>(
+    { disputas: 0, naoLidas: 0 });
+
+  useEffect(() => {
+    Promise.all([
+      api.get<Disputa[]>('/admin/disputes').catch(() => []),
+      api.get<Notification[]>('/admin/notifications').catch(() => []),
+    ]).then(([disputas, notificacoes]) => setContagens({
+      disputas: disputas.length,
+      naoLidas: notificacoes.filter(n => !n.lida).length,
+    }));
+  }, []);
 
   function logout() {
     clearToken();
@@ -161,19 +181,20 @@ export default function Sidebar() {
                 )}
                 {ICONS[item.icon]}
                 <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge === 'terra' && (
+                {/* Zero não vira badge: aviso só aparece quando há algo a fazer. */}
+                {item.badge === 'disputas' && contagens.disputas > 0 && (
                   <span style={{
                     background: 'var(--warm-terra)', color: '#fff',
                     fontSize: 12, fontWeight: 700,
                     padding: '1px 7px', borderRadius: 100,
-                  }}>3</span>
+                  }}>{contagens.disputas}</span>
                 )}
-                {item.badge === 'primary' && (
+                {item.badge === 'naoLidas' && contagens.naoLidas > 0 && (
                   <span style={{
                     background: 'var(--primary)', color: '#fff',
                     fontSize: 12, fontWeight: 700,
                     padding: '1px 7px', borderRadius: 100,
-                  }}>4</span>
+                  }}>{contagens.naoLidas}</span>
                 )}
               </>
             )}
