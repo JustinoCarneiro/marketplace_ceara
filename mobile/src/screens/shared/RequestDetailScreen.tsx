@@ -1,12 +1,12 @@
 import { API_BASE } from '../../api/config';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
 import ScreenState from '../../components/ScreenState';
@@ -303,7 +303,11 @@ export default function RequestDetailScreen() {
     }
   }
 
-  useEffect(() => { load(); }, [requestId]);
+  // useFocusEffect (não useEffect simples): "Abrir disputa" navega pra uma tela separada
+  // (OpenDisputeScreen) e volta com nav.goBack() — sem refazer a busca ao reganhar foco,
+  // esta tela continuava mostrando o status antigo (EM_ANDAMENTO) mesmo com a disputa já
+  // aberta de verdade no backend. Mesmo padrão já usado em ActiveJobScreen.
+  useFocusEffect(useCallback(() => { load(); }, [requestId]));
 
   async function startService() {
     setActionLoading(true);
@@ -555,6 +559,22 @@ export default function RequestDetailScreen() {
             <Text style={styles.btnPrimaryText}>Avaliar</Text>
           </TouchableOpacity>
         )}
+        {showDispute && (
+          // Backend, OpenDisputeScreen e a fila de mediação do admin já existiam prontos,
+          // mas nenhum botão em lugar nenhum do app levava até aqui — o único nav.navigate
+          // que existia sob essa mesma condição era o do SOS (abaixo), sem relação com
+          // disputa nenhuma. Sem isso, cliente/prestador não tinham como abrir disputa pelo
+          // app, só chamando a API na mão.
+          <TouchableOpacity
+            testID="btn-abrir-disputa"
+            style={styles.btnDispute}
+            onPress={() => nav.navigate('OpenDispute', { requestId })}
+            activeOpacity={0.75}
+          >
+            <Feather name="flag" size={16} color={COLORS.institutional2} />
+            <Text style={styles.btnDisputeText}>Abrir disputa</Text>
+          </TouchableOpacity>
+        )}
         <View style={styles.footerRow}>
           {showCancel && (
             <TouchableOpacity
@@ -731,6 +751,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  btnDispute: {
+    height: 46,
+    borderRadius: 100,
+    borderWidth: 1.5,
+    borderColor: COLORS.institutional2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  btnDisputeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.institutional2,
   },
   footerRow: {
     flexDirection: 'row',
