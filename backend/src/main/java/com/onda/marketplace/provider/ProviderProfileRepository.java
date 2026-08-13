@@ -24,8 +24,13 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     List<ProviderProfile> findByStatusWithUser(@Param("status") ProviderStatus status);
 
     // PostGIS ST_DWithin sobre índice GiST — SLA p95 < 300ms (TS03)
+    // "id" aqui é o user_id (não o PK de providers_profile): o mobile navega do card da busca
+    // direto pra ProviderProfileScreen com esse valor, e GET /providers/{userId} (perfil
+    // público) busca por user_id. Selecionar pp.id fazia esse lookup falhar sempre com
+    // PROVIDER_NOT_FOUND — nenhum teste E2E cobria "tocar num card da busca", só o fluxo de
+    // pedido por categoria, por isso sobreviveu a todas as auditorias anteriores.
     @Query(nativeQuery = true, value = """
-            SELECT pp.id,
+            SELECT pp.user_id             AS id,
                    u.nome,
                    pp.categoria,
                    pp.bio,

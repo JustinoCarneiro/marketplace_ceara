@@ -17,7 +17,10 @@ public record ProviderPublicDto(
         int        totalAvaliacoes,
         int        totalServicos,
         String     statusVerificacao,
-        List<Avaliacao> avaliacoes
+        List<Avaliacao> avaliacoes,
+        Integer    tempoRespostaMin,
+        BigDecimal precoMin,
+        BigDecimal precoMax
 ) {
     public record Avaliacao(UUID id, String autorNome, int nota, String comentario) {}
 }

@@ -40,6 +40,10 @@ Como **Cliente**, quero ver profissionais por categoria e proximidade, para acha
 - **Dado que** informo lat/lng e categoria, **quando** busco, **então** recebo prestadores `VERIFICADO` ordenados por distância usando **PostGIS** (índice espacial).
 - **Dado** a chamada `GET /api/v1/providers/nearby`, **então** o p95 responde em < 300ms.
 - **Dado que** não há prestadores no raio, **então** recebo lista vazia com estado tratado (não erro).
+- **Dado que** toco num prestador da lista, **quando** abro o perfil dele, **então** vejo (se já
+  houver propostas no histórico) tempo médio de resposta e faixa de preço praticada — calculados
+  sobre todas as propostas já enviadas pelo prestador, não só as aceitas. Sem propostas ainda,
+  esses campos ficam ausentes (tela mostra "—", não zero).
 
 ### US13 — Filtros básicos
 Como **Cliente**, quero filtrar por distância e nota mínima, para refinar a escolha.

@@ -9,7 +9,6 @@ import type { ProviderStackParams } from './types';
 import AvailableRequestsScreen from '../screens/provider/AvailableRequestsScreen';
 import ActiveJobScreen from '../screens/provider/ActiveJobScreen';
 import SendProposalScreen from '../screens/provider/SendProposalScreen';
-import EscrowHeldScreen from '../screens/provider/EscrowHeldScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import RequestDetailScreen from '../screens/shared/RequestDetailScreen';
 import OpenDisputeScreen from '../screens/shared/OpenDisputeScreen';
@@ -27,7 +26,6 @@ export default function ProviderNavigator() {
       <Stack.Screen name="ProviderTabs" component={ProviderTabs} />
       <Stack.Screen name="AvailableRequests" component={AvailableRequestsScreen} />
       <Stack.Screen name="SendProposal" component={SendProposalScreen} options={{ presentation: 'modal' }} />
-      <Stack.Screen name="EscrowHeld" component={EscrowHeldScreen} />
       <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
       <Stack.Screen name="OpenDispute" component={OpenDisputeScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="Rate" component={RateScreen} />

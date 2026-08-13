@@ -1,6 +1,7 @@
 package com.onda.marketplace.provider;
 
 import com.onda.marketplace.auth.UserRepository;
+import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
 import com.onda.marketplace.review.Review;
@@ -10,6 +11,9 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,6 +58,22 @@ public class ProviderPublicService {
                         r.getComentario()))
                 .toList();
 
+        List<Proposal> propostas = proposalRepository.findByPrestadorId(userId);
+        BigDecimal precoMin = propostas.stream().map(Proposal::getValor).min(Comparator.naturalOrder()).orElse(null);
+        BigDecimal precoMax = propostas.stream().map(Proposal::getValor).max(Comparator.naturalOrder()).orElse(null);
+
+        Integer tempoRespostaMin = null;
+        if (!propostas.isEmpty()) {
+            long mediaMinutos = Math.round(propostas.stream()
+                    .mapToLong(pr -> Duration.between(
+                            pr.getServiceRequest().getCreatedAt(), pr.getCreatedAt()).toMinutes())
+                    .average()
+                    .orElse(0));
+            // O front trata 0 como "sem dado" (`profile.tempoRespostaMin ? ... : '—'`) — um
+            // prestador que responde em segundos não pode desaparecer da própria estatística.
+            tempoRespostaMin = (int) Math.max(1, mediaMinutos);
+        }
+
         return new ProviderPublicDto(
                 p.getUser().getId(),
                 p.getUser().getNome(),
@@ -63,6 +83,9 @@ public class ProviderPublicService {
                 reviews.size(),
                 (int) proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA),
                 p.getStatusVerificacao().name(),
-                avaliacoes);
+                avaliacoes,
+                tempoRespostaMin,
+                precoMin,
+                precoMax);
     }
 }

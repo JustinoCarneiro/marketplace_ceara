@@ -47,7 +47,6 @@ export type ProviderStackParams = {
   ProviderTabs: undefined;
   AvailableRequests: undefined;
   SendProposal: { requestId: string; descricao?: string; categoria?: string };
-  EscrowHeld: { requestId: string };
   RequestDetail: { requestId: string };
   OpenDispute: { requestId: string };
   Rate: { requestId: string; avaliadoId: string; avaliadoNome: string };

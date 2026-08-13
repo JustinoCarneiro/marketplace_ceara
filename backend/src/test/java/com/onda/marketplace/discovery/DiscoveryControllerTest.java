@@ -76,7 +76,8 @@ class DiscoveryControllerTest {
         UUID userId = UUID.randomUUID();
         var dto = new com.onda.marketplace.provider.ProviderPublicDto(
                 userId, "Zé Elétrica", "Elétrica", "Eletricista há 12 anos",
-                java.math.BigDecimal.valueOf(4.8), 10, 8, "VERIFICADO", List.of());
+                java.math.BigDecimal.valueOf(4.8), 10, 8, "VERIFICADO", List.of(),
+                15, java.math.BigDecimal.valueOf(150), java.math.BigDecimal.valueOf(300));
         when(providerPublicService.buscarPorUserId(userId)).thenReturn(dto);
 
         mvc.perform(get("/api/v1/providers/{userId}", userId))

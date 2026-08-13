@@ -130,7 +130,6 @@ export default function MyRequestsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasError, setHasError] = useState<ScreenErrorInfo | null>(null);
-  const [tab, setTab] = useState<'cliente' | 'prestador'>('cliente');
 
   async function load() {
     setHasError(null);
@@ -176,22 +175,6 @@ export default function MyRequestsScreen() {
       >
         <View style={styles.headerBlock}>
           <Text style={styles.title}>Meus pedidos</Text>
-          <View style={styles.tabs}>
-            <TouchableOpacity
-              style={[styles.tabPill, tab === 'cliente' && styles.tabPillActive]}
-              onPress={() => setTab('cliente')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, tab === 'cliente' && styles.tabTextActive]}>Como cliente</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabPill, tab === 'prestador' && styles.tabPillActive]}
-              onPress={() => setTab('prestador')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, tab === 'prestador' && styles.tabTextActive]}>Como prestador</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {loading ? (
@@ -266,31 +249,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
     color: COLORS.text,
-  },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.bgAlt,
-    borderRadius: 100,
-    padding: 4,
-    gap: 0,
-  },
-  tabPill: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 100,
-    alignItems: 'center',
-  },
-  tabPillActive: {
-    backgroundColor: COLORS.institutional,
-  },
-  tabText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: COLORS.textSoft,
-  },
-  tabTextActive: {
-    color: '#fff',
-    fontWeight: '700',
   },
   groups: {
     paddingHorizontal: 20,

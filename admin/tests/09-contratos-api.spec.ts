@@ -13,6 +13,9 @@ import { test, expect, request } from '@playwright/test';
  *   - outbox devolvia `tipoEvento`/`agregado`, admin lia `tipo`/`entidade` → fila de falhas
  *     renderizava linhas em branco.
  *   - CategoryDto nunca teve `totalPrestadores`, a tela exibia "0 prestadores" como se fosse real.
+ *   - nearby devolvia `id` = PK de providers_profile; Home/Resultados encadeiam esse valor em
+ *     GET /providers/{id}, que espera user_id → 422 sempre, apesar do NOME do campo bater dos
+ *     dois lados (bug invisível pra `esperaCampos`, só aparece encadeando as duas chamadas).
  *
  * Se alguém renomear um campo no DTO Java sem atualizar o front, isto falha aqui.
  */
@@ -59,6 +62,14 @@ test.describe('Contrato backend ↔ frontends', () => {
     esperaCampos(lista[0],
       ['id', 'nome', 'categoria', 'bio', 'statusVerificacao', 'notaMedia', 'distanciaMetros'],
       'NearbyProviderDto vs mobile/src/api/nearby.ts');
+
+    // Nome de campo certo não garante VALOR certo: Home/Resultados navegam direto de
+    // lista[0].id pra GET /providers/{id}. Se "id" aqui não for o user_id, isto encadeia
+    // e falha — em vez de só comparar nomes, prova que o valor serve pro próximo passo real.
+    const perfil = await ctx.get(`${API}/providers/${lista[0].id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(perfil.ok(), `id da lista (${lista[0].id}) não abriu o perfil — não é o user_id`).toBeTruthy();
   });
 
   test('GET /admin/outbox entrega os campos que a tela Financeiro lê', async () => {

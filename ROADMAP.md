@@ -249,9 +249,23 @@ GET  /api/v1/providers/{userId}   200 { userId, nome, categoria, bio, notaMedia,
 GET /api/v1/providers/nearby?lat=&lng=&categoria=&raio=&limite=
   # raio em METROS (default 5000), não raioKm — mobile mandava raioKm até 2026-08-08
   # (Spring ignora parâmetro desconhecido: filtro de raio nunca tinha efeito nenhum)
-  200: [ { id, nome, categoria, notaMedia, distanciaKm } ]   # ordenado por distância (PostGIS)
+  # id = user_id (não o PK de providers_profile) — Home/Resultados usam esse id direto
+  # em GET /providers/{userId} a seguir; até 2026-08-12 vinha o PK errado e todo toque
+  # num card da busca dava 422 PROVIDER_NOT_FOUND (nenhum E2E cobria esse caminho, só
+  # o fluxo de pedido por categoria).
+  200: [ { id, nome, categoria, bio, statusVerificacao, notaMedia, distanciaMetros } ]
   200: []                                                     # raio vazio = estado tratado, não erro
   SLA: p95 < 300ms
+
+GET /api/v1/providers/{userId}                          # perfil público (ProviderProfileScreen)
+  200: { userId, nome, categoria, bio, notaMedia, totalAvaliacoes, totalServicos,
+         statusVerificacao, avaliacoes[], tempoRespostaMin, precoMin, precoMax }
+  # tempoRespostaMin/precoMin/precoMax: agregado sobre as Proposal do prestador (qualquer
+  # status, não só ACEITA — reflete padrão de cotação, não só serviço fechado); null sem
+  # proposta nenhuma ainda. Não existe pontualidadePct: não há conceito de horário
+  # combinado no domínio hoje pra medir "no prazo" contra algo (US pendente de definição
+  # de produto antes de virar engenharia).
+  422: PROVIDER_NOT_FOUND
 ```
 
 ### M04 — Solicitação Multimídia + IA

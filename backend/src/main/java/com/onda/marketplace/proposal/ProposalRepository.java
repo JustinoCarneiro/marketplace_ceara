@@ -15,4 +15,9 @@ public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
     // Atendimento ativo do prestador (tab "Em Andamento" no app) — 1 prestador, 1 proposta
     // ACEITA por vez no MVP (sem múltiplos atendimentos simultâneos).
     List<Proposal> findByPrestadorIdAndStatus(UUID prestadorId, ProposalStatus status);
+
+    // Faixa de preço e tempo de resposta do perfil público — todas as propostas já
+    // enviadas (não só ACEITA), porque refletem o padrão de cotação/resposta do
+    // prestador, não só os serviços fechados.
+    List<Proposal> findByPrestadorId(UUID prestadorId);
 }
