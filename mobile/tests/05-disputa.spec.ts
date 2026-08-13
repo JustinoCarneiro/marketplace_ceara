@@ -102,5 +102,11 @@ test('cliente abre disputa pelo app e o pedido some da tab "Em Andamento" do pre
   await p2.getByText('Em Andamento', { exact: true }).click();
   await expect(p2.getByText('Nenhum atendimento em andamento')).toBeVisible({ timeout: 8000 });
 
+  // E aparece no Histórico (GET /service-requests/history) — tela nova, sem isso o
+  // prestador não tinha como ver esse pedido em lugar nenhum depois que saiu de EM_ANDAMENTO.
+  await p2.getByText('Histórico', { exact: true }).click();
+  await expect(p2.getByText('Em disputa', { exact: true })).toBeVisible({ timeout: 8000 });
+  await expect(p2.getByText(CLIENTE.nome)).toBeVisible();
+
   await p2.close();
 });

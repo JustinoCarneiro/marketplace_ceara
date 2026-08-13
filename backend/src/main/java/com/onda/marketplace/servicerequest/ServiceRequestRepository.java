@@ -43,6 +43,23 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     java.util.List<Object[]> contarPorStatusNoPeriodo(@Param("de") java.time.Instant de,
                                                       @Param("ate") java.time.Instant ate);
 
+    // Mesma métrica, recortada por bairro (US23 parte 2) — método separado em vez de
+    // "(:bairro IS NULL OR ...)" seguindo o mesmo motivo já documentado acima pra datas:
+    // evitar depender de inferência de tipo de parâmetro nulo solto.
+    @Query("""
+           SELECT s.status, COUNT(s) FROM ServiceRequest s
+            WHERE s.createdAt >= :de AND s.createdAt < :ate AND s.bairro = :bairro
+            GROUP BY s.status
+           """)
+    java.util.List<Object[]> contarPorStatusNoPeriodoEBairro(@Param("de") java.time.Instant de,
+                                                             @Param("ate") java.time.Instant ate,
+                                                             @Param("bairro") String bairro);
+
+    // Lista de bairros distintos já usados em algum pedido — popula o seletor do admin sem
+    // precisar manter uma tabela separada de bairros válidos.
+    @Query("SELECT DISTINCT s.bairro FROM ServiceRequest s WHERE s.bairro IS NOT NULL ORDER BY s.bairro")
+    java.util.List<String> bairrosDistintos();
+
     // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
     @Query("""
         SELECT CASE WHEN EXISTS(

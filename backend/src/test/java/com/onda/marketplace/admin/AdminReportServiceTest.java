@@ -118,7 +118,7 @@ class AdminReportServiceTest {
                 .thenReturn(BigDecimal.ZERO);
         when(resolutionRepository.tempoMedioResolucaoHoras(any(), any())).thenReturn(0.0);
 
-        service.metrics(null, null);
+        service.metrics(null, null, null);
 
         var de  = org.mockito.ArgumentCaptor.forClass(Instant.class);
         var ate = org.mockito.ArgumentCaptor.forClass(Instant.class);
@@ -139,12 +139,41 @@ class AdminReportServiceTest {
                 .thenReturn(BigDecimal.ZERO);
         when(resolutionRepository.tempoMedioResolucaoHoras(de, ate)).thenReturn(0.0);
 
-        service.metrics(de, ate);
+        service.metrics(de, ate, null);
 
         verify(sosRepository).contarNoPeriodo(de, ate);
         // estoque ignora o período de propósito: disputa aberta antiga ainda é problema de hoje
         verify(srRepository).countByStatus(ServiceRequestStatus.EM_DISPUTA);
         verify(userRepository).countByRoleAndAtivoTrue(UserRole.ROLE_CLIENT);
+    }
+
+    @Test
+    void metrics_comBairro_usaConsultaFiltradaEIgnoraAsDeFluxoSemBairro() {
+        // US23 (parte 2): com bairro informado, pedidosPorStatus vem da consulta filtrada —
+        // a variante sem bairro não pode nem ser chamada, senão o filtro "vaza" e devolve
+        // dado de todos os bairros disfarçado de recorte.
+        Instant de  = Instant.parse("2026-07-01T00:00:00Z");
+        Instant ate = Instant.parse("2026-08-01T00:00:00Z");
+        when(srRepository.contarPorStatusNoPeriodoEBairro(de, ate, "Aldeota")).thenReturn(List.<Object[]>of(
+                linha(ServiceRequestStatus.CONCLUIDO, 5L)));
+        when(transactionRepository.somaValorTotalNoPeriodo(any(), eq(de), eq(ate))).thenReturn(BigDecimal.ZERO);
+        when(transactionRepository.contarNoPeriodo(any(), eq(de), eq(ate))).thenReturn(0L);
+        when(transactionRepository.somaComissaoNoPeriodo(eq(TransactionStatus.LIBERADO), eq(de), eq(ate)))
+                .thenReturn(BigDecimal.ZERO);
+        when(resolutionRepository.tempoMedioResolucaoHoras(de, ate)).thenReturn(0.0);
+
+        MetricsDto m = service.metrics(de, ate, "Aldeota");
+
+        assertThat(m.totalPedidos()).isEqualTo(5L);
+        assertThat(m.pedidosPorStatus()).containsEntry("CONCLUIDO", 5L);
+        verify(srRepository, org.mockito.Mockito.never()).contarPorStatusNoPeriodo(any(), any());
+    }
+
+    @Test
+    void bairrosDisponiveis_delegaParaORepositorio() {
+        when(srRepository.bairrosDistintos()).thenReturn(List.of("Aldeota", "Meireles"));
+
+        assertThat(service.bairrosDisponiveis()).containsExactly("Aldeota", "Meireles");
     }
 
     @Test
@@ -176,7 +205,7 @@ class AdminReportServiceTest {
                 BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-csv");
         when(transactionRepository.findAll()).thenReturn(List.of(tx));
 
-        String csv = service.exportarCsv("transactions");
+        String csv = service.exportarCsv("transactions", null);
 
         assertThat(csv).startsWith("id,serviceRequestId,valorTotal,valorComissao,metodo,statusPagamento");
         assertThat(csv).contains("PIX").contains("200");
@@ -186,7 +215,7 @@ class AdminReportServiceTest {
 
     @Test
     void exportarCsv_recursoDesconhecido_lancaException() {
-        assertThatThrownBy(() -> service.exportarCsv("usuarios"))
+        assertThatThrownBy(() -> service.exportarCsv("usuarios", null))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "UNKNOWN_REPORT");
     }
@@ -209,7 +238,7 @@ class AdminReportServiceTest {
         when(userRepository.countByRoleAndAtivoTrue(UserRole.ROLE_CLIENT)).thenReturn(40L);
         when(sosRepository.contarNoPeriodo(any(), any())).thenReturn(0L);
 
-        byte[] pdf = service.exportarMetricasPdf();
+        byte[] pdf = service.exportarMetricasPdf(null);
 
         // PDF deve começar com assinatura PDF
         assertThat(pdf).isNotEmpty();

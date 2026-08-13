@@ -1,21 +1,30 @@
-import { useState } from 'react';
-import { downloadFile } from '../api/client';
+import { useEffect, useState } from 'react';
+import { api, downloadFile } from '../api/client';
 
 export default function ReportsPage() {
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
+  const [bairro, setBairro] = useState('');
+  const [bairros, setBairros] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
 
+  useEffect(() => {
+    api.get<string[]>('/admin/bairros').then(setBairros).catch(() => setBairros([]));
+  }, []);
+
   async function generate() {
     setGenerating(true); setProgress(0); setDone(false); setErr('');
     const iv = setInterval(() => setProgress(p => Math.min(p + Math.random() * 18, 90)), 300);
     try {
+      const qs = bairro ? `?bairro=${encodeURIComponent(bairro)}` : '';
       // CSV só tem "requests"/"transactions" no backend — "requests" cobre
-      // pedidos e disputas (disputa = pedido com status EM_DISPUTA).
-      if (format === 'csv') await downloadFile('/admin/reports/requests.csv', 'pedidos.csv');
-      else await downloadFile('/admin/reports/metrics.pdf', 'metrics.pdf');
+      // pedidos e disputas (disputa = pedido com status EM_DISPUTA). Bairro filtra só o
+      // CSV de pedidos — o PDF de métricas aceita o parâmetro mas o resumo de GMV/comissão
+      // continua agregado pra base inteira (ver AdminReportService.metrics()).
+      if (format === 'csv') await downloadFile(`/admin/reports/requests.csv${qs}`, 'pedidos.csv');
+      else await downloadFile(`/admin/reports/metrics.pdf${qs}`, 'metrics.pdf');
       setProgress(100);
       setDone(true);
     } catch (e: unknown) {
@@ -83,11 +92,24 @@ export default function ReportsPage() {
                   {format === 'pdf' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#10847D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
                 </div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F3ECDC', border: '1px solid #E6DDC9', borderRadius: 10, padding: '9px 12px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span style={{ fontSize: 12.5, color: '#15596E', fontWeight: 600 }}>Bairro:</span>
+                <select
+                  aria-label="Bairro"
+                  data-testid="select-bairro-relatorio"
+                  value={bairro}
+                  onChange={e => setBairro(e.target.value)}
+                  style={{ flex: 1, border: 'none', background: 'transparent', font: 'inherit', fontSize: 12.5, color: '#0E2A33', cursor: 'pointer', outline: 'none' }}
+                >
+                  <option value="">Todos os bairros</option>
+                  {bairros.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#E2EEF2', borderRadius: 10, padding: '9px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
-                {/* Não existe seletor de período nem de bairro nesta tela — o export
-                    sempre traz o histórico completo. Texto antigo afirmava o contrário. */}
-                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Traz o histórico completo (sem filtro de período ou bairro).</span>
+                {/* Período ainda não tem seletor nesta tela — só bairro (US23 parte 2). */}
+                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Traz o histórico completo (sem filtro de período).</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#606E71" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>

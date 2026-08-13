@@ -318,6 +318,17 @@ POST /api/v1/services/requests/{id}/complete  (ROLE_PROVIDER)  → aguarda confi
 POST /api/v1/services/requests/{id}/confirm   (ROLE_CLIENT)    EM_ANDAMENTO → CONCLUIDO
 POST /api/v1/services/requests/{id}/cancel    → CANCELADO (reembolso se houver retido)
   422: { code:"INVALID_TRANSITION" }   # ex.: PENDENTE → CONCLUIDO
+
+POST /api/v1/service-requests/{id}/dispute    (CLIENT|PROVIDER)  ACEITO|EM_ANDAMENTO → EM_DISPUTA
+  req: { motivo?, detalhes? }
+  # 2026-08-13: implementado desde 2026-08-07 (V10__dispute_reason.sql), mas até então
+  # nenhum botão do app mobile chamava este endpoint — "Abrir disputa" só existia como tela
+  # solta, inalcançável. Corrigido (ver docs/spec.md US24).
+
+GET  /api/v1/service-requests/history          (ROLE_PROVIDER)
+  200: [ { id, categoria, status, updatedAt, clienteNome, valor } ]
+  # 2026-08-13: histórico do prestador (CONCLUIDO/CANCELADO/EM_DISPUTA) — /active cobre só
+  # o atendimento corrente, não existia visão nenhuma do que já passou por essas transições.
 ```
 
 ### M08 — Avaliação & Reputação
@@ -337,10 +348,18 @@ POST /api/v1/services/requests/{id}/sos   (usuário em atendimento)
 
 ### M10 — Painel Admin: Métricas & Gestão  *(web · todas exigem `ROLE_ADMIN` → 403 caso contrário)*
 ```
-GET  /api/v1/admin/metrics?de=&ate=   # bairro: pendente, não implementado (US23 parcial)
+GET  /api/v1/admin/metrics?de=&ate=&bairro=
   200: { gmv, receitaComissao, ticketMedio, pedidosPorStatus:{...},
          taxaConclusao, disputasAbertas, tempoMedioResolucaoH,
          prestadoresVerificados, prestadoresAtivos, clientesAtivos, sosAcionados }
+  # bairro (2026-08-13, US23 parte 2): recorta só pedidosPorStatus/totalPedidos/
+  # taxaConclusao. gmv/receitaComissao/disputasAbertas/sosAcionados continuam agregados
+  # pra base inteira (escoparia join em mais 3 repositórios pra um recorte que a tela
+  # ainda não pedia). bairro é escolhido pelo cliente na criação do pedido (lista fixa,
+  # sem reverse geocoding) — service_requests.bairro, nullable, migration V17.
+
+GET  /api/v1/admin/bairros            200 [ "Aldeota", "Meireles", ... ]
+  # bairros com pelo menos 1 pedido — popula o seletor do dashboard/relatórios.
 
 GET  /api/v1/admin/users?q=&role=&status=        200 [ { id, nome, email, role, status } ]
 POST /api/v1/admin/users/{id}/suspend            200 { status:"SUSPENSO" }   # auditado
@@ -374,8 +393,8 @@ GET  /api/v1/admin/notifications?lida=           200 [ { id, tipo:"SOS"|"DISPUTA
 POST /api/v1/admin/notifications/{id}/read       200
 # alertas SOS/DISPUTA também disparam push/e-mail fora do painel (garantido p/ SOS)
 
-GET  /api/v1/admin/reports/metrics.pdf                      200  application/pdf   # resumo de métricas, histórico completo; de=/ate=/bairro= pendentes, não implementados
-GET  /api/v1/admin/reports/{recurso}.csv                    200  text/csv          # recurso: transactions|requests ("requests" cobre pedidos e disputas, que são pedidos em EM_DISPUTA); sem filtro de período/bairro
+GET  /api/v1/admin/reports/metrics.pdf?bairro=               200  application/pdf   # resumo de métricas, histórico completo; de=/ate= ainda pendentes nesta tela
+GET  /api/v1/admin/reports/{recurso}.csv?bairro=              200  text/csv          # recurso: transactions|requests ("requests" cobre pedidos e disputas, que são pedidos em EM_DISPUTA); bairro só filtra "requests" (transactions não tem bairro — herdaria via join, não implementado); sem filtro de período
 # relatórios NUNCA expõem CPF (TS04/LGPD)
 ```
 
@@ -392,6 +411,25 @@ POST /api/v1/admin/denuncias/{id}/resolver            (ROLE_ADMIN)  200
 ```
 *(Adicionado depois da Fase 3 original — migration `V12__denuncia.sql`; sem M-slot na tabela
 de pesos da seção 2 porque não fazia parte do escopo/estimativa inicial.)*
+
+### M14 — Chat pré-transação (docs/BOAS_PRATICAS_UX.md §1)
+```
+POST /api/v1/service-requests/{id}/messages   (CLIENT|PROVIDER, participante do pedido)
+  req:  { conteudo }
+  201:  { id, remetenteId, remetenteNome, conteudo, mascarado, createdAt }
+  422:  { code:"CHAT_INDISPONIVEL" }   # antes do aceite (PENDENTE/PROPOSTO) ou CANCELADO
+
+GET  /api/v1/service-requests/{id}/messages   (CLIENT|PROVIDER, participante do pedido)
+  200:  [ { id, remetenteId, remetenteNome, conteudo, mascarado, createdAt } ]
+```
+Telefone/e-mail digitados são mascarados (`[contato removido]`) **antes de persistir** — o
+dado bruto nunca chega ao banco, não é só escondido na tela (anti-desintermediação: sem
+isso, cliente e prestador combinam pagamento fora da plataforma e a comissão que sustenta o
+MVP nunca é cobrada). Disponível a partir de `ACEITO` até `CONCLUIDO`/`EM_DISPUTA` — antes do
+aceite ainda não existe par cliente-prestador fixo (pedido pode ter várias propostas
+concorrendo). Migration `V16__messages.sql`.
+*(Adicionado depois da Fase 3 original, 2026-08-13 — mesma razão do M13: não fazia parte do
+escopo/estimativa inicial, sem M-slot na tabela de pesos da seção 2.)*
 
 ### Envelope de erro padrão (`@ControllerAdvice`, TS06)
 ```

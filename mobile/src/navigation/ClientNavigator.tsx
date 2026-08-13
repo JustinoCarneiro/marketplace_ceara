@@ -23,6 +23,7 @@ import PaymentCardScreen from '../screens/client/PaymentCardScreen';
 import EscrowConfirmedScreen from '../screens/client/EscrowConfirmedScreen';
 import RequestDetailScreen from '../screens/shared/RequestDetailScreen';
 import OpenDisputeScreen from '../screens/shared/OpenDisputeScreen';
+import ChatScreen from '../screens/shared/ChatScreen';
 import RateScreen from '../screens/shared/RateScreen';
 import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
@@ -111,6 +112,7 @@ export default function ClientNavigator() {
       <Stack.Screen name="EscrowConfirmed" component={EscrowConfirmedScreen} />
       <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
       <Stack.Screen name="OpenDispute" component={OpenDisputeScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Rate" component={RateScreen} />
       <Stack.Screen name="RateConfirm" component={RateConfirmScreen} />
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />

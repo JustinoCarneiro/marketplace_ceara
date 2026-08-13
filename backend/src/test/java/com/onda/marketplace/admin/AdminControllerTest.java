@@ -85,7 +85,7 @@ class AdminControllerTest {
 
     @Test
     void metrics_retorna200_comAgregados() throws Exception {
-        when(adminReportService.metrics(null, null)).thenReturn(metricsFake());
+        when(adminReportService.metrics(null, null, null)).thenReturn(metricsFake());
 
         mvc.perform(get("/api/v1/admin/metrics"))
                 .andExpect(status().isOk())
@@ -110,13 +110,13 @@ class AdminControllerTest {
         // "ate" é inclusive → vira o começo do dia seguinte, 00:00 local = 03:00Z.
         Instant de  = Instant.parse("2026-07-01T03:00:00Z");
         Instant ate = Instant.parse("2026-08-01T03:00:00Z");
-        when(adminReportService.metrics(de, ate)).thenReturn(metricsFake());
+        when(adminReportService.metrics(de, ate, null)).thenReturn(metricsFake());
 
         mvc.perform(get("/api/v1/admin/metrics").param("de", "2026-07-01").param("ate", "2026-07-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.gmv").value(10000));
 
-        verify(adminReportService).metrics(de, ate);
+        verify(adminReportService).metrics(de, ate, null);
     }
 
     @Test
@@ -132,7 +132,7 @@ class AdminControllerTest {
 
     @Test
     void reportCsv_retornaTextCsv() throws Exception {
-        when(adminReportService.exportarCsv("transactions"))
+        when(adminReportService.exportarCsv("transactions", null))
                 .thenReturn("id,serviceRequestId,valorTotal\n1,2,200");
 
         mvc.perform(get("/api/v1/admin/reports/{recurso}.csv", "transactions"))

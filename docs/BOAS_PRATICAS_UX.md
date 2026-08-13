@@ -27,9 +27,11 @@ micro-interações visíveis.
   prestador), lado a lado com a timeline de status do pedido.
 - ✅ Selo de pagamento seguro (já existe na `SplashScreen` — badge "Pagamento
   seguro com escrow").
-- ⬜ **Mascaramento de contato** no chat pré-transação (telefone/whatsapp
-  borrados) com aviso amigável: "Seus dados ficam protegidos enquanto o
-  pagamento está retido". Relevante quando o chat for implementado.
+- ✅ **Mascaramento de contato** no chat pré-transação (2026-08-13): telefone/
+  e-mail digitados são substituídos por "[contato removido]" **antes de
+  persistir** (não é só borrado na tela), com o aviso amigável sugerido aqui
+  ("Seus dados ficam protegidos enquanto o pagamento está retido") exibido no
+  topo do `ChatScreen`. Ver ROADMAP.md M14 e docs/spec.md US33.
 - ✅ **Custos antecipados sem dark patterns:** `PaymentChoiceScreen` mostra
   valor do serviço, "Comissão Onda (10%)" e o **Total** somado na mesma tela,
   antes de confirmar — validado.
@@ -190,7 +192,7 @@ que ocorreu com [[PENDENCIAS_INTEGRIDADE]]). Restam os itens abaixo:
 | ~~🟢 Baixa~~ | Checkout em uma tela + autofill (`PaymentCardScreen`) | 6 | Baixo | ✅ Feito (2026-08-08) |
 | ~~🟢 Baixa~~ | Feedback de processamento do gateway | 6 | Médio | ✅ Feito (2026-08-08) — achado: confirmação inteira era fake |
 | ~~🟡 Média~~ | Contraste AA — cores de marca (`primary`, `textFaint`, `sunInk`, `terraInk`) | todos | Depende do design | ✅ Feito (2026-08-08) — cliente aprovou recalibrar |
-| 🟢 Baixa | Mascaramento de contato no chat | — | Depende do chat | ⬜ Pendente (bloqueado) |
+| ~~🟢 Baixa~~ | Mascaramento de contato no chat | — | — | ✅ Feito (2026-08-13) — chat pré-transação construído do zero (não existia) |
 
 **Fora deste doc, mas achados no mesmo levantamento:** dois campos coletados na
 UI e nunca persistidos — `bio` do prestador (`RegisterProviderScreen`) e

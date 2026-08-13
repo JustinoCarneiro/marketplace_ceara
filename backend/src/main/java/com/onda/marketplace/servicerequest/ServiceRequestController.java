@@ -57,6 +57,13 @@ public class ServiceRequestController {
         return new ActiveJobDto(service.buscarPedidoAtivoDoPrestador(userId(auth)));
     }
 
+    /** Histórico do prestador logado — pedidos concluídos/cancelados/em disputa (mobile). */
+    @GetMapping("/history")
+    @PreAuthorize("hasRole('PROVIDER')")
+    public List<ProviderHistoryDto> historicoDoPrestador(Authentication auth) {
+        return service.listarHistoricoDoPrestador(userId(auth));
+    }
+
     /** Detalhe do pedido — só para quem participa dele (cliente dono ou prestador aceito). */
     @GetMapping("/{id}")
     public ServiceRequestDetailDto detalhe(@PathVariable UUID id, Authentication auth) {

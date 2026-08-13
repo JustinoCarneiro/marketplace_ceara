@@ -43,7 +43,7 @@ class ServiceRequestControllerTest {
                         .header("X-Idempotency-Key", IDEM_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(
-                                new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267))))
+                                new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDENTE"))
                 .andExpect(jsonPath("$.aiDescricaoSugerida").exists());
@@ -66,7 +66,7 @@ class ServiceRequestControllerTest {
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(
-                                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7319, -38.5267))))
+                                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7319, -38.5267, null))))
                 .andExpect(status().isBadRequest());
     }
 

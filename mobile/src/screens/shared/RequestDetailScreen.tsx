@@ -443,6 +443,10 @@ export default function RequestDetailScreen() {
   const showStartService = isProvider && st === 'ACEITO';
   const showRate = st === 'CONCLUIDO';
   const showCancel = ['ACEITO', 'EM_ANDAMENTO'].includes(st);
+  // Mesma janela do backend (MessageService.CHAT_ATIVO): só existe par cliente-prestador
+  // fixo a partir do aceite; PENDENTE/PROPOSTO podem ter zero ou várias propostas
+  // concorrendo, sem conversa definida ainda.
+  const showChat = ['ACEITO', 'EM_ANDAMENTO', 'CONCLUIDO', 'EM_DISPUTA'].includes(st);
   const showDispute = ['ACEITO', 'EM_ANDAMENTO'].includes(st);
 
   return (
@@ -557,6 +561,17 @@ export default function RequestDetailScreen() {
           >
             <Feather name="star" size={18} color="#fff" />
             <Text style={styles.btnPrimaryText}>Avaliar</Text>
+          </TouchableOpacity>
+        )}
+        {showChat && (
+          <TouchableOpacity
+            testID="btn-abrir-chat"
+            style={styles.btnChat}
+            onPress={() => nav.navigate('Chat', { requestId })}
+            activeOpacity={0.75}
+          >
+            <Feather name="message-circle" size={17} color="#fff" />
+            <Text style={styles.btnChatText}>Conversar</Text>
           </TouchableOpacity>
         )}
         {showDispute && (
@@ -749,6 +764,20 @@ const styles = StyleSheet.create({
   },
   btnPrimaryText: {
     fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  btnChat: {
+    height: 50,
+    borderRadius: 100,
+    backgroundColor: COLORS.institutional,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  btnChatText: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#fff',
   },

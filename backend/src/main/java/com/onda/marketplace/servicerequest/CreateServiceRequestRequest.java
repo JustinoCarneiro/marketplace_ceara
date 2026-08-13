@@ -7,5 +7,6 @@ public record CreateServiceRequestRequest(
         @NotBlank String  categoria,
         String            descricao,
         @NotNull Double   lat,
-        @NotNull Double   lng
+        @NotNull Double   lng,
+        String            bairro
 ) {}

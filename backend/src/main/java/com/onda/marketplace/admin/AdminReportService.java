@@ -75,7 +75,7 @@ public class AdminReportService {
     /** Métricas sem recorte de período (todo o histórico). */
     @Transactional(readOnly = true)
     public MetricsDto metrics() {
-        return metrics(null, null);
+        return metrics(null, null, null);
     }
 
     /**
@@ -83,16 +83,26 @@ public class AdminReportService {
      * O recorte vale para as métricas de fluxo; as de estoque descrevem o estado
      * atual e ignoram as datas — ver {@link MetricsDto}.
      *
-     * @param de  início do período (inclusive), ou null para "desde sempre"
-     * @param ate fim do período (exclusive), ou null para "até agora"
+     * @param de     início do período (inclusive), ou null para "desde sempre"
+     * @param ate    fim do período (exclusive), ou null para "até agora"
+     * @param bairro filtro opcional (US23 parte 2) — recorta {@code pedidosPorStatus} e
+     *               derivados (totalPedidos, taxaConclusao). GMV/comissão/disputas/SOS
+     *               continuam agregados por toda a base: são estoque de negócio, não de
+     *               volume de pedidos, e escopar por bairro exigiria join em mais três
+     *               repositórios pra um recorte que a tela de métricas ainda não pede.
      */
     @Transactional(readOnly = true)
-    public MetricsDto metrics(Instant deOuNull, Instant ateOuNull) {
+    public MetricsDto metrics(Instant deOuNull, Instant ateOuNull, String bairro) {
         Instant de  = deOuNull  != null ? deOuNull  : INICIO_DOS_TEMPOS;
         Instant ate = ateOuNull != null ? ateOuNull : FIM_DOS_TEMPOS;
 
+        boolean temBairro = bairro != null && !bairro.isBlank();
+        List<Object[]> porStatus = temBairro
+                ? srRepository.contarPorStatusNoPeriodoEBairro(de, ate, bairro)
+                : srRepository.contarPorStatusNoPeriodo(de, ate);
+
         Map<String, Long> pedidosPorStatus = new LinkedHashMap<>();
-        for (Object[] linha : srRepository.contarPorStatusNoPeriodo(de, ate)) {
+        for (Object[] linha : porStatus) {
             pedidosPorStatus.put(((ServiceRequestStatus) linha[0]).name(), (Long) linha[1]);
         }
 
@@ -123,6 +133,11 @@ public class AdminReportService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> bairrosDisponiveis() {
+        return srRepository.bairrosDistintos();
+    }
+
+    @Transactional(readOnly = true)
     public List<OperationalAlert> alertas() {
         List<OperationalAlert> alertas = new ArrayList<>();
         addSePositivo(alertas, "SOS_ATIVO",
@@ -141,10 +156,10 @@ public class AdminReportService {
     }
 
     @Transactional(readOnly = true)
-    public String exportarCsv(String recurso) {
+    public String exportarCsv(String recurso, String bairro) {
         return switch (recurso) {
             case "transactions" -> exportarTransacoes();
-            case "requests"     -> exportarPedidos();
+            case "requests"     -> exportarPedidos(bairro);
             default -> throw new BusinessException("UNKNOWN_REPORT",
                     "Relatório desconhecido: " + recurso);
         };
@@ -161,11 +176,14 @@ public class AdminReportService {
         return sb.toString();
     }
 
-    private String exportarPedidos() {
-        StringBuilder sb = new StringBuilder("id,categoria,status,criadoEm");
+    private String exportarPedidos(String bairro) {
+        boolean temBairro = bairro != null && !bairro.isBlank();
+        StringBuilder sb = new StringBuilder("id,categoria,bairro,status,criadoEm");
         for (ServiceRequest s : srRepository.findAll()) {
+            if (temBairro && !bairro.equals(s.getBairro())) continue;
             sb.append('\n').append(linha(
-                    s.getId(), s.getCategoria(), s.getStatus(), s.getCreatedAt()));
+                    s.getId(), s.getCategoria(), s.getBairro() != null ? s.getBairro() : "",
+                    s.getStatus(), s.getCreatedAt()));
         }
         return sb.toString();
     }
@@ -183,11 +201,13 @@ public class AdminReportService {
      * Gera PDF em memória com resumo de métricas do painel (US29).
      * NUNCA expõe CPF — somente agregados (TS04/LGPD).
      *
+     * @param bairro filtro opcional (US23 parte 2) — mesmo recorte de {@link #metrics}:
+     *               só pedidosPorStatus/totalPedidos/taxaConclusao respeitam o bairro.
      * @return array de bytes do PDF
      */
     @Transactional(readOnly = true)
-    public byte[] exportarMetricasPdf() {
-        MetricsDto m = metrics();
+    public byte[] exportarMetricasPdf(String bairro) {
+        MetricsDto m = metrics(null, null, bairro);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             Document doc = new Document(PageSize.A4);
             PdfWriter.getInstance(doc, baos);
@@ -197,6 +217,9 @@ public class AdminReportService {
             Font tituloFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16);
             doc.add(new Paragraph("Marketplace Ceará — Relatório de Métricas", tituloFont));
             doc.add(new Paragraph("Gerado em: " + java.time.Instant.now()));
+            if (bairro != null && !bairro.isBlank()) {
+                doc.add(new Paragraph("Bairro: " + bairro));
+            }
             doc.add(Chunk.NEWLINE);
 
             // Métricas

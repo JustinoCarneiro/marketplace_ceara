@@ -15,7 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -170,6 +173,25 @@ public class ServiceRequestService {
                 .orElse(null);
     }
 
+    // Histórico do prestador (ProviderHistoryScreen): pedidos que já saíram de ACEITO/
+    // EM_ANDAMENTO. O atendimento corrente é só de /active — misturar os dois faria o
+    // pedido em execução aparecer duplicado nas duas telas.
+    private static final Set<ServiceRequestStatus> HISTORICO_PRESTADOR = EnumSet.of(
+            ServiceRequestStatus.CONCLUIDO, ServiceRequestStatus.CANCELADO, ServiceRequestStatus.EM_DISPUTA);
+
+    @Transactional(readOnly = true)
+    public List<ProviderHistoryDto> listarHistoricoDoPrestador(UUID prestadorId) {
+        return proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA).stream()
+                .filter(p -> HISTORICO_PRESTADOR.contains(p.getServiceRequest().getStatus()))
+                .sorted(Comparator.comparing((Proposal p) -> p.getServiceRequest().getUpdatedAt()).reversed())
+                .map(p -> {
+                    ServiceRequest sr = p.getServiceRequest();
+                    return new ProviderHistoryDto(sr.getId(), sr.getCategoria(), sr.getStatus().name(),
+                            sr.getUpdatedAt(), sr.getCliente().getNome(), p.getValor());
+                })
+                .toList();
+    }
+
     /** Sugestão da IA já persistida (nula quando indisponível — fallback manual na tela). */
     @Transactional(readOnly = true)
     public AiSuggestionDto buscarSugestaoIa(UUID requestId, UUID clienteId) {
@@ -228,6 +250,7 @@ public class ServiceRequestService {
         sr.setCategoria(req.categoria());
         sr.setDescricao(req.descricao());
         sr.setLocalizacao(GEO.createPoint(new Coordinate(req.lng(), req.lat())));
+        sr.setBairro(req.bairro());
         sr.setIdempotencyKey(idempotencyKey);
 
         // IA com fallback manual — nunca bloqueia o pedido (princípio CLAUDE.md)

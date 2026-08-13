@@ -84,7 +84,7 @@ class NotificationControllerTest {
     @Test
     void reportMetricsPdf_retorna200ComContentTypeApplicationPdf() throws Exception {
         byte[] fakePdf = "%PDF-1.4 fake content".getBytes();
-        when(adminReportService.exportarMetricasPdf()).thenReturn(fakePdf);
+        when(adminReportService.exportarMetricasPdf(null)).thenReturn(fakePdf);
 
         mvc.perform(get("/api/v1/admin/reports/metrics.pdf"))
                 .andExpect(status().isOk())
@@ -95,7 +95,7 @@ class NotificationControllerTest {
 
     @Test
     void reportMetricsPdf_retornaByteArrayNaoVazio() throws Exception {
-        when(adminReportService.exportarMetricasPdf()).thenReturn(new byte[]{1, 2, 3});
+        when(adminReportService.exportarMetricasPdf(null)).thenReturn(new byte[]{1, 2, 3});
 
         mvc.perform(get("/api/v1/admin/reports/metrics.pdf"))
                 .andExpect(status().isOk())

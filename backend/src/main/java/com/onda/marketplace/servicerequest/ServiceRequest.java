@@ -33,6 +33,12 @@ public class ServiceRequest {
     @Column(columnDefinition = "geography(Point,4326)")
     private Point localizacao;
 
+    // US23 (parte 2): bairro escolhido pelo cliente ao criar o pedido — sem reverse
+    // geocoding implementado, é o único jeito de filtrar métricas/relatórios admin por
+    // região sem inferir a partir de lat/lng.
+    @Column(length = 60)
+    private String bairro;
+
     @Column(name = "ai_descricao_sugerida", columnDefinition = "TEXT")
     private String aiDescricaoSugerida;
 
@@ -72,6 +78,7 @@ public class ServiceRequest {
     public String getDescricao()                { return descricao; }
     public ServiceRequestStatus getStatus()     { return status; }
     public Point getLocalizacao()               { return localizacao; }
+    public String getBairro()                   { return bairro; }
     public String getAiDescricaoSugerida()      { return aiDescricaoSugerida; }
     public BigDecimal getAiFaixaMin()           { return aiFaixaMin; }
     public BigDecimal getAiFaixaMax()           { return aiFaixaMax; }
@@ -86,6 +93,7 @@ public class ServiceRequest {
     public void setDescricao(String v)          { this.descricao = v; }
     public void setStatus(ServiceRequestStatus v) { this.status = v; }
     public void setLocalizacao(Point v)         { this.localizacao = v; }
+    public void setBairro(String v)             { this.bairro = v; }
     public void setCliente(User v)              { this.cliente = v; }
     public void setIdempotencyKey(String v)     { this.idempotencyKey = v; }
     public void setMotivoDisputa(String v)      { this.motivoDisputa = v; }

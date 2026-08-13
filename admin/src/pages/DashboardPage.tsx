@@ -50,8 +50,17 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [dias, setDias] = useState<number | null>(30);
+  const [bairro, setBairro] = useState('');
+  const [bairros, setBairros] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportErr, setExportErr] = useState('');
+
+  // US23 (parte 2): "Todos os bairros" era rótulo fixo, sem filtro real por trás (achado em
+  // auditoria de docs 2026-08-08). Lista vem dos bairros que já têm pelo menos um pedido —
+  // não faz sentido oferecer opção que sempre devolve lista vazia.
+  useEffect(() => {
+    api.get<string[]>('/admin/bairros').then(setBairros).catch(() => setBairros([]));
+  }, []);
 
   // Independente do período do dashboard — é "o que precisa de mim agora", não histórico.
   useEffect(() => {
@@ -61,7 +70,10 @@ export default function DashboardPage() {
   async function exportar() {
     setExporting(true);
     setExportErr('');
-    try { await downloadFile('/admin/reports/metrics.pdf', 'metrics.pdf'); }
+    try {
+      const qs = bairro ? `?bairro=${encodeURIComponent(bairro)}` : '';
+      await downloadFile(`/admin/reports/metrics.pdf${qs}`, 'metrics.pdf');
+    }
     catch (e: unknown) { setExportErr(e instanceof Error ? e.message : 'Erro ao exportar o PDF.'); }
     finally { setExporting(false); }
   }
@@ -71,13 +83,16 @@ export default function DashboardPage() {
     (async () => {
       setLoading(true);
       try {
-        let url = '/admin/metrics';
+        const params = new URLSearchParams();
         if (dias !== null) {
           const inicio = new Date();
           inicio.setDate(inicio.getDate() - dias);
-          url += `?de=${inicio.toISOString().slice(0, 10)}&ate=${new Date().toISOString().slice(0, 10)}`;
+          params.set('de', inicio.toISOString().slice(0, 10));
+          params.set('ate', new Date().toISOString().slice(0, 10));
         }
-        const data = await api.get<Metrics>(url);
+        if (bairro) params.set('bairro', bairro);
+        const qs = params.toString();
+        const data = await api.get<Metrics>(`/admin/metrics${qs ? `?${qs}` : ''}`);
         if (!cancelado) setMetrics(data);
       } catch {
         if (!cancelado) setMetrics(null);
@@ -86,7 +101,7 @@ export default function DashboardPage() {
       }
     })();
     return () => { cancelado = true; };
-  }, [dias]);
+  }, [dias, bairro]);
 
   const fmt = (n: number | null | undefined) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const num = (n: number | null | undefined) => (n ?? 0);
@@ -109,6 +124,19 @@ export default function DashboardPage() {
               style={{ border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', cursor: 'pointer', outline: 'none' }}
             >
               {PERIODOS.map(p => <option key={p.label} value={String(p.dias)}>{p.label}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#4C636A', background: '#F3ECDC', border: '1px solid #E6DDC9', padding: '8px 14px', borderRadius: 100 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <select
+              aria-label="Bairro"
+              data-testid="select-bairro"
+              value={bairro}
+              onChange={e => setBairro(e.target.value)}
+              style={{ border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="">Todos os bairros</option>
+              {bairros.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </label>
           <button onClick={exportar} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 20px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 14, cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.7 : 1, boxShadow: '0 14px 24px -14px rgba(20,168,160,.85)' }}>

@@ -109,11 +109,18 @@ public class AdminController {
     @GetMapping("/metrics")
     public ResponseEntity<MetricsDto> metrics(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate de,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate,
+            @RequestParam(required = false) String bairro) {
 
         Instant inicio = de  != null ? de.atStartOfDay(ZONA_NEGOCIO).toInstant()              : null;
         Instant fim    = ate != null ? ate.plusDays(1).atStartOfDay(ZONA_NEGOCIO).toInstant() : null;
-        return ResponseEntity.ok(adminReportService.metrics(inicio, fim));
+        return ResponseEntity.ok(adminReportService.metrics(inicio, fim, bairro));
+    }
+
+    /** Bairros com pelo menos um pedido — popula o seletor da tela de métricas/relatórios. */
+    @GetMapping("/bairros")
+    public ResponseEntity<List<String>> bairros() {
+        return ResponseEntity.ok(adminReportService.bairrosDisponiveis());
     }
 
     @GetMapping("/alerts")
@@ -122,8 +129,9 @@ public class AdminController {
     }
 
     @GetMapping(value = "/reports/{recurso}.csv", produces = "text/csv")
-    public ResponseEntity<String> reportCsv(@PathVariable String recurso) {
-        String csv = adminReportService.exportarCsv(recurso);
+    public ResponseEntity<String> reportCsv(@PathVariable String recurso,
+                                            @RequestParam(required = false) String bairro) {
+        String csv = adminReportService.exportarCsv(recurso, bairro);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .header("Content-Disposition", "attachment; filename=\"" + recurso + ".csv\"")
@@ -154,8 +162,8 @@ public class AdminController {
      * NUNCA expõe CPF — somente agregados (TS04/LGPD).
      */
     @GetMapping(value = "/reports/metrics.pdf", produces = "application/pdf")
-    public ResponseEntity<byte[]> reportMetricsPdf() {
-        byte[] pdf = adminReportService.exportarMetricasPdf();
+    public ResponseEntity<byte[]> reportMetricsPdf(@RequestParam(required = false) String bairro) {
+        byte[] pdf = adminReportService.exportarMetricasPdf(bairro);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", "attachment; filename=\"metrics.pdf\"")

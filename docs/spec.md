@@ -115,6 +115,9 @@ Como **Plataforma**, quero liberar o valor com split de comissão ao concluir, p
 Como **Cliente ou Prestador**, quero abrir disputa quando algo der errado, para acionar mediação.
 - **Dado** pedido `EM_ANDAMENTO`, **quando** abro disputa, **então** o pedido vai para `EM_DISPUTA` e o valor permanece retido.
 - **Dado** decisão da mediação, **então** a `transaction` vai para `LIBERADO` (a favor do prestador) ou `REEMBOLSADO` (a favor do cliente).
+- **Dado** o app mobile, **então** existe um botão real "Abrir disputa" que leva até esse fluxo.
+  Até 2026-08-13, o backend e a tela existiam prontos, mas nenhum botão do app chamava —
+  o único gatilho sob a mesma condição de visibilidade era o do SOS, sem relação com disputa.
 
 ---
 
@@ -126,6 +129,27 @@ Como **Prestador**, quero atualizar o andamento do serviço, para refletir o sta
 - **Dado** pedido `EM_ANDAMENTO`, **quando** concluo e o cliente confirma, **então** vai para `CONCLUIDO`.
 - **Dado** cancelamento permitido por regra, **quando** acionado, **então** vai para `CANCELADO` com reembolso quando houver valor retido.
 - Transições inválidas (ex.: `PENDENTE → CONCLUIDO`) são rejeitadas com 422.
+
+### US33 — Chat pré-transação entre Cliente e Prestador
+Como **Cliente ou Prestador**, quero conversar sobre o pedido dentro do app, para combinar
+detalhes sem sair da plataforma.
+- **Dado** proposta aceita (`ACEITO` até `CONCLUIDO`/`EM_DISPUTA`), **quando** abro a
+  conversa, **então** vejo e envio mensagens de texto com a outra parte do pedido.
+- **Dado** que digito um telefone ou e-mail na mensagem, **quando** envio, **então** o dado é
+  substituído por "[contato removido]" **antes de ser salvo** — não é só escondido na tela,
+  o valor bruto nunca chega ao banco (anti-desintermediação: protege a comissão do MVP).
+- **Dado** pedido ainda `PENDENTE`/`PROPOSTO` (sem prestador definido) ou `CANCELADO`,
+  **quando** tento enviar mensagem, **então** recebo 422 `CHAT_INDISPONIVEL`.
+- **Dado** que não participo do pedido, **quando** tento ler ou enviar mensagem, **então**
+  recebo 422 `FORBIDDEN`.
+
+### US34 — Histórico do prestador
+Como **Prestador**, quero ver os pedidos que já atendi, para acompanhar meu histórico.
+- **Dado** pedidos `CONCLUIDO`, `CANCELADO` ou `EM_DISPUTA` onde fui o prestador aceito,
+  **quando** abro a aba Histórico, **então** vejo a lista ordenada do mais recente pro mais
+  antigo, com categoria, status, cliente e valor (quando concluído).
+- O atendimento **corrente** (`ACEITO`/`EM_ANDAMENTO`) continua exclusivo da aba "Em
+  Andamento" — não aparece duplicado no Histórico.
 
 ---
 
@@ -193,7 +217,10 @@ Como **Admin**, quero entrar num painel restrito, para gerenciar a plataforma co
 ### US23 — Dashboard de métricas
 Como **Admin**, quero ver as métricas-chave do negócio, para acompanhar a saúde da plataforma.
 - **Dado** o painel inicial, **então** vejo: volume transacionado (GMV), receita de comissão, ticket médio, nº de pedidos por status, taxa de conclusão, disputas abertas e tempo médio de resolução, prestadores verificados/ativos, clientes ativos e SOS acionados no período.
-- **Dado** um filtro de período/bairro, **quando** aplico, **então** as métricas recalculam.
+- **Dado** um filtro de período, **quando** aplico, **então** as métricas recalculam.
+- **Dado** um filtro de bairro (2026-08-13), **quando** aplico, **então** pedidos por status/
+  total/taxa de conclusão recalculam para aquele bairro — GMV, comissão, disputas abertas e
+  SOS continuam agregados pra base inteira (não são filtráveis por bairro ainda).
 - **Dado** uma métrica financeira, **então** ela bate com o estado das `transactions` (consistência com o Escrow).
 
 ### US24 — Mediação de disputas

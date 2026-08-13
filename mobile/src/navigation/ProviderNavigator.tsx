@@ -8,10 +8,12 @@ import type { ProviderStackParams } from './types';
 
 import AvailableRequestsScreen from '../screens/provider/AvailableRequestsScreen';
 import ActiveJobScreen from '../screens/provider/ActiveJobScreen';
+import ProviderHistoryScreen from '../screens/provider/ProviderHistoryScreen';
 import SendProposalScreen from '../screens/provider/SendProposalScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import RequestDetailScreen from '../screens/shared/RequestDetailScreen';
 import OpenDisputeScreen from '../screens/shared/OpenDisputeScreen';
+import ChatScreen from '../screens/shared/ChatScreen';
 import RateScreen from '../screens/shared/RateScreen';
 import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
@@ -28,6 +30,7 @@ export default function ProviderNavigator() {
       <Stack.Screen name="SendProposal" component={SendProposalScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="RequestDetail" component={RequestDetailScreen} />
       <Stack.Screen name="OpenDispute" component={OpenDisputeScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Rate" component={RateScreen} />
       <Stack.Screen name="RateConfirm" component={RateConfirmScreen} />
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
@@ -40,7 +43,7 @@ export default function ProviderNavigator() {
 const Tab = createBottomTabNavigator();
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = { Available: '🔍', Active: '📋', Profile: '👤' };
+  const icons: Record<string, string> = { Available: '🔍', Active: '📋', History: '🕓', Profile: '👤' };
   return (
     <View style={{ marginTop: 4 }}>
       <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>{icons[name]}</Text>
@@ -75,6 +78,7 @@ function ProviderTabs() {
     >
       <Tab.Screen name="Available" component={AvailableRequestsScreen} options={{ tabBarLabel: 'Disponíveis' }} />
       <Tab.Screen name="Active" component={ActiveJobScreen} options={{ tabBarLabel: 'Em Andamento' }} />
+      <Tab.Screen name="History" component={ProviderHistoryScreen} options={{ tabBarLabel: 'Histórico' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Perfil' }} />
     </Tab.Navigator>
   );

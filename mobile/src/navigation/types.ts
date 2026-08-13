@@ -35,6 +35,7 @@ export type ClientStackParams = {
   EscrowConfirmed: { requestId: string };
   RequestDetail: { requestId: string };
   OpenDispute: { requestId: string };
+  Chat: { requestId: string };
   Rate: { requestId: string; avaliadoId: string; avaliadoNome: string };
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };
@@ -49,6 +50,7 @@ export type ProviderStackParams = {
   SendProposal: { requestId: string; descricao?: string; categoria?: string };
   RequestDetail: { requestId: string };
   OpenDispute: { requestId: string };
+  Chat: { requestId: string };
   Rate: { requestId: string; avaliadoId: string; avaliadoNome: string };
   RateConfirm: { nota: number; comentario: string };
   Sos: { requestId: string };

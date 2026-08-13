@@ -29,6 +29,14 @@ function formatDuration(ms: number) {
 
 type RouteProps = RouteProp<ClientStackParams, 'NewRequest'>;
 
+// US23 (parte 2): sem reverse geocoding implementado, a única forma de saber o bairro do
+// pedido é o cliente escolher de uma lista fixa — alimenta o filtro de métricas/relatórios
+// do admin (GET /admin/metrics?bairro=, GET /admin/reports/requests.csv?bairro=).
+const BAIRROS = [
+  'Aldeota', 'Meireles', 'Cocó', 'Papicu', 'Varjota',
+  'Centro', 'Messejana', 'Parangaba', 'Montese', 'Barra do Ceará',
+];
+
 const CATEGORIES: { label: string; icon: React.ComponentProps<typeof Feather>['name']; color: string; bg: string; border: string }[] = [
   { label: 'Elétrica',   icon: 'zap',       color: '#8E6508', bg: color.sunTint,     border: color.warmSun },
   { label: 'Hidráulica', icon: 'droplet',   color: color.institutional2, bg: color.skyTint, border: color.institutional2 },
@@ -45,6 +53,7 @@ export default function NewRequestScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [categoria, setCategoria] = useState(route.params?.categoria ?? '');
   const [descricao, setDescricao] = useState('');
+  const [bairro, setBairro] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -112,7 +121,7 @@ export default function NewRequestScreen() {
           Authorization: `Bearer ${token}`,
           'X-Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify({ categoria, descricao, lat, lng }),
+        body: JSON.stringify({ categoria, descricao, lat, lng, bairro: bairro || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? 'Erro ao criar pedido');
@@ -285,6 +294,24 @@ export default function NewRequestScreen() {
               </View>
             </View>
 
+            {/* Bairro */}
+            <View style={styles.field}>
+              <Text style={styles.label}>BAIRRO <Text style={{ textTransform: 'none', fontWeight: '400' }}>· opcional</Text></Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catGrid}>
+                {BAIRROS.map(b => (
+                  <TouchableOpacity
+                    key={b}
+                    testID={`bairro-${b}`}
+                    style={[styles.catChip, bairro === b && styles.bairroChipSelected]}
+                    onPress={() => setBairro(bairro === b ? '' : b)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.catChipText, { color: bairro === b ? color.textOnAccent : color.textSoft }]}>{b}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             {/* Permissões */}
             <View style={styles.permNotice}>
               <Feather name="info" size={16} color={color.institutional2} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -359,6 +386,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   catChipText: { fontSize: 13, fontWeight: font.weight.semibold },
+  bairroChipSelected: { backgroundColor: color.primary, borderColor: color.primary },
 
   textAreaWrap: {
     backgroundColor: color.surface,

@@ -62,7 +62,7 @@ class ServiceRequestServiceTest {
         when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        var req = new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267);
+        var req = new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267, null);
         ServiceRequestDto dto = service.create(UUID.randomUUID(), req, "idem-key-1");
 
         assertThat(dto.aiDescricaoSugerida()).isEqualTo("Instalação de chuveiro elétrico");
@@ -76,7 +76,7 @@ class ServiceRequestServiceTest {
         when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        var req = new CreateServiceRequestRequest("ENCANADOR", null, -3.7319, -38.5267);
+        var req = new CreateServiceRequestRequest("ENCANADOR", null, -3.7319, -38.5267, null);
         ServiceRequestDto dto = service.create(UUID.randomUUID(), req, "idem-key-2");
 
         // Pedido criado normalmente — sem sugestão IA (fallback manual)
@@ -94,7 +94,7 @@ class ServiceRequestServiceTest {
         when(requestRepository.findByIdempotencyKeyAndCliente_Id("idem-dup", clienteId))
                 .thenReturn(Optional.of(existing));
 
-        var req = new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5);
+        var req = new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, null);
         ServiceRequestDto dto = service.create(clienteId, req, "idem-dup");
 
         assertThat(dto.status()).isEqualTo("PENDENTE");
@@ -112,7 +112,7 @@ class ServiceRequestServiceTest {
         when(userRepository.findById(outroCliente)).thenReturn(Optional.of(cliente));
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        var req = new CreateServiceRequestRequest("ELETRICISTA", "Meu próprio pedido", -3.7, -38.5);
+        var req = new CreateServiceRequestRequest("ELETRICISTA", "Meu próprio pedido", -3.7, -38.5, null);
         ServiceRequestDto dto = service.create(outroCliente, req, "idem-colidida");
 
         // Cria o pedido DELE em vez de devolver o de outra pessoa.
@@ -356,6 +356,34 @@ class ServiceRequestServiceTest {
         when(requestRepository.findById(srConcluido.getId())).thenReturn(Optional.of(srConcluido));
 
         assertThat(service.buscarPedidoAtivoDoPrestador(prestadorId)).isNull();
+    }
+
+    @Test
+    void listarHistoricoDoPrestador_incluiConcluidoCanceladoEDisputa_masNaoOAtendimentoAtivo() {
+        UUID prestadorId = UUID.randomUUID();
+
+        var srConcluido = new ServiceRequest();
+        srConcluido.setCliente(cliente);
+        srConcluido.setCategoria("Elétrica");
+        srConcluido.setStatus(ServiceRequestStatus.CONCLUIDO);
+        setId(srConcluido, UUID.randomUUID());
+        var pConcluido = new Proposal(srConcluido, prestadorId, BigDecimal.valueOf(150), 1, null, ProposalStatus.ACEITA);
+
+        var srEmAndamento = new ServiceRequest();
+        srEmAndamento.setCliente(cliente);
+        srEmAndamento.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
+        setId(srEmAndamento, UUID.randomUUID());
+        var pAtivo = new Proposal(srEmAndamento, prestadorId, BigDecimal.valueOf(300), 1, null, ProposalStatus.ACEITA);
+
+        when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
+                .thenReturn(List.of(pConcluido, pAtivo));
+
+        List<ProviderHistoryDto> historico = service.listarHistoricoDoPrestador(prestadorId);
+
+        assertThat(historico).hasSize(1);
+        assertThat(historico.get(0).id()).isEqualTo(srConcluido.getId());
+        assertThat(historico.get(0).categoria()).isEqualTo("Elétrica");
+        assertThat(historico.get(0).valor()).isEqualByComparingTo("150");
     }
 
     private static void setId(ServiceRequest sr, UUID id) {
