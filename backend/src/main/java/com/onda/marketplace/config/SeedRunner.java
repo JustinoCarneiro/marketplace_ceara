@@ -4,6 +4,9 @@ import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.payment.PaymentMethod;
+import com.onda.marketplace.payment.OutboxEvent;
+import com.onda.marketplace.payment.OutboxEventRepository;
+import com.onda.marketplace.payment.OutboxStatus;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.provider.ProviderProfile;
@@ -20,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Semeia os dados mínimos exigidos pelos testes E2E do painel admin (Playwright).
@@ -40,16 +44,19 @@ public class SeedRunner implements CommandLineRunner {
     private final ProviderProfileRepository providerProfileRepository;
     private final ServiceRequestRepository  serviceRequestRepository;
     private final TransactionRepository     transactionRepository;
+    private final OutboxEventRepository     outboxRepository;
 
     public SeedRunner(UserRepository userRepository, PasswordEncoder passwordEncoder,
                       ProviderProfileRepository providerProfileRepository,
                       ServiceRequestRepository serviceRequestRepository,
-                      TransactionRepository transactionRepository) {
+                      TransactionRepository transactionRepository,
+                      OutboxEventRepository outboxRepository) {
         this.userRepository            = userRepository;
         this.passwordEncoder           = passwordEncoder;
         this.providerProfileRepository = providerProfileRepository;
         this.serviceRequestRepository  = serviceRequestRepository;
         this.transactionRepository     = transactionRepository;
+        this.outboxRepository          = outboxRepository;
     }
 
     @Override
@@ -61,6 +68,7 @@ public class SeedRunner implements CommandLineRunner {
         seedPrestadorInconclusivo();
         seedPrestadorVerificado();
         seedDisputaAberta(maria);
+        seedOutboxEmFalha(maria);
     }
 
     private User seedUsuario(String nome, String email, String senha, UserRole role) {
@@ -145,5 +153,33 @@ public class SeedRunner implements CommandLineRunner {
         transactionRepository.save(tx);
 
         log.info("[seed] disputa de exemplo criada (serviceRequestId={})", sr.getId());
+    }
+
+    /**
+     * Evento de outbox em FALHA — a fila de reconciliação do painel (US27) só é demonstrável
+     * com pelo menos um, e sem ele o teste de contrato de {@code GET /admin/outbox} pulava:
+     * justamente o que protege o par tipoEvento/agregado que a tela Financeiro lê (já foram
+     * lidos como tipo/entidade, renderizando linhas em branco). Teste que pula não protege.
+     */
+    private void seedOutboxEmFalha(User cliente) {
+        var pedido = serviceRequestRepository
+                .findByIdempotencyKeyAndCliente_Id(DISPUTE_SEED_KEY, cliente.getId());
+        if (pedido.isEmpty()) return;
+
+        UUID srId = pedido.get().getId();
+        var tx = transactionRepository.findByServiceRequestId(srId);
+        if (tx.isEmpty()) return;
+
+        if (!outboxRepository.findByStatus(OutboxStatus.FALHA).isEmpty()) {
+            log.info("[seed] outbox em FALHA já existe — ignorando");
+            return;
+        }
+
+        var evento = new OutboxEvent("transaction", tx.get().getId(), "PAYMENT_RELEASED",
+                String.format("{\"transactionId\":\"%s\",\"serviceRequestId\":\"%s\"}",
+                        tx.get().getId(), srId));
+        evento.marcarFalha();
+        outboxRepository.save(evento);
+        log.info("[seed] evento de outbox em FALHA criado (para a fila de reconciliação)");
     }
 }

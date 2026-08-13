@@ -63,7 +63,9 @@ export default function SendProposalScreen() {
           {/* Title */}
           <View style={styles.titleBlock}>
             <Text style={styles.title}>Enviar proposta</Text>
-            <Text style={styles.subtitle}>Troca de tomada com faísca · Aldeota</Text>
+            <Text style={styles.subtitle} numberOfLines={2}>
+              {[route.params.descricao, route.params.categoria].filter(Boolean).join(' · ') || 'Pedido do cliente'}
+            </Text>
           </View>
 
           {/* Valor */}

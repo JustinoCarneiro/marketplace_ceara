@@ -182,7 +182,11 @@ export default function AvailableRequestsScreen() {
                   <TouchableOpacity
                     testID="btn-propor"
                     style={styles.proposalBtn}
-                    onPress={() => nav.navigate('SendProposal', { requestId: r.id })}
+                    onPress={() => nav.navigate('SendProposal', {
+                      requestId: r.id,
+                      descricao: r.titulo ?? r.descricao,
+                      categoria: catLabel(r),
+                    })}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.proposalBtnText}>Enviar proposta</Text>

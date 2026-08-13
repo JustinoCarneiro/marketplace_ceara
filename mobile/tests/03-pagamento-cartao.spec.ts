@@ -84,5 +84,9 @@ test('cliente paga com cartão e vê a confirmação real (não mais fake)', asy
   await expect(page.getByText('Pagamento retido com segurança')).toBeVisible({ timeout: 20000 });
 
   // EscrowConfirmedScreen real: nome do prestador vem do backend, não mais "José Wagner" fixo.
-  await expect(page.getByText('Caio Cartao')).toBeVisible({ timeout: 8000 });
+  // .last(): react-native-screens mantém a PaymentCard montada (porém hidden) por trás e o nome
+  // aparece nas duas telas — a de cima (EscrowConfirmed) é a que vem depois no DOM. Sem isso o
+  // strict mode reprova por 2 matches; com .first() casa justamente a escondida. Mesmo motivo
+  // do .last() no teste 02.
+  await expect(page.getByText('Caio Cartao').last()).toBeVisible({ timeout: 8000 });
 });

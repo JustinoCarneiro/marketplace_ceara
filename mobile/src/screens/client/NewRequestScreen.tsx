@@ -124,7 +124,10 @@ export default function NewRequestScreen() {
           `O pedido foi criado, mas não foi possível enviar ${falhas.join(' e ')}. Você pode tentar de novo depois.`,
         );
       }
-      nav.navigate('AiAssistant', { requestId: data.id });
+      // Leva a descrição digitada: se a IA não sugerir nada (stub/indisponível), a tela de
+      // revisão parte do que o cliente já escreveu em vez de um campo vazio — publicar com
+      // descrição vazia é 422 (PublishRequest.@NotBlank).
+      nav.navigate('AiAssistant', { requestId: data.id, descricao });
     } catch (e: any) {
       setError(e.message ?? 'Erro ao criar pedido.');
     } finally {

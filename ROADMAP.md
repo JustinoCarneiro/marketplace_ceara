@@ -360,6 +360,20 @@ GET  /api/v1/admin/reports/{recurso}.csv                    200  text/csv       
 # relatórios NUNCA expõem CPF (TS04/LGPD)
 ```
 
+### M13 — Canal de Denúncia (US32, Épico 7/9)
+```
+POST /api/v1/denuncias                              (CLIENT|PROVIDER)
+  req:  { tipo:"PRESTADOR"|"AVALIACAO", alvoId, motivo, detalhes? }
+  201:  { id, tipo, status:"ABERTA", criadoEm }
+
+GET  /api/v1/admin/denuncias                         (ROLE_ADMIN)  200 [ { id, tipo, alvoId, denuncianteId, motivo, status, criadoEm } ]
+POST /api/v1/admin/denuncias/{id}/resolver            (ROLE_ADMIN)  200
+  # só fecha a fila — moderação em si (suspender prestador, remover avaliação) é feita
+  # pelos endpoints de moderação já existentes (M10), não por este.
+```
+*(Adicionado depois da Fase 3 original — migration `V12__denuncia.sql`; sem M-slot na tabela
+de pesos da seção 2 porque não fazia parte do escopo/estimativa inicial.)*
+
 ### Envelope de erro padrão (`@ControllerAdvice`, TS06)
 ```
 { "timestamp", "status", "code", "message", "path" }

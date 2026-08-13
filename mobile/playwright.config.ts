@@ -14,6 +14,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     headless: !!process.env.CI,
+
+    // Home/Resultados/NovoPedido/SOS chamam getCurrentCoords() (expo-location) no carregamento.
+    // Sem conceder a permissão aqui, requestForegroundPermissionsAsync() nunca resolve no
+    // Chromium headless: a tela fica em skeleton pra sempre e TODO teste depois do login
+    // estoura timeout — sem erro de console, parecendo bug de UI. Coordenada fixa (Fortaleza)
+    // também mantém o teste determinístico, independente de onde ele roda.
+    permissions: ['geolocation'],
+    geolocation: { latitude: -3.7319, longitude: -38.5267 },
   },
 
   projects: [

@@ -99,11 +99,13 @@ export default function HomeScreen() {
       >
         <View style={styles.topPad}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.locationRow} activeOpacity={0.7}>
+            {/* Sem reverse geocoding, não há nome de bairro real pra mostrar — e sem picker de
+                bairro (US23, adiado), não há ação real por trás de um toque aqui. Antes tinha
+                aparência de botão (TouchableOpacity + chevron-down) sem fazer nada. */}
+            <View style={styles.locationRow}>
               <Feather name="map-pin" size={16} color={color.primary} />
-              <Text style={styles.locationText}>Aldeota, Fortaleza</Text>
-              <Feather name="chevron-down" size={16} color={color.textFaint} />
-            </TouchableOpacity>
+              <Text style={styles.locationText}>Localização atual</Text>
+            </View>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{initStr}</Text>
             </View>
@@ -120,6 +122,21 @@ export default function HomeScreen() {
           >
             <Feather name="search" size={20} color={color.textFaint} />
             <Text style={styles.searchPlaceholder}>Buscar serviço ou profissional</Text>
+          </TouchableOpacity>
+
+          {/* Até aqui, "Criar pedido" só existia no estado VAZIO da lista de próximos e no perfil
+              de um prestador específico: com prestadores na região (o caminho feliz), o cliente
+              não tinha como abrir um pedido aberto — o fluxo central do app (Épico 3) ficava
+              inalcançável. Ficou escondido enquanto o seed não tinha prestador verificado. */}
+          <TouchableOpacity
+            testID="btn-criar-pedido"
+            style={styles.newRequestBtn}
+            onPress={() => nav.navigate('NewRequest', {})}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+          >
+            <Feather name="plus" size={18} color={color.textOnAccent} />
+            <Text style={styles.newRequestText}>Criar pedido</Text>
           </TouchableOpacity>
         </View>
 
@@ -280,6 +297,22 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   searchPlaceholder: { fontSize: 15, color: color.textFaint },
+
+  newRequestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: radius.pill,
+    backgroundColor: color.primary,
+    shadowColor: color.primary,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  newRequestText: { fontSize: 15, fontWeight: font.weight.bold, color: color.textOnAccent },
 
   catRow: { paddingHorizontal: 20, paddingBottom: 18, gap: 10 },
   catItem: { alignItems: 'center', gap: 8 },

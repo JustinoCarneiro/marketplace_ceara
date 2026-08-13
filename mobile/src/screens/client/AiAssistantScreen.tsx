@@ -26,7 +26,9 @@ export default function AiAssistantScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [suggestion, setSuggestion] = useState<AiSuggestion | null>(null);
   const [loading, setLoading] = useState(true);
-  const [descricao, setDescricao] = useState('');
+  // Fallback manual (CLAUDE.md: "IA nunca é caminho crítico bloqueante") — parte da descrição
+  // que o cliente já escreveu; a sugestão da IA só sobrescreve se ela de fato vier.
+  const [descricao, setDescricao] = useState(route.params.descricao ?? '');
   const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function AiAssistantScreen() {
         if (res.ok) {
           const data: AiSuggestion = await res.json();
           setSuggestion(data);
-          setDescricao(data.descricaoSugerida ?? '');
+          if (data.descricaoSugerida) setDescricao(data.descricaoSugerida);
         } else {
           setSuggestion(null);
         }
@@ -52,6 +54,11 @@ export default function AiAssistantScreen() {
   }, []);
 
   async function publish() {
+    // O backend exige descrição (@NotBlank) — avisar aqui é mais claro que um 422 genérico.
+    if (!descricao.trim()) {
+      Alert.alert('Descrição vazia', 'Escreva o que você precisa antes de publicar o pedido.');
+      return;
+    }
     setPublishing(true);
     try {
       const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}/publish`, {

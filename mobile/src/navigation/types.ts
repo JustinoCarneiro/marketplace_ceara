@@ -26,7 +26,7 @@ export type ClientStackParams = {
   Filters: undefined;
   ProviderProfile: { providerId: string };
   NewRequest: { providerId?: string; categoria?: string };
-  AiAssistant: { requestId: string };
+  AiAssistant: { requestId: string; descricao?: string };
   RequestCreated: { requestId: string };
   CompareProposals: { requestId: string };
   PaymentChoice: { requestId: string; proposalId: string; valor: number; prestadorNome?: string };
@@ -46,7 +46,7 @@ export type ClientStackParams = {
 export type ProviderStackParams = {
   ProviderTabs: undefined;
   AvailableRequests: undefined;
-  SendProposal: { requestId: string };
+  SendProposal: { requestId: string; descricao?: string; categoria?: string };
   EscrowHeld: { requestId: string };
   RequestDetail: { requestId: string };
   OpenDispute: { requestId: string };

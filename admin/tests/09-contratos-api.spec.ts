@@ -77,12 +77,19 @@ test.describe('Contrato backend ↔ frontends', () => {
 
   test('GET /admin/transactions entrega os campos que a tela Financeiro lê', async () => {
     const ctx = await request.newContext();
-    const res = await ctx.get(`${API}/admin/transactions?status=RETIDO`, {
-      headers: { Authorization: `Bearer ${await tokenAdmin()}` },
-    });
-    expect(res.ok()).toBeTruthy();
-    const lista = await res.json();
-    test.skip(lista.length === 0, 'sem transação RETIDO no seed — nada a comparar');
+    // Varre os 3 status (os mesmos que a tela concatena): fixar em RETIDO fazia este teste
+    // pular sempre, porque 03-disputas resolve a disputa semeada antes daqui e a transação
+    // já saiu de RETIDO para LIBERADO. Teste que pula não protege contrato nenhum.
+    let lista: Record<string, unknown>[] = [];
+    for (const status of ['RETIDO', 'LIBERADO', 'REEMBOLSADO']) {
+      const res = await ctx.get(`${API}/admin/transactions?status=${status}`, {
+        headers: { Authorization: `Bearer ${await tokenAdmin()}` },
+      });
+      expect(res.ok()).toBeTruthy();
+      lista = await res.json();
+      if (lista.length > 0) break;
+    }
+    test.skip(lista.length === 0, 'nenhuma transação em nenhum status — nada a comparar');
 
     // admin/src/pages/FinancePage.tsx → interface Transaction
     esperaCampos(lista[0], ['id', 'serviceRequestId', 'valorTotal', 'statusPagamento'],
@@ -110,12 +117,30 @@ test.describe('Contrato backend ↔ frontends', () => {
 
   test('GET /admin/alerts entrega os campos que os chips do Dashboard leem', async () => {
     const ctx = await request.newContext();
+
+    // Cria a própria condição em vez de depender do seed: quando este teste roda, 03-disputas
+    // já resolveu a disputa semeada e 04-prestadores já reprovou o prestador semeado, então os
+    // três contadores (SOS/DISPUTA/VERIFICACAO) estão zerados e o teste pulava sempre. Um
+    // prestador novo entra em EM_VERIFICACAO e garante o alerta VERIFICACAO_INCONCLUSIVA.
+    const registro = await ctx.post(`${API}/auth/register/provider`, {
+      data: {
+        nome: 'Contrato Alertas',
+        email: `contrato-alertas-${Date.now()}@onda.dev`,
+        senha: 'Senha@123',
+        cpf: '111.444.777-35',
+        categoria: 'Elétrica',
+        aceitouTermos: true,
+      },
+    });
+    expect(registro.ok(), 'não consegui criar prestador para gerar o alerta').toBeTruthy();
+
     const res = await ctx.get(`${API}/admin/alerts`, {
       headers: { Authorization: `Bearer ${await tokenAdmin()}` },
     });
     expect(res.ok()).toBeTruthy();
     const lista = await res.json();
-    test.skip(lista.length === 0, 'sem alerta operacional no seed — nada a comparar');
+    expect(lista.length, 'prestador recém-criado deveria gerar VERIFICACAO_INCONCLUSIVA')
+      .toBeGreaterThan(0);
 
     // admin/src/pages/DashboardPage.tsx → interface OperationalAlert
     esperaCampos(lista[0], ['tipo', 'quantidade'],
