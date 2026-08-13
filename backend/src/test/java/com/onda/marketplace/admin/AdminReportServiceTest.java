@@ -8,6 +8,7 @@ import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
 import com.onda.marketplace.provider.ProviderProfileRepository;
 import com.onda.marketplace.provider.ProviderStatus;
+import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
@@ -211,6 +212,56 @@ class AdminReportServiceTest {
         assertThat(csv).contains("PIX").contains("200");
         // TS04/LGPD: relatório nunca expõe CPF
         assertThat(csv.toLowerCase()).doesNotContain("cpf");
+    }
+
+    @Test
+    void exportarCsv_requests_bairroComFormulaMaliciosa_ficaEscapado() {
+        // CSV Formula Injection (CWE-1236): bairro é texto livre — sem escapar, um valor
+        // começando com "=" vira fórmula executável ao abrir no Excel/LibreOffice.
+        var sr = new ServiceRequest();
+        sr.setCategoria("Elétrica");
+        sr.setStatus(ServiceRequestStatus.PENDENTE);
+        sr.setBairro("=cmd|'/C calc'!A1");
+        when(srRepository.findAll()).thenReturn(List.of(sr));
+
+        String csv = service.exportarCsv("requests", null);
+
+        // Nenhuma linha pode começar (depois da vírgula anterior) com "=" cru — só com "'="
+        // prefixado, que o Excel/LibreOffice trata como texto, não fórmula.
+        assertThat(csv).doesNotContain(",=cmd").doesNotContain("\n=cmd");
+        assertThat(csv).contains("'=cmd|'/C calc'!A1");
+    }
+
+    @Test
+    void exportarCsv_requests_bairroComVirgula_ficaEntreAspas() {
+        var sr = new ServiceRequest();
+        sr.setCategoria("Pintura");
+        sr.setStatus(ServiceRequestStatus.CONCLUIDO);
+        sr.setBairro("Aldeota, perto da praça");
+        when(srRepository.findAll()).thenReturn(List.of(sr));
+
+        String csv = service.exportarCsv("requests", null);
+
+        assertThat(csv).contains("\"Aldeota, perto da praça\"");
+    }
+
+    @Test
+    void exportarCsv_requests_filtraPorBairro() {
+        var srAldeota = new ServiceRequest();
+        srAldeota.setCategoria("Elétrica");
+        srAldeota.setStatus(ServiceRequestStatus.PENDENTE);
+        srAldeota.setBairro("Aldeota");
+
+        var srMeireles = new ServiceRequest();
+        srMeireles.setCategoria("Hidráulica");
+        srMeireles.setStatus(ServiceRequestStatus.PENDENTE);
+        srMeireles.setBairro("Meireles");
+
+        when(srRepository.findAll()).thenReturn(List.of(srAldeota, srMeireles));
+
+        String csv = service.exportarCsv("requests", "Aldeota");
+
+        assertThat(csv).contains("Elétrica").doesNotContain("Hidráulica");
     }
 
     @Test

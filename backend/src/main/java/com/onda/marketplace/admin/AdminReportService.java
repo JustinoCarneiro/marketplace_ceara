@@ -192,9 +192,27 @@ public class AdminReportService {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < campos.length; i++) {
             if (i > 0) sb.append(',');
-            sb.append(String.valueOf(campos[i]));
+            sb.append(campoCsv(campos[i]));
         }
         return sb.toString();
+    }
+
+    /**
+     * CSV Formula Injection (CWE-1236): campo de texto livre digitado por usuário (ex.:
+     * {@code bairro}, sem validação de conteúdo) começando com {@code = + - @} vira fórmula
+     * executável ao abrir no Excel/LibreOffice — prefixo de aspa simples força texto. Também
+     * escapa vírgula/aspas/quebra de linha (RFC 4180), senão um bairro com vírgula quebra o
+     * alinhamento das colunas do relatório.
+     */
+    private static String campoCsv(Object valor) {
+        String s = String.valueOf(valor);
+        if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) {
+            s = "'" + s;
+        }
+        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
+            s = "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
     }
 
     /**
