@@ -44,6 +44,11 @@ Como **Cliente**, quero ver profissionais por categoria e proximidade, para acha
   houver propostas no histórico) tempo médio de resposta e faixa de preço praticada — calculados
   sobre todas as propostas já enviadas pelo prestador, não só as aceitas. Sem propostas ainda,
   esses campos ficam ausentes (tela mostra "—", não zero).
+- **Dado que** o prestador já teve atendimentos que de fato começaram, **então** vejo também o
+  % de pontualidade dele: comparação entre o horário que ele propôs (US15) e o horário real em
+  que o atendimento passou a `EM_ANDAMENTO`, com 30 min de tolerância (chegar adiantado nunca
+  conta como atraso). Atendimentos sem horário combinado (proposta anterior a essa feature) ou
+  que nunca chegaram a iniciar não entram na conta.
 
 ### US13 — Filtros básicos
 Como **Cliente**, quero filtrar por distância e nota mínima, para refinar a escolha.
@@ -74,10 +79,14 @@ Como **Cliente**, quero que a IA leia minha foto/texto e sugira a descrição e 
 Como **Prestador**, quero enviar uma proposta de preço para um pedido, para concorrer ao serviço.
 - **Dado** um pedido `PENDENTE` na minha categoria/raio, **quando** envio valor + prazo, **então** o pedido recebe minha proposta e passa a `PROPOSTO`.
 - **Dado** que o pedido já foi aceito por outro, **quando** tento propor, **então** recebo 422 (pedido indisponível).
+- **Dado** que envio a proposta, **então** informo também data/hora em que atenderei
+  (`horarioProposto`) — obrigatório e precisa ser no futuro. É a partir desse horário, comparado
+  contra o início real do atendimento, que a pontualidade do prestador (US03) é calculada.
 
 ### US16 — Cliente compara e aceita proposta
 Como **Cliente**, quero comparar propostas e aceitar uma, para contratar com preço justo.
 - **Dado** múltiplas propostas, **quando** aceito uma, **então** as demais são encerradas e o fluxo segue para pagamento/Escrow.
+- **Dado** que estou comparando propostas, **então** vejo também o horário que cada prestador propôs pra atender — preço não é o único critério de decisão.
 > Nota: sem lances em tempo real no MVP (decisão de escopo). Evolução para leilão dinâmico → v2.
 
 ---

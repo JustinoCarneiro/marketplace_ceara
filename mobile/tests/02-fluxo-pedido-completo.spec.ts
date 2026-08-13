@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login } from './helpers/auth';
+import { registerCliente, registerPrestador, login, futureHorarioProposto } from './helpers/auth';
 
 // Um cliente e um prestador dedicados a este arquivo — os testes rodam em sequência
 // (ordem de declaração, workers:1) e compartilham o único pedido criado no 2º teste.
@@ -66,6 +66,9 @@ test('prestador vê o pedido em Disponíveis e envia proposta', async ({ page })
   await expect(page.getByText('SEU VALOR')).toBeVisible({ timeout: 8000 });
   await page.getByTestId('input-valor').fill('150');
   // prazo já vem preenchido com "2" por padrão — só envia.
+  const horario = futureHorarioProposto();
+  await page.getByTestId('input-data-proposta').fill(horario.data);
+  await page.getByTestId('input-hora-proposta').fill(horario.hora);
   await page.getByTestId('btn-enviar-proposta').click();
 
   // A folha fecha e volta pra lista ao enviar com sucesso.

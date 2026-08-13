@@ -70,3 +70,16 @@ export async function login(page: Page, email: string, senha: string) {
   await page.getByPlaceholder('••••••••').fill(senha);
   await page.getByText('Entrar', { exact: true }).click();
 }
+
+/**
+ * Data/hora amanhã às 14h, no formato DD/MM/AAAA + HH:MM que SendProposalScreen espera —
+ * backend exige horarioProposto no futuro (@Future), e "amanhã" evita flakiness de rodar o
+ * teste perto da meia-noite (hoje + poucas horas podia cair no passado por causa do fuso).
+ */
+export function futureHorarioProposto(): { data: string; hora: string } {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  return { data: `${dia}/${mes}/${d.getFullYear()}`, hora: '14:00' };
+}

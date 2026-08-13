@@ -132,7 +132,7 @@ class ServiceRequestServiceTest {
         sr.setDescricao("Chuveiro sem funcionar");
         sr.setStatus(ServiceRequestStatus.ACEITO);
 
-        var proposta = new Proposal(sr, prestadorId, BigDecimal.valueOf(150), 2, ProposalStatus.ACEITA);
+        var proposta = new Proposal(sr, prestadorId, BigDecimal.valueOf(150), 2, null, ProposalStatus.ACEITA);
         var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
 
@@ -323,13 +323,13 @@ class ServiceRequestServiceTest {
         srAntigo.setCliente(cliente);
         srAntigo.setStatus(ServiceRequestStatus.ACEITO);
         setId(srAntigo, UUID.randomUUID());
-        var propostaAntiga = new Proposal(srAntigo, prestadorId, BigDecimal.TEN, 1, ProposalStatus.ACEITA);
+        var propostaAntiga = new Proposal(srAntigo, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         var srRecente = new ServiceRequest();
         srRecente.setCliente(cliente);
         srRecente.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
         setId(srRecente, UUID.randomUUID());
-        var propostaRecente = new Proposal(srRecente, prestadorId, BigDecimal.TEN, 1, ProposalStatus.ACEITA);
+        var propostaRecente = new Proposal(srRecente, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
                 .thenReturn(List.of(propostaAntiga, propostaRecente));
@@ -349,7 +349,7 @@ class ServiceRequestServiceTest {
         srConcluido.setCliente(cliente);
         srConcluido.setStatus(ServiceRequestStatus.CONCLUIDO);
         setId(srConcluido, UUID.randomUUID());
-        var proposta = new Proposal(srConcluido, prestadorId, BigDecimal.TEN, 1, ProposalStatus.ACEITA);
+        var proposta = new Proposal(srConcluido, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta));

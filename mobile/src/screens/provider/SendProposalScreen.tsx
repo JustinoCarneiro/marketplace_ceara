@@ -22,14 +22,45 @@ export default function SendProposalScreen() {
   const token = useAuthStore(s => s.accessToken);
   const [valor, setValor] = useState('');
   const [prazoDias, setPrazoDias] = useState('2');
+  const [dataProposta, setDataProposta] = useState('');
+  const [horaProposta, setHoraProposta] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const valorNum = parseFloat(valor.replace(',', '.')) || 0;
   const recebeNum = valorNum * (1 - COMISSAO);
 
+  // US15: o cliente decide entre propostas também pelo horário — sem isso não dava pra
+  // calcular pontualidade nenhuma (não existe "horário combinado" em lugar nenhum do
+  // domínio além do que o prestador propõe aqui). Texto livre, mesmo padrão de outros
+  // campos do app (ex.: validade do cartão "08/29") — sem lib de date picker no projeto.
+  function parseHorarioProposto(): Date | null {
+    const dataMatch = dataProposta.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const horaMatch = horaProposta.match(/^(\d{2}):(\d{2})$/);
+    if (!dataMatch || !horaMatch) return null;
+    const [, dia, mes, ano] = dataMatch;
+    const [, hora, minuto] = horaMatch;
+    const d = new Date(
+      Number(ano), Number(mes) - 1, Number(dia),
+      Number(hora), Number(minuto), 0, 0,
+    );
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
   async function send() {
-    if (!valor || !prazoDias) { setError('Preencha o valor e o prazo.'); return; }
+    if (!valor || !prazoDias || !dataProposta || !horaProposta) {
+      setError('Preencha valor, prazo e quando você vai atender.');
+      return;
+    }
+    const horario = parseHorarioProposto();
+    if (!horario) {
+      setError('Data ou hora inválida. Use DD/MM/AAAA e HH:MM.');
+      return;
+    }
+    if (horario.getTime() <= Date.now()) {
+      setError('O horário proposto precisa ser no futuro.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -39,6 +70,7 @@ export default function SendProposalScreen() {
         body: JSON.stringify({
           valor: valorNum,
           prazoDias: parseInt(prazoDias, 10),
+          horarioProposto: horario.toISOString(),
         }),
       });
       const data = await res.json();
@@ -99,6 +131,37 @@ export default function SendProposalScreen() {
                 />
               </View>
               <Text style={styles.prazoUnit}>dias</Text>
+            </View>
+          </View>
+
+          {/* Quando você atende */}
+          <View style={styles.field}>
+            <Text style={styles.label}>QUANDO VOCÊ ATENDE</Text>
+            <View style={styles.prazoRow}>
+              <View style={[styles.prazoInput, { flex: 1.4 }]}>
+                <TextInput
+                  testID="input-data-proposta"
+                  style={styles.prazoField}
+                  placeholder="DD/MM/AAAA"
+                  placeholderTextColor={color.textFaint}
+                  value={dataProposta}
+                  onChangeText={setDataProposta}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                />
+              </View>
+              <View style={styles.prazoInput}>
+                <TextInput
+                  testID="input-hora-proposta"
+                  style={styles.prazoField}
+                  placeholder="HH:MM"
+                  placeholderTextColor={color.textFaint}
+                  value={horaProposta}
+                  onChangeText={setHoraProposta}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                />
+              </View>
             </View>
           </View>
 

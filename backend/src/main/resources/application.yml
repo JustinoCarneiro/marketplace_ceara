@@ -84,6 +84,10 @@ marketplace:
     # quando vence este prazo de reciprocidade (padrão Airbnb = 14 dias).
     reveal-deadline-days: ${MARKETPLACE_REVIEW_REVEAL_DAYS:14}
     reveal-job-delay-ms: ${MARKETPLACE_REVIEW_REVEAL_JOB_MS:3600000}  # varredura de vencidas (1h)
+  pontualidade:
+    # Tolerância pra considerar "no prazo" o início real (iniciadoEm) vs. o horário proposto
+    # na proposta aceita (horarioProposto) — chegar adiantado nunca conta como atraso.
+    tolerancia-minutos: ${MARKETPLACE_PONTUALIDADE_TOLERANCIA_MIN:30}
 
 # Actuator — observabilidade base (TS08)
 management:

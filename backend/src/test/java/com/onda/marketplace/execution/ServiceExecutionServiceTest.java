@@ -69,6 +69,9 @@ class ServiceExecutionServiceTest {
         service.start(SR_ID, PRESTADOR_ID);
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.EM_ANDAMENTO);
+        // Pontualidade (US03) compara iniciadoEm contra o horário proposto — sem gravar aqui,
+        // o cálculo nunca teria dado real pra nenhum atendimento.
+        assertThat(sr.getIniciadoEm()).isNotNull();
         verify(srRepository).save(sr);
     }
 
@@ -284,7 +287,7 @@ class ServiceExecutionServiceTest {
 
     private Proposal proposta(UUID prestadorId) {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        return new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 3, ProposalStatus.ACEITA);
+        return new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 3, null, ProposalStatus.ACEITA);
     }
 
     private Transaction transaction(TransactionStatus status) {

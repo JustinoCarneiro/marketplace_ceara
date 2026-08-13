@@ -70,7 +70,8 @@ public class ProposalService {
             throw new BusinessException("REQUEST_CLOSED", "Pedido não aceita mais propostas.");
         }
 
-        var proposal = new Proposal(sr, prestadorId, req.valor(), req.prazoDias(), ProposalStatus.ATIVA);
+        var proposal = new Proposal(sr, prestadorId, req.valor(), req.prazoDias(),
+                req.horarioProposto(), ProposalStatus.ATIVA);
         proposalRepository.save(proposal);
 
         if (sr.getStatus() == ServiceRequestStatus.PENDENTE) {

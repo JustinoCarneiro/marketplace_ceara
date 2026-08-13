@@ -21,6 +21,7 @@ public record ProposalDto(
         int        prestadorAvaliacoes,
         BigDecimal valor,
         int        prazoDias,
+        Instant    horarioProposto,
         String     status,
         Instant    createdAt
 ) {
@@ -35,6 +36,7 @@ public record ProposalDto(
                 prestadorAvaliacoes,
                 p.getValor(),
                 p.getPrazoDias(),
+                p.getHorarioProposto(),
                 p.getStatus().name(),
                 p.getCreatedAt());
     }

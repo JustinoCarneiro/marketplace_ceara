@@ -15,6 +15,7 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
@@ -72,6 +73,7 @@ public class ServiceExecutionService {
         }
 
         sr.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
+        sr.setIniciadoEm(Instant.now());
         srRepository.save(sr);
     }
 

@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,7 +51,9 @@ class ProposalServiceTest {
         when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        service.create(sr.getId(), new CreateProposalRequest(BigDecimal.valueOf(200), 2), UUID.randomUUID());
+        service.create(sr.getId(),
+                new CreateProposalRequest(BigDecimal.valueOf(200), 2, Instant.now().plusSeconds(3600)),
+                UUID.randomUUID());
 
         assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PROPOSTO);
         verify(requestRepository).save(sr);
@@ -64,7 +67,9 @@ class ProposalServiceTest {
         when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() ->
-                service.create(sr.getId(), new CreateProposalRequest(BigDecimal.valueOf(200), 2), UUID.randomUUID()))
+                service.create(sr.getId(),
+                        new CreateProposalRequest(BigDecimal.valueOf(200), 2, Instant.now().plusSeconds(3600)),
+                        UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "REQUEST_CLOSED");
         verify(proposalRepository, never()).save(any());
@@ -113,7 +118,7 @@ class ProposalServiceTest {
         UUID prestadorId = UUID.randomUUID();
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         setClienteId(sr, prestadorId);
-        var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, ProposalStatus.ATIVA);
+        var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, null, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
 
         assertThatThrownBy(() -> service.accept(prop.getId(), prestadorId))
@@ -155,7 +160,9 @@ class ProposalServiceTest {
         when(requestRepository.findById(randomId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                service.create(randomId, new CreateProposalRequest(BigDecimal.valueOf(100), 1), UUID.randomUUID()))
+                service.create(randomId,
+                        new CreateProposalRequest(BigDecimal.valueOf(100), 1, Instant.now().plusSeconds(3600)),
+                        UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
     }
@@ -170,7 +177,7 @@ class ProposalServiceTest {
     }
 
     private Proposal proposal(ServiceRequest sr, ProposalStatus status) {
-        return new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(200), 2, status);
+        return new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(200), 2, null, status);
     }
 
     /** Constrói um cliente com id fixo (User.id é @GeneratedValue) e associa ao pedido. */

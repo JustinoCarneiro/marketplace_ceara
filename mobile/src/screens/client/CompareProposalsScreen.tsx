@@ -24,6 +24,16 @@ interface Proposal {
   prestadorAvaliacoes: number;
   valor: number;
   prazoDias: number;
+  horarioProposto: string | null;
+}
+
+function formatHorario(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${data} às ${hora}`;
 }
 
 const AVATAR_COLORS = [color.warmTerra, '#244C86', color.catLimpeza, '#3C7A4E', color.catHidraulica];
@@ -156,6 +166,13 @@ export default function CompareProposalsScreen() {
                     </View>
                   </View>
 
+                  {formatHorario(p.horarioProposto) && (
+                    <View style={styles.scheduleRow}>
+                      <Feather name="calendar" size={14} color={color.institutional2} />
+                      <Text style={styles.scheduleText}>Atende em {formatHorario(p.horarioProposto)}</Text>
+                    </View>
+                  )}
+
                   {/* CTA */}
                   <TouchableOpacity
                     testID="btn-aceitar-proposta"
@@ -273,6 +290,9 @@ const styles = StyleSheet.create({
   },
   infoBoxLabel: { fontSize: 12, color: color.textSoft },
   infoBoxValue: { fontSize: font.size.h3, fontWeight: font.weight.black, color: color.text, marginTop: 2 },
+
+  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  scheduleText: { fontSize: 12.5, color: color.institutional2, fontWeight: font.weight.semibold },
 
   acceptBtnFilled: {
     height: 48,

@@ -265,6 +265,6 @@ class ReviewServiceTest {
 
     private Proposal proposta(UUID prestadorId) {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        return new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 3, ProposalStatus.ACEITA);
+        return new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 3, null, ProposalStatus.ACEITA);
     }
 }

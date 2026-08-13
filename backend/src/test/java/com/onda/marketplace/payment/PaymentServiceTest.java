@@ -185,6 +185,6 @@ class PaymentServiceTest {
     }
 
     private Proposal proposalAceita(ServiceRequest sr, BigDecimal valor) {
-        return new Proposal(sr, UUID.randomUUID(), valor, 3, ProposalStatus.ACEITA);
+        return new Proposal(sr, UUID.randomUUID(), valor, 3, null, ProposalStatus.ACEITA);
     }
 }

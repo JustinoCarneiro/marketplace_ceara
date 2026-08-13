@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login } from './helpers/auth';
+import { registerCliente, registerPrestador, login, futureHorarioProposto } from './helpers/auth';
 
 // Fluxo dedicado a pagamento com Cartão — antes desta suíte, PaymentCardScreen nunca tinha
 // sido exercitada por E2E nenhum (só Pix, em 02-fluxo-pedido-completo.spec.ts). O botão
@@ -48,6 +48,9 @@ test('prestador envia proposta pro pedido de cartão', async ({ page }) => {
   await page.getByTestId('btn-propor').first().click();
   await expect(page.getByText('SEU VALOR')).toBeVisible({ timeout: 8000 });
   await page.getByTestId('input-valor').fill('220');
+  const horario = futureHorarioProposto();
+  await page.getByTestId('input-data-proposta').fill(horario.data);
+  await page.getByTestId('input-hora-proposta').fill(horario.hora);
   await page.getByTestId('btn-enviar-proposta').click();
   await expect(page.getByText('Pedidos disponíveis')).toBeVisible({ timeout: 8000 });
 });

@@ -39,9 +39,12 @@ class ProviderPublicServiceTest {
 
     ProviderPublicService service;
 
+    private static final long TOLERANCIA_MIN = 30;
+
     @BeforeEach
     void setUp() {
-        service = new ProviderPublicService(profileRepository, reviewRepository, userRepository, proposalRepository);
+        service = new ProviderPublicService(profileRepository, reviewRepository, userRepository,
+                proposalRepository, TOLERANCIA_MIN);
     }
 
     @Test
@@ -96,12 +99,12 @@ class ProviderPublicServiceTest {
 
         var sr1 = new ServiceRequest();
         setCreatedAt(sr1, Instant.parse("2026-08-01T10:00:00Z"));
-        var p1 = new Proposal(sr1, userId, new BigDecimal("150.00"), 2, ProposalStatus.ATIVA);
+        var p1 = new Proposal(sr1, userId, new BigDecimal("150.00"), 2, null, ProposalStatus.ATIVA);
         setCreatedAt(p1, Instant.parse("2026-08-01T10:10:00Z")); // 10 min de resposta
 
         var sr2 = new ServiceRequest();
         setCreatedAt(sr2, Instant.parse("2026-08-02T09:00:00Z"));
-        var p2 = new Proposal(sr2, userId, new BigDecimal("300.00"), 1, ProposalStatus.ACEITA);
+        var p2 = new Proposal(sr2, userId, new BigDecimal("300.00"), 1, null, ProposalStatus.ACEITA);
         setCreatedAt(p2, Instant.parse("2026-08-02T09:20:00Z")); // 20 min de resposta
 
         when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
@@ -115,6 +118,52 @@ class ProviderPublicServiceTest {
         assertThat(dto.precoMin()).isEqualByComparingTo("150.00");
         assertThat(dto.precoMax()).isEqualByComparingTo("300.00");
         assertThat(dto.tempoRespostaMin()).isEqualTo(15); // média de 10 e 20 min
+        // Nenhuma proposta tem horarioProposto — sem dado pra medir pontualidade nenhuma.
+        assertThat(dto.pontualidadePct()).isNull();
+    }
+
+    @Test
+    void buscarPorUserId_calculaPontualidadeSobreAtendimentosIniciados() {
+        UUID userId = UUID.randomUUID();
+        var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
+                .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
+        setId(prestador, userId);
+        var perfil = new ProviderProfile(prestador, "Elétrica", "cpf-cifrado");
+
+        // Pontual: começou 10 min depois do combinado — dentro da tolerância de 30 min.
+        var srPontual = new ServiceRequest();
+        srPontual.setIniciadoEm(Instant.parse("2026-08-01T14:10:00Z"));
+        var pPontual = new Proposal(srPontual, userId, BigDecimal.TEN, 1,
+                Instant.parse("2026-08-01T14:00:00Z"), ProposalStatus.ACEITA);
+
+        // Atrasado: começou 45 min depois do combinado — fora da tolerância.
+        var srAtrasado = new ServiceRequest();
+        srAtrasado.setIniciadoEm(Instant.parse("2026-08-02T09:45:00Z"));
+        var pAtrasado = new Proposal(srAtrasado, userId, BigDecimal.TEN, 1,
+                Instant.parse("2026-08-02T09:00:00Z"), ProposalStatus.ACEITA);
+
+        // Sem horarioProposto (proposta anterior à feature) — não entra na conta nem pra
+        // um lado nem pro outro.
+        var srSemHorario = new ServiceRequest();
+        srSemHorario.setIniciadoEm(Instant.parse("2026-08-03T09:00:00Z"));
+        var pSemHorario = new Proposal(srSemHorario, userId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
+
+        // ATIVA (não aceita, nunca chegou a começar de verdade) — também não conta.
+        var srNaoIniciado = new ServiceRequest();
+        var pNaoIniciado = new Proposal(srNaoIniciado, userId, BigDecimal.TEN, 1,
+                Instant.parse("2026-08-04T09:00:00Z"), ProposalStatus.ATIVA);
+
+        when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
+        when(reviewRepository.findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
+                userId, ReviewType.CLIENTE_AVALIA_PRESTADOR)).thenReturn(List.of());
+        when(proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA)).thenReturn(3L);
+        when(proposalRepository.findByPrestadorId(userId))
+                .thenReturn(List.of(pPontual, pAtrasado, pSemHorario, pNaoIniciado));
+
+        ProviderPublicDto dto = service.buscarPorUserId(userId);
+
+        // 1 pontual de 2 elegíveis (pSemHorario e pNaoIniciado ficam de fora do denominador).
+        assertThat(dto.pontualidadePct()).isEqualTo(50);
     }
 
     @Test

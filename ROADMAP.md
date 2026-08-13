@@ -259,12 +259,14 @@ GET /api/v1/providers/nearby?lat=&lng=&categoria=&raio=&limite=
 
 GET /api/v1/providers/{userId}                          # perfil público (ProviderProfileScreen)
   200: { userId, nome, categoria, bio, notaMedia, totalAvaliacoes, totalServicos,
-         statusVerificacao, avaliacoes[], tempoRespostaMin, precoMin, precoMax }
+         statusVerificacao, avaliacoes[], tempoRespostaMin, precoMin, precoMax, pontualidadePct }
   # tempoRespostaMin/precoMin/precoMax: agregado sobre as Proposal do prestador (qualquer
   # status, não só ACEITA — reflete padrão de cotação, não só serviço fechado); null sem
-  # proposta nenhuma ainda. Não existe pontualidadePct: não há conceito de horário
-  # combinado no domínio hoje pra medir "no prazo" contra algo (US pendente de definição
-  # de produto antes de virar engenharia).
+  # proposta nenhuma ainda.
+  # pontualidadePct (2026-08-13, US15/US03): % de atendimentos com ServiceRequest.iniciadoEm
+  # dentro de marketplace.pontualidade.tolerancia-minutos (default 30) do
+  # Proposal.horarioProposto da proposta ACEITA. Só entram propostas ACEITA com
+  # horarioProposto setado E pedido de fato iniciado — null se nenhum atendimento elegível.
   422: PROVIDER_NOT_FOUND
 ```
 
@@ -282,13 +284,16 @@ POST /api/v1/services/ai/suggest  req:{ descricao?, mediaUrls[] }
 ### M05 — Propostas & Orçamentos
 ```
 POST /api/v1/services/requests/{id}/proposals   (ROLE_PROVIDER)
-  req:  { valor, prazoDias }
+  req:  { valor, prazoDias, horarioProposto }    # horarioProposto: ISO instant, obrigatório
+                                                   # e futuro (@Future) — US15 (2026-08-13)
   201:  { id, status:"ATIVA" }  → pedido vai a PROPOSTO
   422:  { code:"REQUEST_UNAVAILABLE" }           # já aceito por outro
 GET  /api/v1/service-requests/{id}/proposals    200 [ { id, serviceRequestId, prestadorId,
-       prestadorNome, prestadorNota, prestadorAvaliacoes, valor, prazoDias, status, createdAt } ]
+       prestadorNome, prestadorNota, prestadorAvaliacoes, valor, prazoDias, horarioProposto,
+       status, createdAt } ]
      # nome/nota do prestador vêm no DTO: comparar propostas é decidir entre pessoas, não só
      # preço. prestadorNota/Avaliacoes contam só avaliações reveladas (double-blind, US31).
+     # horarioProposto: cliente compara também por quando o prestador atende, não só preço.
 PUT  /api/v1/proposals/{id}/accept|reject  (ROLE_CLIENT) 200 ProposalDto
 ```
 

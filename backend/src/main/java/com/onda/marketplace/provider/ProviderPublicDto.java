@@ -20,7 +20,8 @@ public record ProviderPublicDto(
         List<Avaliacao> avaliacoes,
         Integer    tempoRespostaMin,
         BigDecimal precoMin,
-        BigDecimal precoMax
+        BigDecimal precoMax,
+        Integer    pontualidadePct
 ) {
     public record Avaliacao(UUID id, String autorNome, int nota, String comentario) {}
 }

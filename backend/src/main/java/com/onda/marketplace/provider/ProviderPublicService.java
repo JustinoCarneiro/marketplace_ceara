@@ -8,6 +8,7 @@ import com.onda.marketplace.review.Review;
 import com.onda.marketplace.review.ReviewRepository;
 import com.onda.marketplace.review.ReviewType;
 import com.onda.marketplace.shared.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,15 +27,18 @@ public class ProviderPublicService {
     private final ReviewRepository          reviewRepository;
     private final UserRepository            userRepository;
     private final ProposalRepository        proposalRepository;
+    private final long                      toleranciaPontualidadeMin;
 
     public ProviderPublicService(ProviderProfileRepository profileRepository,
                                  ReviewRepository reviewRepository,
                                  UserRepository userRepository,
-                                 ProposalRepository proposalRepository) {
+                                 ProposalRepository proposalRepository,
+                                 @Value("${marketplace.pontualidade.tolerancia-minutos:30}") long toleranciaPontualidadeMin) {
         this.profileRepository  = profileRepository;
         this.reviewRepository   = reviewRepository;
         this.userRepository     = userRepository;
         this.proposalRepository = proposalRepository;
+        this.toleranciaPontualidadeMin = toleranciaPontualidadeMin;
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +78,25 @@ public class ProviderPublicService {
             tempoRespostaMin = (int) Math.max(1, mediaMinutos);
         }
 
+        // Pontualidade (US03): só entram atendimentos que de fato começaram (iniciadoEm) com
+        // uma proposta aceita que tinha horário combinado (horarioProposto) — propostas sem
+        // esse dado (anteriores à feature) ou pedidos nunca iniciados não contam pra nenhum
+        // dos dois lados, não puxam a média nem pra cima nem pra baixo.
+        List<Proposal> atendimentosIniciados = propostas.stream()
+                .filter(pr -> pr.getStatus() == ProposalStatus.ACEITA)
+                .filter(pr -> pr.getHorarioProposto() != null)
+                .filter(pr -> pr.getServiceRequest().getIniciadoEm() != null)
+                .toList();
+
+        Integer pontualidadePct = null;
+        if (!atendimentosIniciados.isEmpty()) {
+            long pontuais = atendimentosIniciados.stream()
+                    .filter(pr -> !pr.getServiceRequest().getIniciadoEm()
+                            .isAfter(pr.getHorarioProposto().plusSeconds(toleranciaPontualidadeMin * 60)))
+                    .count();
+            pontualidadePct = (int) Math.round(100.0 * pontuais / atendimentosIniciados.size());
+        }
+
         return new ProviderPublicDto(
                 p.getUser().getId(),
                 p.getUser().getNome(),
@@ -86,6 +109,7 @@ public class ProviderPublicService {
                 avaliacoes,
                 tempoRespostaMin,
                 precoMin,
-                precoMax);
+                precoMax,
+                pontualidadePct);
     }
 }

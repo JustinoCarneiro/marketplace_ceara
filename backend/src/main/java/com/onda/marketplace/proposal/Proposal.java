@@ -29,6 +29,12 @@ public class Proposal {
     @Column(name = "prazo_dias", nullable = false)
     private int prazoDias;
 
+    // US15: horário que o prestador propõe pra realizar o serviço. Nullable — propostas
+    // anteriores a esta feature não têm esse dado, e a pontualidade só é calculada quando
+    // existe (ver ProviderPublicService).
+    @Column(name = "horario_proposto")
+    private Instant horarioProposto;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ProposalStatus status;
@@ -38,12 +44,14 @@ public class Proposal {
 
     protected Proposal() {}
 
-    public Proposal(ServiceRequest serviceRequest, UUID prestadorId, BigDecimal valor, int prazoDias, ProposalStatus status) {
-        this.serviceRequest = serviceRequest;
-        this.prestadorId    = prestadorId;
-        this.valor          = valor;
-        this.prazoDias      = prazoDias;
-        this.status         = status;
+    public Proposal(ServiceRequest serviceRequest, UUID prestadorId, BigDecimal valor, int prazoDias,
+                     Instant horarioProposto, ProposalStatus status) {
+        this.serviceRequest  = serviceRequest;
+        this.prestadorId     = prestadorId;
+        this.valor           = valor;
+        this.prazoDias       = prazoDias;
+        this.horarioProposto = horarioProposto;
+        this.status          = status;
     }
 
     public UUID getId()                     { return id; }
@@ -51,6 +59,7 @@ public class Proposal {
     public UUID getPrestadorId()            { return prestadorId; }
     public BigDecimal getValor()            { return valor; }
     public int getPrazoDias()               { return prazoDias; }
+    public Instant getHorarioProposto()     { return horarioProposto; }
     public ProposalStatus getStatus()       { return status; }
     public Instant getCreatedAt()           { return createdAt; }
 

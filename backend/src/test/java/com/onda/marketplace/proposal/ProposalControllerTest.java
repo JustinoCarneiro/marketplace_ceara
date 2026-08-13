@@ -36,13 +36,13 @@ class ProposalControllerTest {
 
     @Test
     void createProposal_validPayload_returns201() throws Exception {
-        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, "ATIVA", Instant.now());
+        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, Instant.now().plusSeconds(3600), "ATIVA", Instant.now());
         when(proposalService.create(eq(SR_ID), any(), any())).thenReturn(dto);
 
         mvc.perform(post("/api/v1/service-requests/{id}/proposals", SR_ID)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(new CreateProposalRequest(BigDecimal.valueOf(250), 3))))
+                        .content(mapper.writeValueAsString(new CreateProposalRequest(BigDecimal.valueOf(250), 3, Instant.now().plusSeconds(3600)))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.valor").value(250))
                 .andExpect(jsonPath("$.status").value("ATIVA"));
@@ -59,7 +59,7 @@ class ProposalControllerTest {
 
     @Test
     void listProposals_returns200WithList() throws Exception {
-        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, "ATIVA", Instant.now());
+        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, Instant.now().plusSeconds(3600), "ATIVA", Instant.now());
         when(proposalService.listForRequest(SR_ID)).thenReturn(List.of(dto));
 
         mvc.perform(get("/api/v1/service-requests/{id}/proposals", SR_ID))
@@ -69,7 +69,7 @@ class ProposalControllerTest {
 
     @Test
     void acceptProposal_returns200() throws Exception {
-        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, "ACEITA", Instant.now());
+        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, Instant.now().plusSeconds(3600), "ACEITA", Instant.now());
         when(proposalService.accept(eq(PROP_ID), any())).thenReturn(dto);
 
         mvc.perform(put("/api/v1/proposals/{id}/accept", PROP_ID).with(csrf()))
@@ -79,7 +79,7 @@ class ProposalControllerTest {
 
     @Test
     void rejectProposal_returns200() throws Exception {
-        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, "RECUSADA", Instant.now());
+        var dto = new ProposalDto(PROP_ID, SR_ID, UUID.randomUUID(), "Prestador Teste", BigDecimal.valueOf(4.8), 12, BigDecimal.valueOf(250), 3, Instant.now().plusSeconds(3600), "RECUSADA", Instant.now());
         when(proposalService.reject(eq(PROP_ID), any())).thenReturn(dto);
 
         mvc.perform(put("/api/v1/proposals/{id}/reject", PROP_ID).with(csrf()))

@@ -51,6 +51,12 @@ public class ServiceRequest {
     @Column(name = "detalhes_disputa", columnDefinition = "TEXT")
     private String detalhesDisputa;
 
+    // US03 (pontualidade): momento real em que ACEITO → EM_ANDAMENTO, gravado uma única vez
+    // em ServiceExecutionService.start(). Comparado contra o horarioProposto da proposta
+    // aceita — updatedAt não serve porque é reescrito a cada mudança (ex.: disputa depois).
+    @Column(name = "iniciado_em")
+    private Instant iniciadoEm;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -72,6 +78,7 @@ public class ServiceRequest {
     public String getIdempotencyKey()           { return idempotencyKey; }
     public String getMotivoDisputa()            { return motivoDisputa; }
     public String getDetalhesDisputa()          { return detalhesDisputa; }
+    public Instant getIniciadoEm()              { return iniciadoEm; }
     public Instant getCreatedAt()               { return createdAt; }
     public Instant getUpdatedAt()               { return updatedAt; }
 
@@ -83,6 +90,7 @@ public class ServiceRequest {
     public void setIdempotencyKey(String v)     { this.idempotencyKey = v; }
     public void setMotivoDisputa(String v)      { this.motivoDisputa = v; }
     public void setDetalhesDisputa(String v)    { this.detalhesDisputa = v; }
+    public void setIniciadoEm(Instant v)        { this.iniciadoEm = v; }
 
     public void aplicarSugestaoIA(AiSuggestion s) {
         this.aiDescricaoSugerida = s.descricaoSugerida();
