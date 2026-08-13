@@ -45,6 +45,7 @@ export default function CompareProposalsScreen() {
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [categoria, setCategoria] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -62,6 +63,19 @@ export default function CompareProposalsScreen() {
         setProposals([]);
       } finally {
         setLoading(false);
+      }
+    })();
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/service-requests/${route.params.requestId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCategoria(data.categoria ?? null);
+        }
+      } catch {
+        // Subtítulo só perde a categoria — a comparação de propostas não depende disso.
       }
     })();
   }, []);
@@ -104,7 +118,7 @@ export default function CompareProposalsScreen() {
         </TouchableOpacity>
         <View style={styles.headerTitles}>
           <Text style={styles.headerTitle}>Propostas recebidas</Text>
-          <Text style={styles.headerSub}>{proposals.length} propostas · Instalação elétrica</Text>
+          <Text style={styles.headerSub}>{proposals.length} propostas{categoria ? ` · ${categoria}` : ''}</Text>
         </View>
       </View>
 

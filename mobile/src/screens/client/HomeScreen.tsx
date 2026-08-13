@@ -149,7 +149,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={cat.slug}
               style={styles.catItem}
-              onPress={() => nav.navigate('Results', { categoria: cat.slug })}
+              onPress={() => nav.navigate('Results', { categoria: cat.label })}
               activeOpacity={0.8}
             >
               <View style={[styles.catIcon, { backgroundColor: cat.bg, borderColor: cat.border }]}>

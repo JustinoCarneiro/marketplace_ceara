@@ -35,6 +35,16 @@ function initials(nome: string) {
 
 const RAIO_STEPS = [5, 8, 15];
 
+const CATEGORIA_PLURAL: Record<string, string> = {
+  'Elétrica': 'Eletricistas',
+  'Hidráulica': 'Encanadores',
+  'Limpeza': 'Diaristas',
+  'Pintura': 'Pintores',
+  'Reforma': 'Profissionais de reforma',
+  'Jardinagem': 'Jardineiros',
+  'Geral': 'Profissionais gerais',
+};
+
 export default function ResultsScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
@@ -50,7 +60,7 @@ export default function ResultsScreen() {
 
   const categoria = route.params?.categoria;
   const titulo = categoria
-    ? categoria.charAt(0).toUpperCase() + categoria.slice(1) + 'istas'
+    ? (CATEGORIA_PLURAL[categoria] ?? categoria)
     : 'Todos os prestadores';
 
   useEffect(() => {

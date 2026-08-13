@@ -18,7 +18,10 @@
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
       },
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://onda-api.157.173.212.76.sslip.io/api/v1"
+      }
     }
   }
 }

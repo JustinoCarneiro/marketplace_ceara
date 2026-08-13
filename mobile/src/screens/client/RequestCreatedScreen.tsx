@@ -23,6 +23,18 @@ const C = {
   sunTint: '#FDF3D6',
 };
 
+// Mesmos ícones/cores por categoria usados em NewRequestScreen — mantém o card de
+// confirmação consistente com o que o cliente escolheu, em vez do ícone fixo de Elétrica.
+const CATEGORY_ICON: Record<string, { icon: React.ComponentProps<typeof Feather>['name']; color: string; bg: string }> = {
+  'Elétrica':   { icon: 'zap',     color: '#8E6508', bg: '#FDF3D6' },
+  'Hidráulica': { icon: 'droplet', color: '#15596E', bg: '#E2EEF2' },
+  'Limpeza':    { icon: 'edit-2',  color: '#15756E', bg: '#DDF0EC' },
+  'Pintura':    { icon: 'edit-3',  color: '#A94C25', bg: '#F7E3D6' },
+  'Reforma':    { icon: 'tool',    color: '#244C86', bg: '#E8EEFA' },
+  'Jardinagem': { icon: 'sun',     color: '#3C7A4E', bg: '#E2F0E6' },
+  'Geral':      { icon: 'grid',    color: '#4C636A', bg: '#FCF8EE' },
+};
+
 export default function RequestCreatedScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
@@ -71,8 +83,12 @@ export default function RequestCreatedScreen() {
 
             {summary && (
               <View style={styles.serviceCard}>
-                <View style={styles.serviceIconWrap}>
-                  <Feather name="zap" size={22} color="#8E6508" />
+                <View style={[styles.serviceIconWrap, { backgroundColor: (CATEGORY_ICON[summary.categoria] ?? CATEGORY_ICON.Geral).bg }]}>
+                  <Feather
+                    name={(CATEGORY_ICON[summary.categoria] ?? CATEGORY_ICON.Geral).icon}
+                    size={22}
+                    color={(CATEGORY_ICON[summary.categoria] ?? CATEGORY_ICON.Geral).color}
+                  />
                 </View>
                 <View style={styles.serviceInfo}>
                   <Text style={styles.serviceTitle} numberOfLines={1}>{summary.descricao}</Text>
