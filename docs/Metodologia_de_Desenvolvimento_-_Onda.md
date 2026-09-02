@@ -59,6 +59,8 @@ cliente e para o negócio.
 | Commits / Small Releases | Fase 4 | Código testado e pronto para produção. |
 | `memoria-tecnica/` | Fase 4 (nasce vazia na Fase 0) | Memória técnica viva: bugs cabeludos e decisões tomadas fora da spec — ver seção 11. |
 | Deploy | Fase 5 | Software em produção. |
+| `docs/METRICAS-PROJETO.md` | Fase 0 | Registro de coleta: kickoff (datas, valor, canal), timesheet por sessão, log de espera/impedimento — ver seção 14. |
+| `docs/ANALISE-PROJETO-<nome>.md` | Fase 5 | Análise de fechamento pelos KPIs (prazo, DORA, fluxo, valor agregado, financeiro). Alimenta o histórico da empresa e calibra o prazo/preço do próximo — ver seção 14. |
 
 ---
 
@@ -76,7 +78,7 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
 *Prepara o terreno antes de qualquer conversa de escopo.*
 
 - **Entrada:** pedido aceito, projeto iniciado.
-- **Atividades:** clonar o template `onda-starter`; ativar a skill de perfil conforme o tipo (e-commerce, app, LP, sistema, automação).
+- **Atividades:** clonar o template `onda-starter`; ativar a skill de perfil conforme o tipo (e-commerce, app, LP, sistema, automação); criar o **registro de métricas** `docs/METRICAS-PROJETO.md` (template vem no `onda-starter`) e preencher o bloco de kickoff — as 4 datas, o valor do contrato + moeda, o canal (Workana/direto) com comissão/saque/tributo, o valor/hora alvo. O custo/hora interno da empresa fica no sibling privado do projeto, nunca no repo (ver seção 14).
 - **Saída:** repositório preparado, contexto enxuto.
 - **Ator:** Humano + IA.
 
@@ -134,6 +136,7 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
   - **Commit limpo** (Small Release).
   - **Atualiza o status do módulo no `ROADMAP.md`** de `⬜ Pendente` para `✅ Concluído (data)` assim que os testes fecham verdes e o commit é feito — é isso que faz do `ROADMAP.md` o quadro Kanban vivo do projeto (seção 12), não um board externo.
 - **Memória técnica:** antes de investigar um bug ou decidir algo fora da spec, consultar `memoria-tecnica/`; ao resolver algo não-trivial, registrar lá (ver seção 11 — critério de quando vale a pena).
+- **Coleta de métricas (leve):** ao fim de cada sessão, uma linha de timesheet em `docs/METRICAS-PROJETO.md`; ao parar por causa externa (cliente, terceiro, infra), abrir e fechar um episódio no log de espera/impedimento do mesmo arquivo. É o que torna a análise de fechamento da Fase 5 possível — ver seção 14.
 - **Decisões:**
   - **G4 — Testes verdes?** Não → volta ao TDD.
   - **G5 — Pedido de mudança?** Sim → **retorno à Fase 1**.
@@ -154,8 +157,9 @@ Scaffolding · Spec Viva · Layout & Congelamento · Blueprint · Esteira XP · 
   2. Validação humana de ponta a ponta.
   3. Revisão final de segurança.
   4. Revisão manual da `memoria-tecnica/`: checar se ficou desatualizada e podar notas triviais (a IA popula por conta própria em melhor esforço, não é garantido — não assumir que está completa sem olhar).
+  5. **Análise de KPIs de fechamento:** rodar a análise pelo padrão da empresa (`docs/METRICAS-KPI.md`), gerando `docs/ANALISE-PROJETO-<nome>.md` — prazo, DORA, fluxo, valor agregado, financeiro de serviços, SPACE, cliente. Feita **perto do fim**, assim que o escopo está estável; não precisa esperar o deploy. Prompt operacional: `docs/PROMPT-ANALISE-KPI.md`. Ver seção 14.
 - **Decisão — G7:** *Smoke test + validação OK?* Não → **retorno à Fase 4**. Sim → avança.
-- **Saída:** **Deploy via CI/CD** → software em produção.
+- **Saída:** **Deploy via CI/CD** → software em produção; `docs/ANALISE-PROJETO-<nome>.md` no histórico da empresa.
 - **Ator:** Humano valida · IA executa · Cliente recebe.
 
 ---
@@ -174,6 +178,9 @@ governança do fluxo.
 | G5 | Dentro da Fase 4 | Pedido de mudança? | Retorna à Fase 1 | Continua |
 | G6 | Dentro da Fase 4 | Mais módulos na fila? | Puxa o próximo | Vai para Fase 5 |
 | G7 | Dentro da Fase 5 | Smoke test + validação OK? | Deploy | Retorna à Fase 4 |
+
+> A **análise de KPIs de fechamento** (seção 14) é atividade obrigatória da Fase 5, não um gateway —
+> não bloqueia o deploy, mas a Fase 5 não se encerra sem ela.
 
 ---
 
@@ -209,6 +216,11 @@ Prazo = Fase 2 (≈2d com identidade / ≈4d sem) + Σ(dias dos módulos das Fas
 
 O mesmo método precifica **aditivos**: uma funcionalidade nova pedida no meio é medida com o
 mesmo peso e soma ao prazo de forma consistente.
+
+O histórico de `docs/ANALISE-PROJETO-*.md` (seção 14) recalibra esta tabela projeto a projeto: se
+o `effective hourly rate` real vem sistematicamente abaixo do alvo, ou o `lead time` real diverge
+do peso estimado, os pesos e o preço-base sobem na próxima proposta — a previsibilidade deixa de
+ser só teórica e passa a se corrigir com dado.
 
 ### Exemplo prático
 
@@ -246,7 +258,7 @@ Todo o ciclo roda dentro do **VSCode + extensão Claude Code** — interface vis
 | 2b · Layout | Claude Design | Recurso exclusivo de geração visual de interface. |
 | 3 · Blueprint | Claude Code / VSCode | Escreve `ROADMAP.md` direto no repositório. |
 | 4 · Esteira XP / TDD | Claude Code / VSCode | Lê/escreve código e roda testes. |
-| 5 · Homologação | Claude Code / VSCode | Docker, scripts e deploy. |
+| 5 · Homologação | Claude Code / VSCode | Docker, scripts, deploy e a análise de KPIs de fechamento (seção 14). |
 
 ### Ponto de entrada por fase
 
@@ -257,7 +269,7 @@ Todo o ciclo roda dentro do **VSCode + extensão Claude Code** — interface vis
 | 2b · Layout | VSCode / Claude Code | `/onda-layout` |
 | 3 · Blueprint | VSCode / Claude Code | `/onda-blueprint` |
 | 4 · Esteira XP | VSCode / Claude Code | Diretiva Primária + ciclo TDD por módulo |
-| 5 · Homologação | VSCode / Claude Code | Smoke test + validação + deploy |
+| 5 · Homologação | VSCode / Claude Code | Smoke test + validação + deploy + análise de KPIs (`docs/PROMPT-ANALISE-KPI.md`) |
 
 ---
 
@@ -479,6 +491,71 @@ Para garantir rastreabilidade de responsabilidades e filtragem visual rápida, o
 - 🟠 **Infraestrutura / Cloud:** DevOps, pipelines CI/CD, buckets (S3), Docker, deploys.
 - 🟣 **Design / Documentação:** Pesquisa visual, criação de tokens, prototipagem (Figma) e documentação técnica.
 - 🔴 **Bug / Débito Técnico:** Correções de defeitos ou refatorações emergenciais de performance.
+
+---
+
+## 14. Análise de KPIs de Fechamento — passo da Fase 5
+
+*Formalizado em set/2026, a partir do projeto Heliene Araújo (piloto). O padrão de métricas
+(`docs/METRICAS-KPI.md`) e o prompt operacional (`docs/PROMPT-ANALISE-KPI.md`) nasceram nesse
+projeto e valem para todos.*
+
+### O que é e por quê
+
+Todo projeto que fecha deixa aprendizado sobre **prazo, custo e fluxo** que, se não for capturado
+num formato comparável, se perde. Este é o passo que transforma cada entrega em dado para o
+planejamento da empresa: ao fim (ou perto do fim) de **todo** projeto, roda-se uma análise
+padronizada e grava-se `docs/ANALISE-PROJETO-<nome>.md`.
+
+Não é opcional e não é um gateway: a Fase 5 não se encerra sem essa análise, mas ela **não
+bloqueia o deploy** — pode (e deve) ser feita assim que o escopo está estável, em paralelo com a
+homologação.
+
+### Quando
+
+- **Fase 0** — criar `docs/METRICAS-PROJETO.md` (template no `onda-starter`) e preencher o bloco
+  de kickoff: as 4 datas, o valor do contrato + moeda, o canal (Workana/direto) com comissão %,
+  taxa de saque % e regime tributário, o valor/hora alvo. O **custo/hora interno da empresa** é o
+  único número sensível — fica no sibling privado (`<projeto>-docs-privados/`) ou é informado na
+  hora da análise, nunca no repo. O peso dos módulos entra aqui quando o `ROADMAP.md` nascer (Fase 3).
+- **Fase 4** — coleta leve contínua nos blocos de `docs/METRICAS-PROJETO.md`: uma linha de
+  timesheet por sessão (`data | fase | horas | nota`) e um episódio no log de espera/impedimento
+  sempre que o trabalho parar por causa externa (`início | fim | motivo | o que destrava`). Sem
+  esses dois, metade dos KPIs vira estimativa grosseira (não dá pra fechar margem real, CPI, flow
+  efficiency, realization rate).
+- **Fase 5** — a análise em si: rodar `docs/PROMPT-ANALISE-KPI.md` numa sessão na raiz do repo.
+
+### O que a análise cobre
+
+Prazo · **DORA** (deployment frequency, lead time p/ mudança, change failure rate, recovery time,
+rework rate) · **Fluxo** (lead time vs. cycle time vs. flow efficiency, aging WIP, flow
+distribution, wait/blocked time) · **Valor Agregado** (SPI, CPI, EAC, VAC; burn vs. % concluído) ·
+**Financeiro de serviços** (effective hourly rate, realization rate, gross margin com e sem mão de
+obra, receita por unidade de escopo, aditivos faturados) · **SPACE** · **Cliente** (on-time
+delivery, CSAT, rework, time-to-launch). Definições, fórmulas e alvos: `docs/METRICAS-KPI.md`,
+seção 3.
+
+### Regras
+
+- Todo valor derivado de horas não registradas é **faixa estimada**, marcada como tal. Nunca
+  fabricar timesheet.
+- Cada achado vem com a **implicação de planejamento**, não só o número.
+- Anti-padrões proibidos: linhas de código como KPI de valor, velocity como meta ou comparação,
+  métrica individual para avaliar pessoa, post-mortem financeiro em vez de acompanhamento contínuo.
+
+### Saída e uso
+
+- `docs/ANALISE-PROJETO-<nome>.md` no repo do projeto + um bloco-resumo (“Snapshot para o
+  histórico”) copiado para o registro central da empresa.
+- Esse histórico **recalibra a seção 7**: pesos de módulo e preço-base se corrigem com dado real,
+  projeto a projeto.
+
+### Ressalvas
+
+- Escrever para humano ler — o valor está no aprendizado destilado, não na tabela.
+- Um `ANALISE-PROJETO` por projeto; o padrão (`METRICAS-KPI.md`) é único e fixo para todos.
+- É melhor esforço da IA seguir a instrução; o humano confere o preenchimento no fechamento, junto
+  com a revisão da `memoria-tecnica/` (Fase 5, atividade 4).
 
 ---
 
