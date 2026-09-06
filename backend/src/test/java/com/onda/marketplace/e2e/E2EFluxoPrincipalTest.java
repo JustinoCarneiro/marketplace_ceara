@@ -15,6 +15,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
@@ -219,10 +221,11 @@ class E2EFluxoPrincipalTest {
                 .header("Authorization", "Bearer " + tokenPrestador)
                 .body("""
                         {
-                          "valor":     250.00,
-                          "prazoDias": 1
+                          "valor":           250.00,
+                          "prazoDias":       1,
+                          "horarioProposto": "%s"
                         }
-                        """)
+                        """.formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
                 .when()
                 .post("/api/v1/service-requests/{id}/proposals", requestId)
                 .then()
