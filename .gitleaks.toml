@@ -1,0 +1,12 @@
+title = "Marketplace Ceará — gitleaks"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Config e placeholders de teste; Pix BR Code (endereço de recebimento, não credencial)."
+paths = [
+  '''backend/src/test/resources/.*''',
+  '''\.github/workflows/.*''',
+  '''mobile/src/screens/client/PaymentPixScreen\.tsx''',
+]

@@ -26,3 +26,6 @@ __pycache__/
 *.pyc
 
 .env.jira
+
+# ─── OndaDev ───
+.ondadev/handoff/current.md

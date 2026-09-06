@@ -1,7 +1,7 @@
 # Métricas e KPIs de Projeto — Padrão da Empresa
 
 > **Status:** adotado. É o padrão referenciado pela **Fase 5 da metodologia Onda**
-> (`Metodologia_de_Desenvolvimento_-_Onda.md`, seção 14 — "Análise de KPIs de Fechamento").
+> (Análise de KPIs de Fechamento — metodologia canônica no `onda-starter`, versão em `ONDA_VERSION`).
 > Semeado a partir do projeto Heliene Araújo (set/2026). Deve migrar para `onda-starter/setup/`
 > junto com o resto do ecossistema de skills.
 > **Prompt operacional (para rodar a análise em qualquer projeto):** [`./PROMPT-ANALISE-KPI.md`](./PROMPT-ANALISE-KPI.md).

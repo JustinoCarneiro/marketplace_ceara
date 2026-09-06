@@ -1,6 +1,6 @@
 # Métricas do Projeto — marketplace-ceara
 
-> Registro de coleta para a **Análise de KPIs de Fechamento** (metodologia Onda, seção 14).
+> Registro de coleta para a **Análise de KPIs de Fechamento** (metodologia OndaDev, Fase 5).
 > Padrão e catálogo: `docs/METRICAS-KPI.md`. Prompt da análise: `docs/PROMPT-ANALISE-KPI.md`.
 >
 > **Regra de dado sensível:** só o *custo/hora interno da empresa* fica fora deste arquivo — no
