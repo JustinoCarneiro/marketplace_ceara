@@ -12,6 +12,9 @@ on:
       - 'backend/src/**'
       - '.github/workflows/mobile-e2e.yml'
 
+permissions:
+  contents: read
+
 jobs:
   maestro-android:
     name: Android API 29 — Maestro E2E

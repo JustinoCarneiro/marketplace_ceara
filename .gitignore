@@ -24,3 +24,8 @@ build/
 # Python
 __pycache__/
 *.pyc
+
+.env.jira
+
+# ─── OndaDev ───
+.ondadev/handoff/current.md

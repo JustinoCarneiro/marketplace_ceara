@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # Marketplace de Serviços Residenciais (Ceará)
 
 Plataforma hiperlocal que conecta clientes a prestadores de serviços residenciais com pagamento retido (Escrow) e reputação verificada.
@@ -47,8 +49,8 @@ ACEITO | EM_ANDAMENTO ──(cancelamento permitido)──► CANCELADO(reembols
 Transação financeira (`transactions`): `PENDENTE → RETIDO → (LIBERADO | REEMBOLSADO)`; em falha → `PENDENTE` (retry idempotente).
 
 
-## Diretivas de Gestão (Regra de Ouro do Trello)
-> **ATENÇÃO:** Toda vez que você (Claude/IA) criar, modificar ou deletar qualquer especificação funcional ou técnica nos arquivos `CLAUDE.md`, `ROADMAP.md`, `docs/spec.md` ou `design/DESIGN.md`, você é **OBRIGADO** a executar o script `./scripts/trello_sync.py` para espelhar essa exata alteração no Trello correspondente (criando cards no Backlog, atualizando os Critérios de Aceite ou arquivando o que foi cancelado). Documentação e Trello são a mesma entidade.
+## Diretivas de Gestão (Jira)
+> O quadro Jira do projeto (board `MKT` em `ondaenterprise.atlassian.net`) é uma **projeção do status**, não a fonte da verdade — essa continua sendo `CLAUDE.md` + `docs/spec.md` + `ROADMAP.md`. A spec muda primeiro nos arquivos; o board é acertado depois, à mão na UI ou com `scripts/jira_sync.py` para lotes pontuais — **nunca disparado automaticamente por edição de doc** (isso recriava issues em duplicata). Não há mais Trello. Credenciais de API do Jira em `.env.jira`, fora do controle de versão. Exclusão de issue exige confirmação explícita.
 
 ## Convenções
 - API REST `/api/v1`, JSON, erros padronizados via `@ControllerAdvice` (400/422/404…).
