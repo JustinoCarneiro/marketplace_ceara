@@ -24,3 +24,5 @@ build/
 # Python
 __pycache__/
 *.pyc
+
+.env.jira

@@ -17,6 +17,7 @@ BOARDS = {
     "Marketplace Ceará": "63beccde337fc800bbcf45ee",
     "Sistema Lucas": "69951af0ee6e12883ce5aac2",
     "SAW HUB": "6a6ba95ff873a38adf05ff8f",
+    "Heliene Macedo": "6a831529c1f77f8bdbb26789",
 }
 
 def req(method, url, data=None):

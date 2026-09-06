@@ -47,8 +47,8 @@ ACEITO | EM_ANDAMENTO ──(cancelamento permitido)──► CANCELADO(reembols
 Transação financeira (`transactions`): `PENDENTE → RETIDO → (LIBERADO | REEMBOLSADO)`; em falha → `PENDENTE` (retry idempotente).
 
 
-## Diretivas de Gestão (Regra de Ouro do Trello)
-> **ATENÇÃO:** Toda vez que você (Claude/IA) criar, modificar ou deletar qualquer especificação funcional ou técnica nos arquivos `CLAUDE.md`, `ROADMAP.md`, `docs/spec.md` ou `design/DESIGN.md`, você é **OBRIGADO** a executar o script `./scripts/trello_sync.py` para espelhar essa exata alteração no Trello correspondente (criando cards no Backlog, atualizando os Critérios de Aceite ou arquivando o que foi cancelado). Documentação e Trello são a mesma entidade.
+## Diretivas de Gestão (Regra de Ouro do Trello + Jira)
+> **ATENÇÃO:** Toda vez que você (Claude/IA) criar, modificar ou deletar qualquer especificação funcional ou técnica nos arquivos `CLAUDE.md`, `ROADMAP.md`, `docs/spec.md` ou `design/DESIGN.md`, você é **OBRIGADO** a executar **os dois scripts** — `./scripts/trello_sync.py` e `./scripts/jira_sync.py` — para espelhar essa exata alteração no Trello e no Jira correspondentes (criando cards/issues no Backlog, atualizando os Critérios de Aceite ou arquivando o que foi cancelado). Documentação, Trello e Jira são a mesma entidade. Board Jira deste projeto: `MKT` em `ondaenterprise.atlassian.net` (credenciais em `.env.jira`, fora do controle de versão).
 
 ## Convenções
 - API REST `/api/v1`, JSON, erros padronizados via `@ControllerAdvice` (400/422/404…).
