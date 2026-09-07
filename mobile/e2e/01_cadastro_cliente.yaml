@@ -38,6 +38,14 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# Achado por evidência direta (screenshot da run 8): o texto da senha foi
+# parar DENTRO do campo E-MAIL ("...onda.devsenha1234") — o tap em
+# input-senha não estava tirando o foco de verdade do campo anterior.
+# Corrida entre o layout ainda se ajustando à troca de teclado
+# (email-address → padrão) e o tap calculado com bounds da hierarquia
+# anterior. hideKeyboard força o layout a assentar antes de localizar e
+# tocar no campo seguinte.
+- hideKeyboard
 - tapOn:
     id: "input-senha"
 - tapOn:

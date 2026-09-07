@@ -43,6 +43,11 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# Achado por evidência direta em 01_cadastro_cliente.yaml (screenshot mostrando
+# a senha digitada dentro do campo E-MAIL) — hideKeyboard força o layout a
+# assentar antes de tocar no campo de senha, evitando a corrida entre a troca
+# de teclado (email-address → padrão) e o cálculo do tap.
+- hideKeyboard
 - tapOn:
     id: "input-senha"
 - tapOn:

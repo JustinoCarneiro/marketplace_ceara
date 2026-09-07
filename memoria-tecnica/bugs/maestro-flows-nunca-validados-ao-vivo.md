@@ -49,10 +49,25 @@ fixo, e isso levou a duas hipóteses erradas antes da causa raiz completa:
 
 Não dá pra prever depois de qual evento (foco ou digitação, em qual campo) o diálogo aparece —
 a dispensa tolerante precisa ir **antes E depois de cada `inputText`**, nos 3 campos, não só
-depois. Lição dentro da lição: um `tapOn` opcional "resolver" uma run não é prova de causa raiz
-correta, e uma hipótese plausível (corrida de foco) confirmada por evidência real (árvore de
-acessibilidade) ainda pode ser a hipótese errada — só uma run **limpa e repetível**, com a causa
-raiz fotografada no exato momento do sintoma, fecha a investigação.
+depois.
+
+- *Runs 7-8, SEGUNDA causa raiz (coexistindo com a do diálogo — duas causas diferentes, não uma):*
+  mesmo numa run em que **nenhuma** das 6 dispensas de "DENY" encontrou o diálogo (nenhuma
+  interferência dele), o fluxo ainda falhava no mesmo `assertVisible: "Elétrica"`. O screenshot
+  dessa run mostra a prova direta: o campo E-MAIL exibia `lucia.teste@onda.devsenha1234` — a
+  senha foi digitada **dentro do campo de e-mail**. O `tapOn: { id: "input-senha" }` não estava
+  de fato tirando o foco do campo anterior; é uma corrida entre o layout ainda se ajustando à
+  troca de teclado (email-address → padrão/secureTextEntry) e o toque calculado em cima dos
+  bounds de uma captura de hierarquia que ainda não refletia o layout assentado. `hideKeyboard`
+  antes de tocar em `input-senha` força esse assentamento.
+
+Lição dentro da lição: um `tapOn` opcional "resolver" uma run não é prova de causa raiz correta,
+uma hipótese plausível (corrida de foco, runs 3-4) confirmada por evidência real (árvore de
+acessibilidade) ainda pode ser a hipótese errada, e **duas causas raiz diferentes podem produzir
+o mesmo sintoma final** (`assertVisible: "Elétrica"` falhando) em runs diferentes — corrigir a
+primeira não garante fechar o bug se a segunda continuar solta. Só uma run **limpa e repetível**,
+com a causa raiz fotografada no exato momento do sintoma, fecha a investigação — e mesmo depois
+de fechada, vale checar se o mesmo sintoma final não tinha mais de uma causa.
 
 **2 e 3. O pipeline nunca chegou vivo até aqui.** Desde que o guard do canal de alerta passou a
 bloquear o boot do backend (~07/08), *nenhuma* run de CI executou de fato os fluxos Maestro —
@@ -75,6 +90,9 @@ inclusive os que dependiam de mudanças de contrato feitas depois dessa data:
 - `RegisterClientScreen.tsx` e `RegisterProviderScreen.tsx`: `testID="input-senha"` adicionado
   ao campo de senha (mudança aditiva, sem alterar comportamento) — seletor por id em vez de texto
   de placeholder, mais robusto independente do bug do diálogo.
+- `01_cadastro_cliente.yaml` e `03_cadastro_prestador.yaml`: `hideKeyboard` entre o `inputText`
+  do e-mail e o `tapOn` em `input-senha` — resolve a 2ª causa raiz (corrida de layout na troca
+  de teclado, ver achado das runs 7-8).
 - `03_cadastro_prestador.yaml`: também ganhou o `tapOn: { id: "checkbox-termos" }` que nunca
   existia, antes de selecionar categoria.
 - `05_enviar_proposta.yaml`: preenche `input-data-proposta` (`20/12/2026`) e
