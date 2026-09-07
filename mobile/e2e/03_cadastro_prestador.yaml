@@ -11,12 +11,16 @@ env:
     visible: "Sou Prestador"
     timeout: 10000
 - tapOn: "Sou Prestador"
-# Tela de prestador tem mais campos/conteúdo que a de cliente (CPF + aviso
-# LGPD + chips de categoria) — primeiro render mais lento; assertVisible
-# simples (sem wait) flakeou numa run por timing, mesmo com o texto
-# claramente presente no screenshot de debug daquele momento.
+# "Criar conta" nunca casa nessa tela mesmo com 15s de espera e o texto
+# claramente visível no screenshot de debug — a tela de cliente tem um botão
+# PRÓPRIO com o texto exato "Criar conta" (RegisterClientScreen.tsx:222,
+# nó de acessibilidade simples e isolado) que é quem realmente satisfaz o
+# assertVisible de lá; aqui o título é só o Text aninhado "Criar conta" +
+# "prestador" (RegisterProviderScreen.tsx:63-66) e o botão de verdade é
+# "Enviar para verificação" — nunca existiu um "Criar conta" tocável ou
+# isolado nesta tela. "CPF" é rótulo simples e exclusivo desta tela.
 - extendedWaitUntil:
-    visible: "Criar conta"
+    visible: "CPF"
     timeout: 15000
 # Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
 # 01_cadastro_cliente.yaml — timing genuinamente não-determinístico (confirmado

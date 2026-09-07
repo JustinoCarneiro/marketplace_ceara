@@ -20,6 +20,14 @@ achou 3 bugs reais nos próprios arquivos de teste, nenhum deles vindo do app:
 3. `05_enviar_proposta.yaml` — preenchia só valor e tocava "Enviar", sem preencher data/hora.
 4. `03_cadastro_prestador.yaml` — tocava um botão "Cadastrar" que nunca existiu na tela; o botão
    real é "Enviar para verificação" (`RegisterProviderScreen.tsx:214`).
+5. `03_cadastro_prestador.yaml` — `assertVisible: "Criar conta"` nunca casava nessa tela, mesmo
+   com 15s de espera e o texto visivelmente na tela no screenshot de debug (não era timing).
+   Causa: `RegisterClientScreen.tsx` tem um botão PRÓPRIO com o texto exato "Criar conta" (linha
+   222, nó de acessibilidade simples e isolado) — é ele, não o título, quem satisfazia o
+   `assertVisible` de `01_cadastro_cliente.yaml`. `RegisterProviderScreen.tsx` só tem "Criar
+   conta" dentro de um `<Text>` aninhado no título ("Criar conta" + `<Text>`"prestador"`</Text>`,
+   linhas 63-66) — nunca existiu um nó isolado com esse texto nessa tela, tocável ou não. Trocado
+   por `"CPF"`, rótulo simples e exclusivo desta tela.
 
 ## Causa raiz
 
