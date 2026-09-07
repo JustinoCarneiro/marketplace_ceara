@@ -30,6 +30,11 @@ env:
 - tapOn:
     text: "mínimo 8 caracteres"
 - inputText: ${SENHA}
+# DEBUG TEMPORÁRIO: senha ficava vazia mesmo sem o diálogo de contatos aparecer
+# (confirmado — os dois dismiss de DENY WARNED "not found" na run anterior).
+# Screenshot aqui pra ver o estado real da tela nesse ponto antes de mais
+# hipótese às cegas.
+- takeScreenshot: debug-apos-senha
 # Defesa extra caso o diálogo apareça de novo/atrasado — tolerante, não quebra
 # se não houver nada pra dispensar.
 - tapOn:
