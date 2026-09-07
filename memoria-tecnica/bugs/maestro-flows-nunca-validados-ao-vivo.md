@@ -18,6 +18,8 @@ achou 3 bugs reais nos próprios arquivos de teste, nenhum deles vindo do app:
 2. `03_cadastro_prestador.yaml` — nunca tocava o checkbox de termos (achado por leitura de
    código, ainda não observado ao vivo).
 3. `05_enviar_proposta.yaml` — preenchia só valor e tocava "Enviar", sem preencher data/hora.
+4. `03_cadastro_prestador.yaml` — tocava um botão "Cadastrar" que nunca existiu na tela; o botão
+   real é "Enviar para verificação" (`RegisterProviderScreen.tsx:214`).
 
 ## Causa raiz
 

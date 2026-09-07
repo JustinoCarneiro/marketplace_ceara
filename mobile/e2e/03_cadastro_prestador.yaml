@@ -11,7 +11,13 @@ env:
     visible: "Sou Prestador"
     timeout: 10000
 - tapOn: "Sou Prestador"
-- assertVisible: "Criar conta"
+# Tela de prestador tem mais campos/conteúdo que a de cliente (CPF + aviso
+# LGPD + chips de categoria) — primeiro render mais lento; assertVisible
+# simples (sem wait) flakeou numa run por timing, mesmo com o texto
+# claramente presente no screenshot de debug daquele momento.
+- extendedWaitUntil:
+    visible: "Criar conta"
+    timeout: 15000
 # Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
 # 01_cadastro_cliente.yaml — timing genuinamente não-determinístico (confirmado
 # aparecendo em pontos diferentes a cada run, inclusive antes de digitar).
@@ -66,6 +72,8 @@ env:
 # sido pego porque o pipeline não chegava vivo até aqui (backend não subia).
 - tapOn:
     id: "checkbox-termos"
+# Botão real é "Enviar para verificação" (RegisterProviderScreen.tsx:214) — nunca
+# validado ao vivo antes, "Cadastrar" nunca existiu nessa tela.
 - tapOn: "Elétrica"
-- tapOn: "Cadastrar"
+- tapOn: "Enviar para verificação"
 - assertVisible: "EM VERIFICAÇÃO"
