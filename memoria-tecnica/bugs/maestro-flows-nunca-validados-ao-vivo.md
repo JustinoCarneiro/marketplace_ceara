@@ -61,13 +61,20 @@ depois.
   bounds de uma captura de hierarquia que ainda não refletia o layout assentado. `hideKeyboard`
   antes de tocar em `input-senha` força esse assentamento.
 
+- *Run 9, TERCEIRA causa raiz:* com as duas primeiras corrigidas, o screenshot dessa run mostra
+  a senha certinha (pontos mascarados + medidor de força "Boa") — mas o teclado continuava
+  aberto, cobrindo a linha do checkbox de termos por completo. `Tap on id: checkbox-termos...
+  FAILED` de novo, só que agora por um motivo trivial: elemento fora da área alcançável, não
+  diálogo nem corrida de foco. `hideKeyboard` antes de procurar o checkbox resolve.
+
 Lição dentro da lição: um `tapOn` opcional "resolver" uma run não é prova de causa raiz correta,
 uma hipótese plausível (corrida de foco, runs 3-4) confirmada por evidência real (árvore de
-acessibilidade) ainda pode ser a hipótese errada, e **duas causas raiz diferentes podem produzir
-o mesmo sintoma final** (`assertVisible: "Elétrica"` falhando) em runs diferentes — corrigir a
-primeira não garante fechar o bug se a segunda continuar solta. Só uma run **limpa e repetível**,
-com a causa raiz fotografada no exato momento do sintoma, fecha a investigação — e mesmo depois
-de fechada, vale checar se o mesmo sintoma final não tinha mais de uma causa.
+acessibilidade) ainda pode ser a hipótese errada, e **o mesmo sintoma final pode ter mais de uma
+causa raiz diferente, reveladas em camadas** — cada fix corrigia a run o suficiente pra chegar
+até a camada seguinte (diálogo → corrida de foco/teclado → teclado cobrindo o alvo), nunca
+todas de uma vez. Só uma run **limpa e repetível**, com a causa raiz fotografada no exato momento
+do sintoma, fecha cada camada — e "resolvido" só depois de uma run inteira sem nenhuma
+interferência reportada.
 
 **2 e 3. O pipeline nunca chegou vivo até aqui.** Desde que o guard do canal de alerta passou a
 bloquear o boot do backend (~07/08), *nenhuma* run de CI executou de fato os fluxos Maestro —
@@ -93,6 +100,9 @@ inclusive os que dependiam de mudanças de contrato feitas depois dessa data:
 - `01_cadastro_cliente.yaml` e `03_cadastro_prestador.yaml`: `hideKeyboard` entre o `inputText`
   do e-mail e o `tapOn` em `input-senha` — resolve a 2ª causa raiz (corrida de layout na troca
   de teclado, ver achado das runs 7-8).
+- `01_cadastro_cliente.yaml` e `03_cadastro_prestador.yaml`: `hideKeyboard` depois do `inputText`
+  da senha, antes de procurar `checkbox-termos` — resolve a 3ª causa raiz (teclado ainda aberto
+  cobrindo a linha do checkbox, ver achado da run 9).
 - `03_cadastro_prestador.yaml`: também ganhou o `tapOn: { id: "checkbox-termos" }` que nunca
   existia, antes de selecionar categoria.
 - `05_enviar_proposta.yaml`: preenche `input-data-proposta` (`20/12/2026`) e

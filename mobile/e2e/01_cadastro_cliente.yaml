@@ -55,6 +55,11 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# Confirmado por screenshot (run 9): senha digitada certinho (dots + medidor
+# "Boa"), mas o teclado continuava aberto cobrindo a linha do checkbox — por
+# isso "Element not found: checkbox-termos" mesmo com o elemento existindo,
+# só fora da área visível/alcançável. hideKeyboard antes de procurá-lo.
+- hideKeyboard
 # Botão "Criar conta" fica desabilitado até aceitar os termos (canSubmit exige
 # acceptedTerms) — sem esse tapOn, o botão nunca é encontrado pelo Maestro.
 # tapOn por texto falhou ("Li e aceito os" not found) — os links "Termos de Uso"/

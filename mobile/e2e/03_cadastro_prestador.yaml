@@ -57,6 +57,10 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# Confirmado em 01_cadastro_cliente.yaml (screenshot): teclado aberto cobre a
+# linha do checkbox mesmo com o campo de senha certo — hideKeyboard antes de
+# procurá-lo.
+- hideKeyboard
 # handleSubmit em RegisterProviderScreen.tsx recusa silenciosamente (só seta
 # error, nunca chama a API) sem aceptedTerms — faltava esse tapOn, nunca tinha
 # sido pego porque o pipeline não chegava vivo até aqui (backend não subia).
