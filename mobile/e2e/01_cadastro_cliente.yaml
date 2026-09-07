@@ -30,6 +30,13 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# 6 runs seguidas confirmaram (inclusive pela árvore nativa: "focused": "false",
+# sem texto) que o campo não ganha foco de verdade na 1ª tentativa logo depois
+# da transição de teclado do campo E-MAIL — Maestro reporta "COMPLETED" tanto
+# no tap quanto no inputText, mas nada gruda. 2º tap no mesmo elemento é o
+# workaround padrão pra esse tipo de corrida de foco em automação mobile.
+- tapOn:
+    id: "input-senha"
 - tapOn:
     id: "input-senha"
 - inputText: ${SENHA}

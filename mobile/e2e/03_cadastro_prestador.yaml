@@ -34,6 +34,10 @@ env:
 - tapOn:
     text: "DENY"
     optional: true
+# Mesmo workaround de 01_cadastro_cliente.yaml — foco não gruda de 1ª logo
+# após a transição de teclado do campo anterior.
+- tapOn:
+    id: "input-senha"
 - tapOn:
     id: "input-senha"
 - inputText: ${SENHA}
