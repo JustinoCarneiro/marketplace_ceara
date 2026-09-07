@@ -35,7 +35,7 @@ env:
     text: "DENY"
     optional: true
 - tapOn:
-    text: "mínimo 8 caracteres"
+    id: "input-senha"
 - inputText: ${SENHA}
 - tapOn:
     text: "DENY"

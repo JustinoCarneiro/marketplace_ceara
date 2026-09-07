@@ -114,6 +114,7 @@ export default function RegisterProviderScreen() {
             <View style={styles.field}>
               <Text style={styles.label}>SENHA</Text>
               <TextInput
+                testID="input-senha"
                 style={styles.input}
                 placeholder="mínimo 8 caracteres"
                 placeholderTextColor={color.textFaint}
