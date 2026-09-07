@@ -19,6 +19,17 @@ env:
     id: "input-valor"
 - inputText: "150"
 # prazo já vem preenchido com "2" por padrão
+# US15 (13/08): horário agora é obrigatório (dataProposta/horaProposta partem
+# vazios, sem default) — sem preencher, send() nem chama a API, só mostra erro
+# e a folha nunca fecha. Mesma causa raiz do bug já corrigido no
+# E2EFluxoPrincipalTest do backend (memoria-tecnica/bugs/e2e-fluxo-principal-quebrado.md).
+- tapOn:
+    id: "input-data-proposta"
+- inputText: "20/12/2026"
+- tapOn:
+    id: "input-hora-proposta"
+- inputText: "14:00"
+- hideKeyboard
 - tapOn:
     id: "btn-enviar-proposta"
 # Ao enviar, a folha fecha (goBack) e volta para a lista

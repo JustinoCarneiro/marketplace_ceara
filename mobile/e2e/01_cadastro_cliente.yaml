@@ -20,6 +20,16 @@ env:
 - tapOn:
     text: "mínimo 8 caracteres"
 - inputText: ${SENHA}
+# O teclado AOSP do emulador de CI pede permissão de contatos (autocomplete do
+# campo NOME) e essa caixa de diálogo do sistema fica por cima da tela, fora da
+# árvore do app — "Element not found: checkbox-termos" não era testID/
+# acessibilidade quebrada, era isso cobrindo o elemento (confirmado via
+# screenshot de debug do Maestro). Dispensa tolerante antes de continuar; não
+# depende de qual campo disparou nem se o diálogo chega a aparecer.
+- tapOn:
+    text: "DENY"
+    optional: true
+
 # Botão "Criar conta" fica desabilitado até aceitar os termos (canSubmit exige
 # acceptedTerms) — sem esse tapOn, o botão nunca é encontrado pelo Maestro.
 # tapOn por texto falhou ("Li e aceito os" not found) — os links "Termos de Uso"/
