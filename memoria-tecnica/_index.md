@@ -26,6 +26,7 @@ critério completo de quando vale (e quando não vale) criar uma nota aqui.
 - [[jira-team-managed-endpoints-bloqueados]] — campo→layout é gap real de API; delete de issue era falta de papel atribuído, não permissão da plataforma.
 - [[maestro-e2e-backend-nao-sobe]] — Maestro E2E falhava em toda run desde ~07/08: guard de canal de alerta bloqueava o boot do backend em CI.
 - [[maestro-flows-nunca-validados-ao-vivo]] — com o boot corrigido, 3 fluxos Maestro quebrados apareceram: diálogo de sistema do teclado cobrindo o checkbox de termos, e dois fluxos nunca atualizados depois de mudanças de contrato (agendamento US15, aceite de termos do prestador).
+- [[maestro-e2e-cleartext-bloqueado]] — com o formulário de cadastro finalmente submetendo, apareceu mais uma camada: `usesCleartextTraffic` do app.json é campo morto nesta versão do Expo, release não herdava permissão de HTTP puro pro backend local do emulador.
 
 ## Decisões
 *(vazio — criado retroativamente em 2026-08-03; começa a ser populado dali em diante)*
