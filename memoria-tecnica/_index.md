@@ -22,7 +22,9 @@ critério completo de quando vale (e quando não vale) criar uma nota aqui.
   aviso dedicado em outro doc) — isso duplicaria a fonte de verdade em vez de complementá-la.
 
 ## Bugs
-*(vazio — criado retroativamente em 2026-08-03; começa a ser populado dali em diante)*
+- [[e2e-fluxo-principal-quebrado]] — CI vermelho no master desde 13/08: DTO de proposta ganhou campo obrigatório, teste E2E não foi atualizado.
+- [[jira-team-managed-endpoints-bloqueados]] — campo→layout é gap real de API; delete de issue era falta de papel atribuído, não permissão da plataforma.
+- [[maestro-e2e-backend-nao-sobe]] — Maestro E2E falhava em toda run desde ~07/08: guard de canal de alerta bloqueava o boot do backend em CI.
 
 ## Decisões
 *(vazio — criado retroativamente em 2026-08-03; começa a ser populado dali em diante)*

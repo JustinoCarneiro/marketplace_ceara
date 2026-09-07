@@ -108,6 +108,10 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
           MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
+          # Sem isso o boot falha (alertChannelValidator exige e-mail/push configurado em
+          # produção) — CI não tem canal de alerta real, mesma flag usada no ambiente de
+          # demo pública. Ver memoria-tecnica/bugs/maestro-e2e-backend-nao-sobe.md.
+          ALLOW_MISSING_ALERT_CHANNEL: "true"
 
       # ─── APK release (standalone) ─────────────────────────────────────────
       # IMPORTANTE: assembleDebug gera o Expo dev client (precisa de Metro) e no
