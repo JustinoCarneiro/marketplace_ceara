@@ -11,35 +11,39 @@ env:
     timeout: 10000
 - tapOn: "Sou Cliente"
 - assertVisible: "Criar conta"
+# O teclado AOSP do emulador de CI pede permissão de contatos ("Allow Android
+# Keyboard (AOSP) to access your contacts?") em timing genuinamente
+# não-determinístico — confirmado por 8 runs aparecendo em pontos diferentes
+# a cada vez: depois do NOME, depois do E-MAIL, depois de focar SENHA (antes
+# até de digitar). É diálogo de SISTEMA, fora da árvore do app: enquanto
+# aberto, ele intercepta a digitação seguinte por completo (Maestro reporta
+# "COMPLETED" mesmo digitando no vazio — não é erro, é silêncio). Por isso a
+# dispensa tolerante vai ANTES e DEPOIS de cada inputText, nos 3 campos —
+# cobre o diálogo aparecendo tanto no foco quanto durante/depois da digitação.
 - tapOn:
     text: "Lúcia Maria Alves"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${NOME}
-# O teclado AOSP do emulador de CI pede permissão de contatos ("Allow Android
-# Keyboard (AOSP) to access your contacts?") em algum ponto não-determinístico
-# do preenchimento — confirmado em runs diferentes aparecendo logo após NOME
-# numa, e só depois de SENHA na outra. É um diálogo de SISTEMA, fora da árvore
-# do app, que intercepta a digitação seguinte enquanto aberto (não é só
-# sobreposição visual). Por isso a dispensa tolerante vai depois de CADA campo,
-# não só uma vez — não dá pra prever quando ele aparece.
 - tapOn:
     text: "DENY"
     optional: true
 - tapOn:
     text: "lucia.alves@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL}
 - tapOn:
     text: "DENY"
     optional: true
-# DEBUG TEMPORÁRIO — 7 runs sem fechar isso: 2º tap em input-senha chegou a
-# FALHAR (elemento sumiu da árvore, não só sem foco) uns 18s depois do 1º tap
-# ter funcionado. Hipótese: overlay de sistema (Autofill?) tomando conta da
-# tela nesse intervalo — screenshots aqui pra confirmar antes de mais um fix
-# às cegas.
 - tapOn:
     id: "input-senha"
-- takeScreenshot: debug-apos-tap-senha
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
-- takeScreenshot: debug-apos-digitar-senha
 - tapOn:
     text: "DENY"
     optional: true

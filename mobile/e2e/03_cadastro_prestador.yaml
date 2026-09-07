@@ -12,34 +12,42 @@ env:
     timeout: 10000
 - tapOn: "Sou Prestador"
 - assertVisible: "Criar conta"
+# Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
+# 01_cadastro_cliente.yaml — timing genuinamente não-determinístico (confirmado
+# aparecendo em pontos diferentes a cada run, inclusive antes de digitar).
+# Dispensa tolerante ANTES e DEPOIS de cada inputText.
 - tapOn:
     text: "José Wagner Ferreira"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${NOME}
-# Mesmo diálogo de sistema do teclado AOSP (permissão de contatos) documentado
-# em 01_cadastro_cliente.yaml — timing não-determinístico entre runs (confirmado
-# aparecendo depois de campos diferentes em runs diferentes), por isso a
-# dispensa tolerante vai depois de CADA campo, não só uma vez.
 - tapOn:
     text: "DENY"
     optional: true
 - tapOn:
     text: "123.456.789-00"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${CPF}
 - tapOn:
     text: "DENY"
     optional: true
 - tapOn:
     text: "jose@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL}
 - tapOn:
     text: "DENY"
     optional: true
-# Mesmo workaround de 01_cadastro_cliente.yaml — foco não gruda de 1ª logo
-# após a transição de teclado do campo anterior.
 - tapOn:
     id: "input-senha"
 - tapOn:
-    id: "input-senha"
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
 - tapOn:
     text: "DENY"
