@@ -15,6 +15,14 @@ env:
 - tapOn:
     text: "José Wagner Ferreira"
 - inputText: ${NOME}
+# Mesmo diálogo de sistema do teclado AOSP (permissão de contatos) documentado
+# em 01_cadastro_cliente.yaml — dispensar logo após o campo NOME (que dispara
+# o diálogo), antes de tocar em qualquer outro campo. Dispensar só no fim
+# chega tarde: o diálogo engole a digitação dos campos seguintes, não só cobre
+# visualmente.
+- tapOn:
+    text: "DENY"
+    optional: true
 - tapOn:
     text: "123.456.789-00"
 - inputText: ${CPF}
@@ -24,8 +32,6 @@ env:
 - tapOn:
     text: "mínimo 8 caracteres"
 - inputText: ${SENHA}
-# Mesmo diálogo de sistema do teclado AOSP (permissão de contatos) documentado
-# em 01_cadastro_cliente.yaml — dispensa tolerante antes de continuar.
 - tapOn:
     text: "DENY"
     optional: true

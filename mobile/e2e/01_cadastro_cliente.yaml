@@ -14,18 +14,24 @@ env:
 - tapOn:
     text: "Lúcia Maria Alves"
 - inputText: ${NOME}
+# O teclado AOSP do emulador de CI pede permissão de contatos assim que o
+# campo NOME dispara autocomplete, e o diálogo de sistema (fora da árvore do
+# app) intercepta a digitação seguinte — não só cobre visualmente, ENGOLE os
+# toques/texto dos campos seguintes enquanto está aberto (1ª tentativa dispensava
+# só antes do checkbox-termos, tarde demais: SENHA já tinha sido "digitada" no
+# vazio). Dispensar aqui, logo após o campo que dispara, antes de tocar em
+# qualquer outro campo. Confirmado via screenshot de debug do Maestro.
+- tapOn:
+    text: "DENY"
+    optional: true
 - tapOn:
     text: "lucia.alves@email.com"
 - inputText: ${EMAIL}
 - tapOn:
     text: "mínimo 8 caracteres"
 - inputText: ${SENHA}
-# O teclado AOSP do emulador de CI pede permissão de contatos (autocomplete do
-# campo NOME) e essa caixa de diálogo do sistema fica por cima da tela, fora da
-# árvore do app — "Element not found: checkbox-termos" não era testID/
-# acessibilidade quebrada, era isso cobrindo o elemento (confirmado via
-# screenshot de debug do Maestro). Dispensa tolerante antes de continuar; não
-# depende de qual campo disparou nem se o diálogo chega a aparecer.
+# Defesa extra caso o diálogo apareça de novo/atrasado — tolerante, não quebra
+# se não houver nada pra dispensar.
 - tapOn:
     text: "DENY"
     optional: true
