@@ -12,13 +12,12 @@ env:
 - tapOn: "Criar pedido"
 - assertVisible: "Novo pedido"
 - tapOn: "Elétrica"
-# "DESCRIÇÃO" (label) aparece instantâneo — não era render lento. A árvore de
-# acessibilidade no momento da falha mostra o campo certinho (hintText com o texto
-# completo, clickable, bounds válidos) mas o tapOn por texto nunca encontrava durante
-# os ~18s de busca — suspeita: TextInput com multiline (NewRequestScreen.tsx:207) não
-# casa de forma confiável por conteúdo de hint via tapOn de texto no Maestro, mesmo
-# quando a dump final da hierarquia mostra o atributo presente. testID em vez de texto,
-# mesmo padrão já usado pra senha/checkbox neste projeto.
+# "DESCRIÇÃO" (label) aparece instantâneo — não era render lento. Causa real (só
+# entendida depois, ao bater no mesmo padrão em "PENDENTE" mais abaixo): tapOn/
+# assertVisible por texto no Maestro exige casar a string INTEIRA do nó, não um
+# trecho — "A tomada da cozinha" é só o prefixo do hintText completo ("...solta
+# faísca quando ligo a air fryer..."), nunca ia casar por mais que esperasse.
+# testID evita o problema de vez (casa por id, não por conteúdo de texto).
 - extendedWaitUntil:
     visible: "DESCRIÇÃO"
     timeout: 15000
@@ -44,4 +43,7 @@ env:
 - assertVisible: "Revisar com a IA"
 - tapOn: "Confirmar e publicar pedido"
 - assertVisible: "Pedido criado!"
-- assertVisible: "PENDENTE"
+# "PENDENTE" sozinho nunca casa — o nó de verdade é "PENDENTE · AGUARDANDO
+# PROPOSTAS" (RequestCreatedScreen.tsx:81) num Text só, e Maestro exige a string
+# inteira (ver comentário do input-descricao acima — mesma causa raiz).
+- assertVisible: "PENDENTE · AGUARDANDO PROPOSTAS"

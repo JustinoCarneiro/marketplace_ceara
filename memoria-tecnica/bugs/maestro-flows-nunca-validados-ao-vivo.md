@@ -244,6 +244,24 @@ um passo genuinamente faltando: `NewRequestScreen` → `IA review` → `RequestC
 IA"` + `tapOn: "Confirmar e publicar pedido"` entre os dois. Sem risco de teclado aqui — tela
 sem nenhum campo de texto.
 
+**Achado final, corrige uma hipótese anterior — Maestro exige a string INTEIRA, não um
+trecho:** com "Confirmar e publicar pedido" resolvido, "Pedido criado!" passou — mas
+`assertVisible: "PENDENTE"` falhou com o texto claramente visível no screenshot ("PENDENTE ·
+AGUARDANDO PROPOSTAS" — um `Text` só, `RequestCreatedScreen.tsx:81`). Isso revela a causa raiz
+de verdade por trás do mistério do `input-descricao` (mais acima nesta nota): não era o
+`TextInput` `multiline` que não casava por hint — era que `tapOn`/`assertVisible` por texto no
+Maestro exige a string **inteira** do nó, e "A tomada da cozinha" é só o prefixo do hint
+completo, igual "PENDENTE" é só o prefixo de "PENDENTE · AGUARDANDO PROPOSTAS". A troca por
+`testID` funcionou pra descrição por acaso (evita o problema por completo, casando por id em vez
+de texto) — não porque `multiline` fosse a causa. Fix aqui: usar a string completa
+`"PENDENTE · AGUARDANDO PROPOSTAS"` em vez do prefixo.
+
+**Lição sobre a lição:** a hipótese do `multiline` era plausível e nunca foi desmentida
+diretamente — só ficou visivelmente incompleta quando o mesmo sintoma reapareceu num elemento
+sem nada de especial (um `Text` comum). Vale, ao documentar causa raiz de flakiness de
+automação, marcar claramente quando a explicação é "prova direta" vs. "hipótese não
+contraditada" — a segunda pode estar certa por acidente.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]
