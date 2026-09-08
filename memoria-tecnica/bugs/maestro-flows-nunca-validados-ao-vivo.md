@@ -158,6 +158,18 @@ própria de que o mesmo problema existe ali, pode introduzir uma regressão nova
 resolver algo — cada `hideKeyboard`/passo defensivo precisa da sua própria justificativa
 observada, não só "funcionou lá, deve funcionar aqui também".
 
+**Achado adicional (com login corrigido, 03 fica flaky de novo):** depois do fix do
+`hideKeyboard`/Splash, `01` continuou verde mas `03_cadastro_prestador.yaml` voltou a falhar —
+dessa vez em `Tap on "Enviar para verificação"... FAILED`. Screenshot mostra o app na tela
+**"Termos de Uso"** (`LegalScreen`), não no formulário. O `tapOn: id: "checkbox-termos"` (depois
+do `scrollUntilVisible`) tocou no link "Termos de Uso" aninhado dentro do mesmo
+`TouchableOpacity` do checkbox, em vez do quadrado do checkbox em si — o tap no centro da linha
+inteira corre risco de cair sobre o link se a linha ocupar mais espaço vertical (ex.: depois de
+scroll, ou se quebrar em 2 linhas). `RegisterClientScreen.tsx` tem a mesma estrutura e não tinha
+mostrado esse sintoma ainda (sorte de layout, não ausência do risco). Fix: `point: "10%,50%"` no
+`tapOn` de `checkbox-termos` nos dois arquivos — força o toque na borda esquerda, onde fica o
+quadrado, longe do texto/links aninhados.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

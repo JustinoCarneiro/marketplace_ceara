@@ -65,8 +65,13 @@ env:
 # tapOn por texto falhou ("Li e aceito os" not found) — os links "Termos de Uso"/
 # "Política de Privacidade" aninhados com onPress fragmentam a árvore de
 # acessibilidade nativa. testID é o padrão já usado em todo o resto do app.
+# point na borda esquerda (onde fica o quadrado do checkbox) — achado em
+# 03_cadastro_prestador.yaml: tap no centro da linha inteira corre risco de
+# cair em cima do link "Termos de Uso" aninhado (mesmo TouchableOpacity),
+# principalmente se a linha quebrar em 2 linhas.
 - tapOn:
     id: "checkbox-termos"
+    point: "10%,50%"
 - tapOn: "Criar conta"
 - assertVisible: "Elétrica"
 - waitForAnimationToEnd
