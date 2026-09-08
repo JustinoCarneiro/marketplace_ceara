@@ -24,6 +24,15 @@ appId: com.onda.marketplace
 - tapOn:
     text: "DENY"
     optional: true
-# NÃO usar hideKeyboard aqui — ver comentário em login_cliente.yaml (causava
-# regressão real: BACK de sistema como fallback, voltando pra Splash).
-- tapOn: "Entrar"
+# Estado do teclado aqui é não-determinístico — ver comentário detalhado em
+# login_cliente.yaml. Só chama hideKeyboard se comprovadamente ainda na tela
+# de login (evita o BACK indevido pra Splash depois de login bem-sucedido).
+- tapOn:
+    text: "Entrar"
+    optional: true
+- runFlow:
+    when:
+      visible: "Bom te ver de novo"
+    commands:
+      - hideKeyboard
+      - tapOn: "Entrar"

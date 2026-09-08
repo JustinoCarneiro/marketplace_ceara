@@ -186,6 +186,22 @@ de antes do botão "Entrar" foi mexido, e esse foi removido por outro motivo). A
 posição seguro porque o teclado está garantidamente aberto ali (acabou de digitar), diferente do
 caso antes de "Entrar" onde não havia teclado pra fechar de verdade.
 
+**Achado adicional (login preenche certo, mas "Entrar" oscila coberto/livre):** com o
+`hideKeyboard` entre e-mail e senha resolvendo a corrida de digitação, a run seguinte mostrou —
+por screenshot — os dois campos preenchidos certinho e o **teclado aberto cobrindo "Entrar"**.
+Ou seja, a suposição anterior ("tela de login é curta, Entrar nunca fica coberto") estava errada:
+o estado do teclado nesse ponto é tão não-determinístico quanto o diálogo AOSP — às vezes fecha
+sozinho antes de chegar aqui (caso em que `hideKeyboard` incondicional já causou a regressão pro
+Splash), às vezes continua aberto cobrindo o botão (caso em que falta `hideKeyboard`). As duas
+causas são reais e se alternam entre runs — não dá pra resolver com uma chamada incondicional
+nos dois sentidos.
+
+Fix: tenta tocar "Entrar" direto primeiro (`optional: true`); só recorre a `hideKeyboard` +
+retry dentro de um `runFlow: when: visible: "Bom te ver de novo"` — condicionado a ainda estar
+comprovadamente na tela de login. Depois de um login bem-sucedido esse título nunca está mais
+visível, então o bloco condicional nunca dispara ali, eliminando o risco do BACK indevido no
+caminho de sucesso.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]
