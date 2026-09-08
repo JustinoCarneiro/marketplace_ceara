@@ -137,6 +137,14 @@ verificada até alguém notar o vermelho e investigar. Vale, depois de qualquer 
 checar se há mudanças de contrato feitas *durante* a janela de vermelho que nunca chegaram a ser
 testadas de verdade — não assumir que "CI verde de novo" significa "nada mais quebrado".
 
+**Achado adicional (01/03 já verdes, avançando pra 04):** `04_criar_pedido.yaml` usa
+`subflows/login_cliente.yaml`, um arquivo compartilhado por vários fluxos (02, 04, 05...) que
+nunca tinha recebido o tratamento do diálogo AOSP nem de `hideKeyboard` — só os arquivos de
+cadastro (01/03) tinham sido corrigidos até aqui. Mesmo diálogo, mesmo sintoma ("Entrar" coberto).
+`login_cliente.yaml` e `login_prestador.yaml` ganharam o mesmo padrão (dispensa antes/depois de
+cada campo + `hideKeyboard` antes do botão) — corrigir um arquivo compartilhado uma vez beneficia
+todos os fluxos que o usam, em vez de duplicar o fix em cada um.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

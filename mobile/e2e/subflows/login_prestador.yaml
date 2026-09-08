@@ -1,10 +1,26 @@
 appId: com.onda.marketplace
 ---
+# Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
+# 01_cadastro_cliente.yaml (timing não-determinístico, intercepta a digitação
+# enquanto aberto) — dispensa tolerante antes e depois de cada inputText.
 - tapOn: "Já tenho conta"
 - tapOn:
     text: "seu@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL_PRESTADOR}
 - tapOn:
+    text: "DENY"
+    optional: true
+- tapOn:
     text: "••••••••"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
+- tapOn:
+    text: "DENY"
+    optional: true
+- hideKeyboard
 - tapOn: "Entrar"
