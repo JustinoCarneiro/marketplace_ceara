@@ -235,6 +235,15 @@ AOSP). Mesmo padrão condicional já usado em `login_cliente.yaml`: tenta tocar 
 só chama `hideKeyboard` dentro de `runFlow: when: visible: "Novo pedido"` — evita o risco de
 BACK indevido se o teclado já estiver fechado nessa tentativa.
 
+**Achado adicional (gap estrutural, não flakiness):** com "Continuar" resolvido, o próximo
+`assertVisible: "Pedido criado!"` falhou de verdade — screenshot mostra a tela **"Revisar com
+a IA"** (sugestão da IA + botão "Confirmar e publicar pedido"), uma tela inteira que o fluxo
+nunca contemplava. Diferente de todos os achados anteriores desta nota (timing/seletor), esse é
+um passo genuinamente faltando: `NewRequestScreen` → `IA review` → `RequestCreatedScreen`, não
+`NewRequestScreen` → `RequestCreatedScreen` direto. Adicionado `assertVisible: "Revisar com a
+IA"` + `tapOn: "Confirmar e publicar pedido"` entre os dois. Sem risco de teclado aqui — tela
+sem nenhum campo de texto.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

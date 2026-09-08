@@ -38,5 +38,10 @@ env:
     commands:
       - hideKeyboard
       - tapOn: "Continuar"
+# "Continuar" leva pra "Revisar com a IA" — faltava esse passo inteiro, o fluxo pulava
+# direto pra "Pedido criado!" sem nunca confirmar (NewRequestScreen → IA review →
+# RequestCreatedScreen, não NewRequestScreen → RequestCreatedScreen direto).
+- assertVisible: "Revisar com a IA"
+- tapOn: "Confirmar e publicar pedido"
 - assertVisible: "Pedido criado!"
 - assertVisible: "PENDENTE"
