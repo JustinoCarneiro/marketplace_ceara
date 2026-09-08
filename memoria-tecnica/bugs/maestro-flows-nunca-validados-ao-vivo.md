@@ -262,6 +262,12 @@ sem nada de especial (um `Text` comum). Vale, ao documentar causa raiz de flakin
 automação, marcar claramente quando a explicação é "prova direta" vs. "hipótese não
 contraditada" — a segunda pode estar certa por acidente.
 
+**Marco: `01`, `03` e `04` verdes de forma estável (3 runs seguidas cada).** Progresso avançou
+pra `05_enviar_proposta.yaml`, nunca exercitado antes — mesmo padrão recorrente de teclado
+cobrindo campo seguinte: teclado numérico do campo VALOR cobre a seção PRAZO/data-proposta.
+Mesmo fix condicional (tenta direto, `hideKeyboard` só se ainda na mesma folha "Enviar
+proposta").
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

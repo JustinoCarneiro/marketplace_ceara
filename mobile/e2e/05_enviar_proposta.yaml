@@ -23,8 +23,20 @@ env:
 # vazios, sem default) — sem preencher, send() nem chama a API, só mostra erro
 # e a folha nunca fecha. Mesma causa raiz do bug já corrigido no
 # E2EFluxoPrincipalTest do backend (memoria-tecnica/bugs/e2e-fluxo-principal-quebrado.md).
+# Teclado numérico do campo VALOR cobre a seção PRAZO/data — confirmado por
+# screenshot. Mesmo padrão condicional de 01_cadastro_cliente.yaml/
+# 04_criar_pedido.yaml: tenta direto, só hideKeyboard se comprovadamente
+# ainda na mesma folha ("Enviar proposta" visível).
 - tapOn:
     id: "input-data-proposta"
+    optional: true
+- runFlow:
+    when:
+      visible: "Enviar proposta"
+    commands:
+      - hideKeyboard
+      - tapOn:
+          id: "input-data-proposta"
 - inputText: "20/12/2026"
 - tapOn:
     id: "input-hora-proposta"
