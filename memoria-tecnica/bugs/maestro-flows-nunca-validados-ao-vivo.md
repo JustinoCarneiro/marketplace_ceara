@@ -228,6 +228,13 @@ momento de desistir) via uma leitura de árvore diferente da busca incremental e
 padrão já usado pra senha/checkbox neste projeto quando texto de placeholder se mostra pouco
 confiável.
 
+**Achado adicional (descrição resolvida, "Continuar" coberto):** com o testID, a descrição
+digitou certinho — e o próximo passo, "Continuar", falhou com o teclado visivelmente aberto no
+screenshot (com a barra de sugestão de contatos do Android, a mesma feature por trás do diálogo
+AOSP). Mesmo padrão condicional já usado em `login_cliente.yaml`: tenta tocar direto primeiro,
+só chama `hideKeyboard` dentro de `runFlow: when: visible: "Novo pedido"` — evita o risco de
+BACK indevido se o teclado já estiver fechado nessa tentativa.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

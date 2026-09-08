@@ -25,6 +25,18 @@ env:
 - tapOn:
     id: "input-descricao"
 - inputText: "Tomada da sala parou de funcionar."
-- tapOn: "Continuar"
+# Teclado aberto (com a barra de sugestão de contatos, mesma feature do diálogo AOSP)
+# cobre "Continuar" — confirmado por screenshot. Mesmo padrão condicional já usado em
+# login_cliente.yaml: tenta direto primeiro, só chama hideKeyboard se ainda
+# comprovadamente na mesma tela (evita o risco de BACK indevido já visto lá).
+- tapOn:
+    text: "Continuar"
+    optional: true
+- runFlow:
+    when:
+      visible: "Novo pedido"
+    commands:
+      - hideKeyboard
+      - tapOn: "Continuar"
 - assertVisible: "Pedido criado!"
 - assertVisible: "PENDENTE"
