@@ -6,12 +6,44 @@ env:
 - launchApp:
     clearState: false
 - runFlow: subflows/login_cliente.yaml
-- tapOn: "Novo pedido"
+# Botão real na Home é "Criar pedido" (HomeScreen.tsx) — "Novo pedido" só existe como
+# título da tela seguinte (NewRequestScreen.tsx:164), nunca como botão na Home. Nunca
+# validado ao vivo antes (pipeline não chegava aqui).
+- tapOn: "Criar pedido"
 - assertVisible: "Novo pedido"
 - tapOn: "Elétrica"
+# "DESCRIÇÃO" (label) aparece instantâneo — não era render lento. Causa real (só
+# entendida depois, ao bater no mesmo padrão em "PENDENTE" mais abaixo): tapOn/
+# assertVisible por texto no Maestro exige casar a string INTEIRA do nó, não um
+# trecho — "A tomada da cozinha" é só o prefixo do hintText completo ("...solta
+# faísca quando ligo a air fryer..."), nunca ia casar por mais que esperasse.
+# testID evita o problema de vez (casa por id, não por conteúdo de texto).
+- extendedWaitUntil:
+    visible: "DESCRIÇÃO"
+    timeout: 15000
 - tapOn:
-    text: "A tomada da cozinha"
+    id: "input-descricao"
 - inputText: "Tomada da sala parou de funcionar."
-- tapOn: "Continuar"
+# Teclado aberto (com a barra de sugestão de contatos, mesma feature do diálogo AOSP)
+# cobre "Continuar" — confirmado por screenshot. Mesmo padrão condicional já usado em
+# login_cliente.yaml: tenta direto primeiro, só chama hideKeyboard se ainda
+# comprovadamente na mesma tela (evita o risco de BACK indevido já visto lá).
+- tapOn:
+    text: "Continuar"
+    optional: true
+- runFlow:
+    when:
+      visible: "Novo pedido"
+    commands:
+      - hideKeyboard
+      - tapOn: "Continuar"
+# "Continuar" leva pra "Revisar com a IA" — faltava esse passo inteiro, o fluxo pulava
+# direto pra "Pedido criado!" sem nunca confirmar (NewRequestScreen → IA review →
+# RequestCreatedScreen, não NewRequestScreen → RequestCreatedScreen direto).
+- assertVisible: "Revisar com a IA"
+- tapOn: "Confirmar e publicar pedido"
 - assertVisible: "Pedido criado!"
-- assertVisible: "PENDENTE"
+# "PENDENTE" sozinho nunca casa — o nó de verdade é "PENDENTE · AGUARDANDO
+# PROPOSTAS" (RequestCreatedScreen.tsx:81) num Text só, e Maestro exige a string
+# inteira (ver comentário do input-descricao acima — mesma causa raiz).
+- assertVisible: "PENDENTE · AGUARDANDO PROPOSTAS"

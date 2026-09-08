@@ -199,6 +199,7 @@ export default function NewRequestScreen() {
               <Text style={styles.label}>DESCRIÇÃO</Text>
               <View style={styles.textAreaWrap}>
                 <TextInput
+                  testID="input-descricao"
                   style={styles.textArea}
                   placeholder="A tomada da cozinha solta faísca quando ligo a air fryer. Preciso trocar com segurança."
                   placeholderTextColor={color.textFaint}

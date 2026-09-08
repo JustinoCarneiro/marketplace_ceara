@@ -11,19 +11,88 @@ env:
     visible: "Sou Prestador"
     timeout: 10000
 - tapOn: "Sou Prestador"
-- assertVisible: "Criar conta"
+# "Criar conta" nunca casa nessa tela mesmo com 15s de espera e o texto
+# claramente visível no screenshot de debug — a tela de cliente tem um botão
+# PRÓPRIO com o texto exato "Criar conta" (RegisterClientScreen.tsx:222,
+# nó de acessibilidade simples e isolado) que é quem realmente satisfaz o
+# assertVisible de lá; aqui o título é só o Text aninhado "Criar conta" +
+# "prestador" (RegisterProviderScreen.tsx:63-66) e o botão de verdade é
+# "Enviar para verificação" — nunca existiu um "Criar conta" tocável ou
+# isolado nesta tela. "CPF" é rótulo simples e exclusivo desta tela.
+- extendedWaitUntil:
+    visible: "CPF"
+    timeout: 15000
+# Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
+# 01_cadastro_cliente.yaml — timing genuinamente não-determinístico (confirmado
+# aparecendo em pontos diferentes a cada run, inclusive antes de digitar).
+# Dispensa tolerante ANTES e DEPOIS de cada inputText.
 - tapOn:
     text: "José Wagner Ferreira"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${NOME}
 - tapOn:
+    text: "DENY"
+    optional: true
+- tapOn:
     text: "123.456.789-00"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${CPF}
 - tapOn:
+    text: "DENY"
+    optional: true
+- tapOn:
     text: "jose@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL}
 - tapOn:
-    text: "mínimo 8 caracteres"
+    text: "DENY"
+    optional: true
+# Achado por evidência direta em 01_cadastro_cliente.yaml (screenshot mostrando
+# a senha digitada dentro do campo E-MAIL) — hideKeyboard força o layout a
+# assentar antes de tocar no campo de senha, evitando a corrida entre a troca
+# de teclado (email-address → padrão) e o cálculo do tap.
+- hideKeyboard
+- tapOn:
+    id: "input-senha"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
+- tapOn:
+    text: "DENY"
+    optional: true
+# Confirmado em 01_cadastro_cliente.yaml (screenshot): teclado aberto cobre a
+# linha do checkbox mesmo com o campo de senha certo — hideKeyboard antes de
+# procurá-lo.
+- hideKeyboard
 - tapOn: "Elétrica"
-- tapOn: "Cadastrar"
+# Diferente da tela de cliente: aqui tem BIO (textarea) e LOCALIZAÇÃO DE
+# ATENDIMENTO entre a categoria e o checkbox (RegisterProviderScreen.tsx:147-
+# 169) — formulário mais alto que a tela, checkbox fica abaixo da dobra depois
+# de fechar o teclado. Confirmado por screenshot: tela ia de "CATEGORIA
+# PRINCIPAL" direto pro botão "Enviar para verificação", nada entre eles
+# visível. scrollUntilVisible em vez de mais um hideKeyboard/wait.
+- scrollUntilVisible:
+    element:
+      id: "checkbox-termos"
+    direction: DOWN
+# handleSubmit em RegisterProviderScreen.tsx recusa silenciosamente (só seta
+# error, nunca chama a API) sem aceptedTerms — faltava esse tapOn, nunca tinha
+# sido pego porque o pipeline não chegava vivo até aqui (backend não subia).
+# point na borda esquerda — ver cálculo detalhado em 01_cadastro_cliente.yaml
+# (checkbox 20dp / linha ≈345dp ≈ 5,8% — 4% mira o centro do quadrado com
+# folga). "10%" já tinha sido tentado e caiu no link "Termos de Uso".
+- tapOn:
+    id: "checkbox-termos"
+    point: "4%,50%"
+# Botão real é "Enviar para verificação" (RegisterProviderScreen.tsx:214) — nunca
+# validado ao vivo antes, "Cadastrar" nunca existiu nessa tela. Fica fora do
+# ScrollView (footer fixo), continua alcançável mesmo depois do scroll acima.
+- tapOn: "Enviar para verificação"
 - assertVisible: "EM VERIFICAÇÃO"

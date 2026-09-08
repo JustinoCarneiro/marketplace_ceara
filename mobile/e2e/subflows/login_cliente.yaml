@@ -1,13 +1,51 @@
 appId: com.onda.marketplace
 ---
+# Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
+# 01_cadastro_cliente.yaml (timing não-determinístico, intercepta a digitação
+# enquanto aberto) — dispensa tolerante antes e depois de cada inputText.
 - tapOn: "Já tenho conta"
 - tapOn:
     text: "seu@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL_CLIENTE}
 - tapOn:
+    text: "DENY"
+    optional: true
+# Mesma corrida de layout já documentada em 01_cadastro_cliente.yaml: sem
+# isso, a senha ia parar dentro do campo de e-mail (confirmado por screenshot
+# — "...devsenha1234" no e-mail, "senha: must not be blank" no login). Seguro
+# aqui: o teclado está garantidamente aberto (acabou de digitar), diferente
+# do caso antes de "Entrar" onde não tinha keyboard pra fechar de verdade.
+- hideKeyboard
+- tapOn:
     text: "••••••••"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
-- tapOn: "Entrar"
+- tapOn:
+    text: "DENY"
+    optional: true
+# Estado do teclado aqui é tão não-determinístico quanto o diálogo AOSP:
+# numa run fica aberto cobrindo "Entrar" (confirmado por screenshot), noutra
+# já fecha sozinho antes daqui — e hideKeyboard incondicional já causou uma
+# regressão real na 2ª situação (sem teclado de verdade pra fechar, cai no
+# fallback de BACK de sistema, que navega pra Splash em vez de fechar
+# teclado nenhum). Tenta tocar "Entrar" direto primeiro; só chama
+# hideKeyboard se ainda estiver comprovadamente na tela de login (título
+# "Bom te ver de novo" visível) — isso nunca é verdade depois de um login
+# bem-sucedido, então não arrisca o BACK indevido nesse caso.
+- tapOn:
+    text: "Entrar"
+    optional: true
+- runFlow:
+    when:
+      visible: "Bom te ver de novo"
+    commands:
+      - hideKeyboard
+      - tapOn: "Entrar"
 - assertVisible:
     text: "Olá"
     optional: true

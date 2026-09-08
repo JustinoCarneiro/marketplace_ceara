@@ -140,6 +140,7 @@ export default function RegisterClientScreen() {
               <Text style={styles.label}>SENHA</Text>
               <View style={styles.inputRow}>
                 <TextInput
+                  testID="input-senha"
                   style={[styles.input, styles.inputFlex, senha.length > 0 && { letterSpacing: 3 }]}
                   placeholder="mínimo 8 caracteres"
                   placeholderTextColor={color.textFaint}

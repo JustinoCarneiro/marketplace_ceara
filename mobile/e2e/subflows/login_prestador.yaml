@@ -1,10 +1,38 @@
 appId: com.onda.marketplace
 ---
+# Mesmo diálogo de sistema do teclado AOSP documentado em detalhe em
+# 01_cadastro_cliente.yaml (timing não-determinístico, intercepta a digitação
+# enquanto aberto) — dispensa tolerante antes e depois de cada inputText.
 - tapOn: "Já tenho conta"
 - tapOn:
     text: "seu@email.com"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${EMAIL_PRESTADOR}
 - tapOn:
+    text: "DENY"
+    optional: true
+# Mesma corrida de layout documentada em login_cliente.yaml/01_cadastro_cliente.yaml.
+- hideKeyboard
+- tapOn:
     text: "••••••••"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${SENHA}
-- tapOn: "Entrar"
+- tapOn:
+    text: "DENY"
+    optional: true
+# Estado do teclado aqui é não-determinístico — ver comentário detalhado em
+# login_cliente.yaml. Só chama hideKeyboard se comprovadamente ainda na tela
+# de login (evita o BACK indevido pra Splash depois de login bem-sucedido).
+- tapOn:
+    text: "Entrar"
+    optional: true
+- runFlow:
+    when:
+      visible: "Bom te ver de novo"
+    commands:
+      - hideKeyboard
+      - tapOn: "Entrar"
