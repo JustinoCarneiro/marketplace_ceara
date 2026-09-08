@@ -12,15 +12,18 @@ env:
 - tapOn: "Criar pedido"
 - assertVisible: "Novo pedido"
 - tapOn: "Elétrica"
-# NewRequestScreen tem bastante conteúdo (anexos, localização, chips de bairro) — mesmo
-# padrão de 1º render lento já visto em RegisterProviderScreen (03_cadastro_prestador.yaml).
-# tapOn direto no placeholder chegou a "Element not found" com o campo claramente
-# renderizado no screenshot de debug — timing, não seletor errado.
+# "DESCRIÇÃO" (label) aparece instantâneo — não era render lento. A árvore de
+# acessibilidade no momento da falha mostra o campo certinho (hintText com o texto
+# completo, clickable, bounds válidos) mas o tapOn por texto nunca encontrava durante
+# os ~18s de busca — suspeita: TextInput com multiline (NewRequestScreen.tsx:207) não
+# casa de forma confiável por conteúdo de hint via tapOn de texto no Maestro, mesmo
+# quando a dump final da hierarquia mostra o atributo presente. testID em vez de texto,
+# mesmo padrão já usado pra senha/checkbox neste projeto.
 - extendedWaitUntil:
     visible: "DESCRIÇÃO"
     timeout: 15000
 - tapOn:
-    text: "A tomada da cozinha"
+    id: "input-descricao"
 - inputText: "Tomada da sala parou de funcionar."
 - tapOn: "Continuar"
 - assertVisible: "Pedido criado!"

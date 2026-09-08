@@ -214,9 +214,19 @@ onde se navega).
 **Achado adicional (Home resolvida, chegando no formulário de pedido):** `tapOn: "Criar
 pedido"` e a categoria "Elétrica" funcionaram, mas o tap no placeholder da descrição
 ("A tomada da cozinha") deu "Element not found" com o campo claramente renderizado no
-screenshot de debug — mesmo padrão de 1º render lento já visto em
-`03_cadastro_prestador.yaml` (`NewRequestScreen` tem bastante conteúdo: anexos, localização,
-chips de bairro). `extendedWaitUntil: visible: "DESCRIÇÃO"` antes do tap, mesma receita.
+screenshot de debug. `extendedWaitUntil: visible: "DESCRIÇÃO"` **não resolveu** — o label
+aparece instantâneo (0,15s), não era render lento.
+
+Investigação mais funda: a dump de hierarquia de acessibilidade capturada no exato momento
+da falha mostra o campo certinho — `hintText` com o texto completo, `clickable: true`,
+bounds válidos — mas o `tapOn` por texto nunca encontrava durante os ~18s de busca ativa do
+Maestro. Suspeita (não 100% confirmada): `TextInput` com `multiline` (`NewRequestScreen.tsx:207`)
+não casa de forma confiável por conteúdo de hint via `tapOn` de texto nesta versão do Maestro,
+mesmo quando a dump final da hierarquia mostra o atributo presente — só a captura de debug (no
+momento de desistir) via uma leitura de árvore diferente da busca incremental em si. `testID=
+"input-descricao"` adicionado ao campo (mudança aditiva) e o seletor trocado pra `id:` — mesmo
+padrão já usado pra senha/checkbox neste projeto quando texto de placeholder se mostra pouco
+confiável.
 
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
