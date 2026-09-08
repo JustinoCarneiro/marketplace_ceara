@@ -6,7 +6,10 @@ env:
 - launchApp:
     clearState: false
 - runFlow: subflows/login_cliente.yaml
-- tapOn: "Novo pedido"
+# Botão real na Home é "Criar pedido" (HomeScreen.tsx) — "Novo pedido" só existe como
+# título da tela seguinte (NewRequestScreen.tsx:164), nunca como botão na Home. Nunca
+# validado ao vivo antes (pipeline não chegava aqui).
+- tapOn: "Criar pedido"
 - assertVisible: "Novo pedido"
 - tapOn: "Elétrica"
 - tapOn:

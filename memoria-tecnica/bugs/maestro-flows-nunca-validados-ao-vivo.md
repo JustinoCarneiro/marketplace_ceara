@@ -202,6 +202,15 @@ comprovadamente na tela de login. Depois de um login bem-sucedido esse título n
 visível, então o bloco condicional nunca dispara ali, eliminando o risco do BACK indevido no
 caminho de sucesso.
 
+**Achado adicional (login 100% verde, chegando na Home pela 1ª vez):** com o subflow de login
+resolvido, `04_criar_pedido.yaml` finalmente chegou na Home — e `tapOn: "Novo pedido"` falhou.
+Screenshot mostra a Home normal, logada, com o botão real chamado **"Criar pedido"**
+(`HomeScreen.tsx`); "Novo pedido" só existe como título da tela seguinte
+(`NewRequestScreen.tsx:164`), nunca como botão na Home — mesma classe de erro de `03` ("Cadastrar"
+que nunca existiu): suposição de texto nunca validada ao vivo. Corrigido pra `tapOn: "Criar
+pedido"`; a `assertVisible: "Novo pedido"` logo depois continua certa (é o título da tela pra
+onde se navega).
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]
