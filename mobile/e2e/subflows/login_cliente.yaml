@@ -13,6 +13,12 @@ appId: com.onda.marketplace
 - tapOn:
     text: "DENY"
     optional: true
+# Mesma corrida de layout já documentada em 01_cadastro_cliente.yaml: sem
+# isso, a senha ia parar dentro do campo de e-mail (confirmado por screenshot
+# — "...devsenha1234" no e-mail, "senha: must not be blank" no login). Seguro
+# aqui: o teclado está garantidamente aberto (acabou de digitar), diferente
+# do caso antes de "Entrar" onde não tinha keyboard pra fechar de verdade.
+- hideKeyboard
 - tapOn:
     text: "••••••••"
 - tapOn:

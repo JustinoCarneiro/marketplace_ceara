@@ -175,6 +175,17 @@ largura ≈345dp (tela 393dp de um Pixel 3a − `paddingHorizontal: space[5]` ×
 quadrado ocupa só os primeiros ~5,8% da largura da linha. `point: "4%,50%"` mira o centro do
 quadrado com folga dos dois lados — dentro da faixa seguro, não no chute redondo "10%".
 
+**Achado adicional (01/03 verdes e estáveis, avançando pra 04 de verdade):** login em
+`subflows/login_cliente.yaml` completou (`COMPLETED`), mas o pedido falhou logo depois em
+`Tap on "Novo pedido"`. Screenshot mostra o app **de volta na tela de login**, com erro "senha:
+must not be blank" e o campo E-MAIL mostrando `...devsenha1234` — a mesmíssima corrida de layout
+já resolvida em `01_cadastro_cliente.yaml` (email→senha, teclado ainda se ajustando), só que o
+`hideKeyboard` entre esses dois campos nunca tinha sido replicado pros subflows de login (só o
+de antes do botão "Entrar" foi mexido, e esse foi removido por outro motivo). Adicionado
+`hideKeyboard` entre `inputText` do e-mail e o tap no campo de senha, nos dois subflows —
+posição seguro porque o teclado está garantidamente aberto ali (acabou de digitar), diferente do
+caso antes de "Entrar" onde não havia teclado pra fechar de verdade.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

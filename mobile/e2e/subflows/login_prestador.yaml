@@ -13,6 +13,8 @@ appId: com.onda.marketplace
 - tapOn:
     text: "DENY"
     optional: true
+# Mesma corrida de layout documentada em login_cliente.yaml/01_cadastro_cliente.yaml.
+- hideKeyboard
 - tapOn:
     text: "••••••••"
 - tapOn:
