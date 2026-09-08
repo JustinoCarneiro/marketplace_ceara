@@ -22,7 +22,13 @@ appId: com.onda.marketplace
 - tapOn:
     text: "DENY"
     optional: true
-- hideKeyboard
+# NÃO usar hideKeyboard aqui: tela de login é curta (e-mail + senha + Entrar,
+# sem campos extras tipo BIO/CPF), "Entrar" não fica coberto pelo teclado.
+# hideKeyboard chegou a ser adicionado por padrão, mas causou regressão real
+# — se o teclado já tiver fechado no momento (efeito colateral de dispensar o
+# diálogo AOSP), o fallback de hideKeyboard manda um BACK de sistema, que
+# volta a navegação pra Splash em vez de fechar teclado nenhum. Visto direto
+# no screenshot: app voltou pra tela inicial, "Entrar" nunca mais encontrado.
 - tapOn: "Entrar"
 - assertVisible:
     text: "Olá"

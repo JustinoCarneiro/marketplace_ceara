@@ -139,11 +139,24 @@ testadas de verdade — não assumir que "CI verde de novo" significa "nada mais
 
 **Achado adicional (01/03 já verdes, avançando pra 04):** `04_criar_pedido.yaml` usa
 `subflows/login_cliente.yaml`, um arquivo compartilhado por vários fluxos (02, 04, 05...) que
-nunca tinha recebido o tratamento do diálogo AOSP nem de `hideKeyboard` — só os arquivos de
-cadastro (01/03) tinham sido corrigidos até aqui. Mesmo diálogo, mesmo sintoma ("Entrar" coberto).
-`login_cliente.yaml` e `login_prestador.yaml` ganharam o mesmo padrão (dispensa antes/depois de
-cada campo + `hideKeyboard` antes do botão) — corrigir um arquivo compartilhado uma vez beneficia
-todos os fluxos que o usam, em vez de duplicar o fix em cada um.
+nunca tinha recebido o tratamento do diálogo AOSP — só os arquivos de cadastro (01/03) tinham
+sido corrigidos até aqui. Mesmo diálogo, mesmo sintoma ("Entrar" não encontrado).
+
+**Regressão introduzida e corrigida na hora:** copiei o padrão de 01/03 de cabeça, incluindo um
+`hideKeyboard` antes do `tapOn: "Entrar"` — sem evidência de que fosse necessário aqui (diferente
+das telas de cadastro, a de login é curta: e-mail + senha + botão, sem BIO/CPF/chips empurrando
+conteúdo). Resultado real, visto no screenshot da run seguinte: o app **voltou pra tela Splash**
+— não é que "Entrar" ficasse coberto, o app simplesmente não estava mais na tela de login.
+Causa: `hideKeyboard` do Maestro cai pra um `BACK` de sistema como fallback quando não há teclado
+de fato aberto no momento (o dismiss do diálogo AOSP, alguns instantes antes, já tinha fechado o
+teclado como efeito colateral) — e a tela de Login não intercepta esse back, então ele navega de
+volta pra Splash. `hideKeyboard` **removido** de `login_cliente.yaml`/`login_prestador.yaml`
+(mantido em 01/03, onde já está confirmado necessário e correto por runs verdes).
+
+**Lição:** copiar um fix que funcionou num arquivo pra outro arquivo parecido, sem evidência
+própria de que o mesmo problema existe ali, pode introduzir uma regressão nova em vez de
+resolver algo — cada `hideKeyboard`/passo defensivo precisa da sua própria justificativa
+observada, não só "funcionou lá, deve funcionar aqui também".
 
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
