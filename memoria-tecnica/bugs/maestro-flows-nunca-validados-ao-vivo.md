@@ -28,6 +28,12 @@ achou 3 bugs reais nos próprios arquivos de teste, nenhum deles vindo do app:
    conta" dentro de um `<Text>` aninhado no título ("Criar conta" + `<Text>`"prestador"`</Text>`,
    linhas 63-66) — nunca existiu um nó isolado com esse texto nessa tela, tocável ou não. Trocado
    por `"CPF"`, rótulo simples e exclusivo desta tela.
+6. `03_cadastro_prestador.yaml` — `checkbox-termos` continuava "not found" mesmo depois do
+   `hideKeyboard` que resolveu o mesmo sintoma em `01_cadastro_cliente.yaml`. Causa real, visível
+   no screenshot: o formulário de prestador tem **BIO** (textarea) e **LOCALIZAÇÃO DE
+   ATENDIMENTO** entre a categoria e o checkbox (`RegisterProviderScreen.tsx:147-169`, campos que
+   não existem na tela de cliente) — conteúdo mais alto que a tela, checkbox abaixo da dobra
+   mesmo sem teclado. `scrollUntilVisible` em vez de mais um `hideKeyboard`/wait.
 
 ## Causa raiz
 
