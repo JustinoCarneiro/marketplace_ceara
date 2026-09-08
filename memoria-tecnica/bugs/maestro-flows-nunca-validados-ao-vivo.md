@@ -211,6 +211,13 @@ que nunca existiu): suposição de texto nunca validada ao vivo. Corrigido pra `
 pedido"`; a `assertVisible: "Novo pedido"` logo depois continua certa (é o título da tela pra
 onde se navega).
 
+**Achado adicional (Home resolvida, chegando no formulário de pedido):** `tapOn: "Criar
+pedido"` e a categoria "Elétrica" funcionaram, mas o tap no placeholder da descrição
+("A tomada da cozinha") deu "Element not found" com o campo claramente renderizado no
+screenshot de debug — mesmo padrão de 1º render lento já visto em
+`03_cadastro_prestador.yaml` (`NewRequestScreen` tem bastante conteúdo: anexos, localização,
+chips de bairro). `extendedWaitUntil: visible: "DESCRIÇÃO"` antes do tap, mesma receita.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]

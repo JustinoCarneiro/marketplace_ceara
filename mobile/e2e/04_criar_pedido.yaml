@@ -12,6 +12,13 @@ env:
 - tapOn: "Criar pedido"
 - assertVisible: "Novo pedido"
 - tapOn: "Elétrica"
+# NewRequestScreen tem bastante conteúdo (anexos, localização, chips de bairro) — mesmo
+# padrão de 1º render lento já visto em RegisterProviderScreen (03_cadastro_prestador.yaml).
+# tapOn direto no placeholder chegou a "Element not found" com o campo claramente
+# renderizado no screenshot de debug — timing, não seletor errado.
+- extendedWaitUntil:
+    visible: "DESCRIÇÃO"
+    timeout: 15000
 - tapOn:
     text: "A tomada da cozinha"
 - inputText: "Tomada da sala parou de funcionar."
