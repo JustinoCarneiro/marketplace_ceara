@@ -38,8 +38,18 @@ env:
       - tapOn:
           id: "input-data-proposta"
 - inputText: "20/12/2026"
+# Mesmo padrão de novo — teclado reabre depois de digitar a data e cobre a
+# hora. Mesmo fix condicional.
 - tapOn:
     id: "input-hora-proposta"
+    optional: true
+- runFlow:
+    when:
+      visible: "Enviar proposta"
+    commands:
+      - hideKeyboard
+      - tapOn:
+          id: "input-hora-proposta"
 - inputText: "14:00"
 - hideKeyboard
 - tapOn:

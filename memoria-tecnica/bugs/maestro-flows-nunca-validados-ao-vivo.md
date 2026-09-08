@@ -268,6 +268,9 @@ cobrindo campo seguinte: teclado numérico do campo VALOR cobre a seção PRAZO/
 Mesmo fix condicional (tenta direto, `hideKeyboard` só se ainda na mesma folha "Enviar
 proposta").
 
+**Mesmo padrão se repete uma 3ª vez na mesma folha:** depois de digitar a data, o teclado reabre
+(numérico) e cobre o campo de hora — idêntico ao valor→data. Mesmo fix condicional aplicado.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]
