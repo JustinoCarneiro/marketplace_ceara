@@ -25,7 +25,7 @@ critério completo de quando vale (e quando não vale) criar uma nota aqui.
 - [[e2e-fluxo-principal-quebrado]] — CI vermelho no master desde 13/08: DTO de proposta ganhou campo obrigatório, teste E2E não foi atualizado.
 - [[jira-team-managed-endpoints-bloqueados]] — campo→layout é gap real de API; delete de issue era falta de papel atribuído, não permissão da plataforma.
 - [[maestro-e2e-backend-nao-sobe]] — Maestro E2E falhava em toda run desde ~07/08: guard de canal de alerta bloqueava o boot do backend em CI.
-- [[maestro-flows-nunca-validados-ao-vivo]] — com o boot corrigido, 3 fluxos Maestro quebrados apareceram: diálogo de sistema do teclado cobrindo o checkbox de termos, e dois fluxos nunca atualizados depois de mudanças de contrato (agendamento US15, aceite de termos do prestador).
+- [[maestro-flows-nunca-validados-ao-vivo]] — com o boot corrigido, uma cadeia de ~9 causas raiz distintas (diálogo de sistema do teclado, corrida de foco, hideKeyboard incondicional causando BACK indevido, tap caindo em link aninhado, botões nunca validados, Maestro exigindo string inteira e não trecho, telas com scroll, passo da IA faltando) — 28 runs de validação até fechar `01`/`02`/`03`/`04`/`05` 100% verdes pela 1ª vez em mais de um mês.
 - [[maestro-e2e-cleartext-bloqueado]] — com o formulário de cadastro finalmente submetendo, apareceu mais uma camada: `usesCleartextTraffic` do app.json é campo morto nesta versão do Expo, release não herdava permissão de HTTP puro pro backend local do emulador.
 
 ## Decisões

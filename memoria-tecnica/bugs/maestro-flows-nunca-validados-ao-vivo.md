@@ -3,7 +3,7 @@ tipo: bug
 data: 2026-09-07
 severidade: Alta
 status: Resolvido
-resolvido_em: 2026-09-07
+resolvido_em: 2026-09-08
 ---
 
 # 3 fluxos Maestro quebrados, nunca detectados — o pipeline nunca tinha rodado vivo
@@ -270,6 +270,39 @@ proposta").
 
 **Mesmo padrão se repete uma 3ª vez na mesma folha:** depois de digitar a data, o teclado reabre
 (numérico) e cobre o campo de hora — idêntico ao valor→data. Mesmo fix condicional aplicado.
+
+## Fechamento — CI 100% verde (08/09, 28ª run de validação)
+
+`01_cadastro_cliente`, `02_login_cliente`, `03_cadastro_prestador`, `04_criar_pedido` e
+`05_enviar_proposta` passam de ponta a ponta — a primeira vez em mais de um mês que o job
+`Mobile — Maestro E2E` fecha verde. `06_aceitar_proposta` e `07_concluir_e_avaliar` continuam
+`known-fail` (proposital, ver comentário no workflow — dependem de fluxo de aceite/pagamento
+ainda não coberto), não bloqueiam o job.
+
+**Balanço da investigação (13 causas raiz distintas, não uma só):**
+1. Backend não subia (guard de canal de alerta) — [[maestro-e2e-backend-nao-sobe]].
+2. Diálogo de sistema do teclado AOSP (permissão de contatos), timing não-determinístico —
+   precisou de dispensa antes E depois de cada campo de texto, em todo formulário.
+3. Corrida de foco/layout na troca de teclado entre campos (email→senha) — `hideKeyboard`
+   incondicional na posição certa.
+4. `hideKeyboard` incondicional antes de um botão pode fazer BACK de sistema pra tela anterior
+   se não houver teclado de fato aberto — precisa de guarda condicional
+   (`runFlow: when: visible: <algo só válido nessa tela>`).
+5. Tap no centro de uma linha com link de texto aninhado (termos de uso) cai no link em vez do
+   elemento alvo — `point` relativo calculado a partir do style real, não chutado.
+6. Botões/textos assumidos sem nunca ter rodado ao vivo ("Cadastrar", "Novo pedido") — sempre
+   existiram só na cabeça de quem escreveu o YAML, nunca na tela real.
+7. `tapOn`/`assertVisible` por texto no Maestro exige a string **inteira** do nó, não um
+   trecho — descoberta tardia que explica dois "mistérios" anteriores de uma vez.
+8. Telas com mais conteúdo (BIO, CPF, chips de bairro) empurram elementos abaixo da dobra —
+   `scrollUntilVisible` em vez de mais `hideKeyboard`.
+9. Passo inteiro faltando (tela de revisão da IA) — não é flakiness, é fluxo incompleto de
+   verdade.
+
+Nenhuma causa isolada explicava tudo — cada fix resolvia uma camada e expunha a próxima. A
+lição que mais vale carregar pra próxima automação: **uma run "passou" nunca é prova de que a
+causa raiz identificada estava certa** — só uma run limpa e repetível, de preferência mais de
+uma, fecha o caso.
 
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
