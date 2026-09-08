@@ -85,12 +85,12 @@ env:
 # handleSubmit em RegisterProviderScreen.tsx recusa silenciosamente (só seta
 # error, nunca chama a API) sem aceptedTerms — faltava esse tapOn, nunca tinha
 # sido pego porque o pipeline não chegava vivo até aqui (backend não subia).
-# point na borda esquerda: tap no centro caiu em cima do link "Termos de Uso"
-# aninhado (mesmo TouchableOpacity) — confirmado por screenshot mostrando a
-# navegação indo pra tela de Termos de Uso em vez de marcar o checkbox.
+# point na borda esquerda — ver cálculo detalhado em 01_cadastro_cliente.yaml
+# (checkbox 20dp / linha ≈345dp ≈ 5,8% — 4% mira o centro do quadrado com
+# folga). "10%" já tinha sido tentado e caiu no link "Termos de Uso".
 - tapOn:
     id: "checkbox-termos"
-    point: "10%,50%"
+    point: "4%,50%"
 # Botão real é "Enviar para verificação" (RegisterProviderScreen.tsx:214) — nunca
 # validado ao vivo antes, "Cadastrar" nunca existiu nessa tela. Fica fora do
 # ScrollView (footer fixo), continua alcançável mesmo depois do scroll acima.

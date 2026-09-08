@@ -166,9 +166,14 @@ do `scrollUntilVisible`) tocou no link "Termos de Uso" aninhado dentro do mesmo
 `TouchableOpacity` do checkbox, em vez do quadrado do checkbox em si — o tap no centro da linha
 inteira corre risco de cair sobre o link se a linha ocupar mais espaço vertical (ex.: depois de
 scroll, ou se quebrar em 2 linhas). `RegisterClientScreen.tsx` tem a mesma estrutura e não tinha
-mostrado esse sintoma ainda (sorte de layout, não ausência do risco). Fix: `point: "10%,50%"` no
-`tapOn` de `checkbox-termos` nos dois arquivos — força o toque na borda esquerda, onde fica o
-quadrado, longe do texto/links aninhados.
+mostrado esse sintoma ainda (sorte de layout, não ausência do risco).
+
+Primeira tentativa: `point: "10%,50%"` — **também errado**, caiu em "Política de Privacidade" na
+run seguinte (chutado sem medir, só "mais pra esquerda"). Segunda tentativa, calculada a partir
+do style real em vez de chute: `checkbox { width: 20 }` + `termsRow { gap: 10 }`, linha com
+largura ≈345dp (tela 393dp de um Pixel 3a − `paddingHorizontal: space[5]` × 2 = 24dp × 2) → o
+quadrado ocupa só os primeiros ~5,8% da largura da linha. `point: "4%,50%"` mira o centro do
+quadrado com folga dos dois lados — dentro da faixa seguro, não no chute redondo "10%".
 
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
