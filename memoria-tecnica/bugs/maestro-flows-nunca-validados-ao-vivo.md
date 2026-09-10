@@ -304,6 +304,29 @@ lição que mais vale carregar pra próxima automação: **uma run "passou" nunc
 causa raiz identificada estava certa** — só uma run limpa e repetível, de preferência mais de
 uma, fecha o caso.
 
+## Fechamento complementar — aceite, Pix, conclusão e avaliação (10/09)
+
+Os fluxos que ainda estavam deliberadamente em `known-fail` foram exercitados ao vivo pela
+primeira vez. A execução #83 chegou aos dois caminhos novos e revelou uma dependência de
+ambiente, não um defeito visual do Maestro: o workflow Mobile E2E iniciava o backend sem
+`MARKETPLACE_GATEWAY_SIMULATE=true`. Como a confirmação simulada é desligada por padrão para
+não inventar dinheiro fora de ambientes de teste, a transação ficava `PENDENTE`; o fluxo 06
+ficava esperando a confirmação do Pix e o 07 recebia a mensagem genérica ao tentar iniciar o
+serviço.
+
+Solução aplicada na branch da PR #5:
+
+- o workflow habilita a confirmação simulada e um ciclo rápido de outbox **somente no runner de
+  CI**; a configuração de produção não mudou;
+- 06 navega pela aba real `Pedidos`, trata o diálogo AOSP ao preencher CPF e verifica a retenção
+  e o pedido aceito;
+- 07 inclui o subflow do prestador para `ACEITO → EM_ANDAMENTO`, depois faz a confirmação e a
+  avaliação do cliente.
+
+As runs manuais #84 (`34502310101`) e #85 (`34505092812`) completaram 06 e 07 sem comandos
+`FAILED` nos respectivos artefatos Maestro. Só então o commit `17d497d` removeu o wrapper
+`known-fail`: agora uma falha de aceite ou conclusão interrompe a suíte.
+
 ## Ligado a
 - [[maestro-e2e-backend-nao-sobe]]
 - [[e2e-fluxo-principal-quebrado]]
