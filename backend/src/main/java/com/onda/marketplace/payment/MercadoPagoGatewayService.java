@@ -130,6 +130,25 @@ class MercadoPagoGatewayService implements GatewayService {
         }
     }
 
+    /**
+     * Status atual do pagamento no Mercado Pago ({@code approved}, {@code pending},
+     * {@code rejected}, {@code cancelled}, ...). {@code null} se a consulta falhar —
+     * o webhook então não confirma nada e aguarda a próxima notificação/retry do MP.
+     */
+    String consultarStatusPagamento(String paymentId) {
+        try {
+            JsonNode res = http.get()
+                    .uri("/v1/payments/{id}", paymentId)
+                    .retrieve()
+                    .body(JsonNode.class);
+            return res != null ? res.path("status").asText(null) : null;
+        } catch (RestClientResponseException e) {
+            log.warn("Mercado Pago: consulta do pagamento {} falhou (HTTP {}): {}",
+                    paymentId, e.getStatusCode().value(), e.getResponseBodyAsString());
+            return null;
+        }
+    }
+
     @Override
     public void liberar(Transaction transaction) {
         throw new UnsupportedOperationException(

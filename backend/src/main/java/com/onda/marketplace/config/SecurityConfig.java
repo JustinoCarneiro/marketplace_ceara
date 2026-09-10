@@ -50,6 +50,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook").permitAll()
+                        // Webhook do Mercado Pago (MKT-49): sem auth de sessão — a
+                        // autenticidade vem da assinatura x-signature validada no controller.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/mercadopago/webhook").permitAll()
                         // Quando uma exceção escapa do controller, o Boot faz FORWARD para
                         // /error; sem liberar esse dispatch a resposta vira 401 e some o erro
                         // real (um erro de SQL já apareceu como "não autenticado" por causa disso).
