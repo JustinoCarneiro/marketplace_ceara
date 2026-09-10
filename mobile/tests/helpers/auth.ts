@@ -29,6 +29,10 @@ export async function registerCliente(page: Page, c: ClienteSeed) {
   await page.getByPlaceholder('mínimo 8 caracteres').fill(c.senha);
   await page.getByText(/Li e aceito os/i).click();
   await page.getByText('Criar conta', { exact: true }).click();
+  // O setup de fluxos fecha esta página em seguida. Esperar a Home garante que o
+  // POST de cadastro concluiu antes do close, em vez de deixar a conta ausente
+  // para o próximo teste por uma corrida de navegação.
+  await expect(page.getByText('Criar pedido', { exact: true })).toBeVisible({ timeout: 8000 });
 }
 
 /**
