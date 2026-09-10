@@ -29,4 +29,4 @@ critério completo de quando vale (e quando não vale) criar uma nota aqui.
 - [[maestro-e2e-cleartext-bloqueado]] — com o formulário de cadastro finalmente submetendo, apareceu mais uma camada: `usesCleartextTraffic` do app.json é campo morto nesta versão do Expo, release não herdava permissão de HTTP puro pro backend local do emulador.
 
 ## Decisões
-*(vazio — criado retroativamente em 2026-08-03; começa a ser populado dali em diante)*
+- [[mercadopago-escrow-modelo-de-repasse]] — MKT-49: split básico do Mercado Pago (auto na aprovação, Pix D0) não é o Escrow da spec (US06/US17). **Decidido (2026-09-10): Modelo A** — plataforma recebe o valor cheio e repassa ao prestador na conclusão (só Pix no piloto); migrar pro Modelo B (marketplace MP nativo) antes de escalar. Motor Saga/Outbox e máquinas de estado não mudam.
