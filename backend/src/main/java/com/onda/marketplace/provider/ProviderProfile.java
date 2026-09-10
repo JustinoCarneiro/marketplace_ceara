@@ -28,6 +28,12 @@ public class ProviderProfile {
     @Column(name = "cpf_cifrado")
     private String cpfCifrado;
 
+    // Destino do repasse na conclusão do serviço (Modelo A, MKT-49). PII: cifrada em
+    // repouso (AES-GCM, mesma chave do cpfCifrado). Nullable — perfis antigos e
+    // prestadores que ainda não cadastraram.
+    @Column(name = "chave_pix_cifrada")
+    private String chavePixCifrada;
+
     @Column(columnDefinition = "geography(Point,4326)")
     private Point localizacao;
 
@@ -64,6 +70,8 @@ public class ProviderProfile {
     public String getBio()                 { return bio; }
     public void   setBio(String bio)       { this.bio = bio; }
     public String getCpfCifrado()          { return cpfCifrado; }
+    public String getChavePixCifrada()            { return chavePixCifrada; }
+    public void   setChavePixCifrada(String v)    { this.chavePixCifrada = v; }
     public ProviderStatus getStatusVerificacao() { return statusVerificacao; }
     public BigDecimal getSaldoRetido()     { return saldoRetido; }
     public BigDecimal getNotaMedia()       { return notaMedia; }

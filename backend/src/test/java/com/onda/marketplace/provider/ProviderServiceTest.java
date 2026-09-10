@@ -84,4 +84,51 @@ class ProviderServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "EMAIL_IN_USE");
     }
+
+    @Test
+    void atualizarChavePix_cifraAntesDeSalvar_naoGuardaEmClaro() {
+        var userId = java.util.UUID.randomUUID();
+        var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
+        when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        providerService.atualizarChavePix(userId, "prestador@pix.com");
+
+        assertThat(perfil.getChavePixCifrada())
+                .isNotBlank()
+                .doesNotContain("prestador@pix.com");
+        verify(profileRepository).save(perfil);
+    }
+
+    @Test
+    void atualizarChavePix_vazia_ehRejeitada() {
+        assertThatThrownBy(() -> providerService.atualizarChavePix(java.util.UUID.randomUUID(), "  "))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PIX_KEY_REQUIRED");
+        verifyNoInteractions(profileRepository);
+    }
+
+    @Test
+    void atualizarChavePix_perfilInexistente_404() {
+        var userId = java.util.UUID.randomUUID();
+        when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "chave"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PROVIDER_NOT_FOUND");
+    }
+
+    @Test
+    void chavePixCadastrada_refleteOEstadoDoPerfil() {
+        var comChave = new ProviderProfile(null, "EL", "cpf");
+        comChave.setChavePixCifrada("cifrado");
+        var semChave = new ProviderProfile(null, "EL", "cpf");
+        var u1 = java.util.UUID.randomUUID();
+        var u2 = java.util.UUID.randomUUID();
+        when(profileRepository.findByUserId(u1)).thenReturn(java.util.Optional.of(comChave));
+        when(profileRepository.findByUserId(u2)).thenReturn(java.util.Optional.of(semChave));
+
+        assertThat(providerService.chavePixCadastrada(u1)).isTrue();
+        assertThat(providerService.chavePixCadastrada(u2)).isFalse();
+    }
 }
