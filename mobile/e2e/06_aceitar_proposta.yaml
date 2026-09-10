@@ -10,7 +10,7 @@ env:
     visible: "Já tenho conta"
     timeout: 10000
 - runFlow: subflows/login_cliente.yaml
-- tapOn: "Meus pedidos"
+- tapOn: "Pedidos"
 - tapOn:
     id: "meu-pedido-card"
     index: 0
@@ -28,11 +28,32 @@ env:
 - assertVisible: "Confirme sua identidade"
 - tapOn:
     id: "input-cpf"
+- tapOn:
+    text: "DENY"
+    optional: true
 - inputText: ${CPF_CLIENTE}
 - tapOn:
+    text: "DENY"
+    optional: true
+- tapOn:
     id: "btn-confirmar-cpf"
+- runFlow:
+    # O teclado numérico pode cobrir a ação. Só o fecha se o modal ainda
+    # estiver aberto depois da primeira tentativa, evitando BACK indevido.
+    when:
+      visible: "Confirme sua identidade"
+    commands:
+      - hideKeyboard
+      - tapOn:
+          id: "btn-confirmar-cpf"
 # Após confirmar o CPF, segue para o Pix simulado
-- assertVisible: "Paguei"
+- extendedWaitUntil:
+    visible: "Paguei"
+    timeout: 10000
 - tapOn:
     id: "btn-paguei"
-- assertVisible: "ACEITO"
+# O gateway simulado confirma assincronamente; a tela faz polling por até 21s.
+- extendedWaitUntil:
+    visible: "Pagamento retido com segurança"
+    timeout: 30000
+- assertVisible: "PEDIDO ACEITO"
