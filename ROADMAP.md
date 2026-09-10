@@ -12,7 +12,7 @@
 | 2 · Layout | `onda-direcao-visual` + `onda-layout` | `design/tokens.css` + `DESIGN.md` + protótipo P0 ✅ |
 | 3 · Blueprint | `onda-blueprint` | **Este ROADMAP + contratos** ✅ |
 | 4 · XP Coding | `onda-xp-tdd` | Módulos testados e commitados ✅ M00–M12 (todos concluídos) |
-| 5 · Homologação | `onda-homologacao` | Deploy em produção |
+| 5 · Homologação | `onda-homologacao` | Deploy em produção 🔶 ambiente de demo público no ar (VPS Coolify, `*.157.173.212.76.sslip.io`) desde 2026-08-13 — profile `seed`, gateway/IA simulados; produção real ainda pendente (ver `docs/METRICAS-PROJETO.md` e pendências de gateway/IA/SMTP/backup) |
 
 > **Decisão de prazo (Gate G2):** Fase 2 concluída — `design/tokens.css` (172 LOC, direção "Maré Clara"), `DESIGN.md`, protótipo P0 normalizados.
 
