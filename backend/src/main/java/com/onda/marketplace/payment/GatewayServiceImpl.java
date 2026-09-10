@@ -2,11 +2,18 @@ package com.onda.marketplace.payment;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
+/**
+ * Stub do gateway — ativo por padrão. Cede lugar ao {@link MercadoPagoGatewayService}
+ * quando {@code marketplace.gateway.mercadopago.enabled=true}. Usado no CI, na demo
+ * pública (profile seed) e em qualquer ambiente sem gateway real configurado.
+ */
 @Service
+@ConditionalOnProperty(name = "marketplace.gateway.mercadopago.enabled", havingValue = "false", matchIfMissing = true)
 class GatewayServiceImpl implements GatewayService {
 
     private static final Logger log = LoggerFactory.getLogger(GatewayServiceImpl.class);
