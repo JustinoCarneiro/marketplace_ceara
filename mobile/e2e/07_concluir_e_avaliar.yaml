@@ -1,6 +1,7 @@
 appId: com.onda.marketplace
 env:
   EMAIL_CLIENTE: "lucia.teste@onda.dev"
+  EMAIL_PRESTADOR: "jose.prestador@onda.dev"
   SENHA: "senha1234"
 ---
 - launchApp:
@@ -8,18 +9,39 @@ env:
 - extendedWaitUntil:
     visible: "Já tenho conta"
     timeout: 10000
+# O fluxo 06 deixa o pedido ACEITO com o escrow RETIDO. O prestador precisa
+# iniciar o serviço antes que o cliente possa confirmar a conclusão.
+- runFlow: subflows/prestador_inicia_servico.yaml
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Já tenho conta"
+    timeout: 10000
 - runFlow: subflows/login_cliente.yaml
-- tapOn: "Meus pedidos"
+- tapOn: "Pedidos"
 - tapOn:
-    text: "Ver detalhes"
+    id: "meu-pedido-card"
     index: 0
-- assertVisible: "EM ANDAMENTO"
+- extendedWaitUntil:
+    visible: "EM ANDAMENTO"
+    timeout: 10000
 - tapOn: "Confirmar conclusão"
-- assertVisible: "Como foi o serviço"
+- extendedWaitUntil:
+    visible: "Avaliar"
+    timeout: 10000
+- tapOn: "Avaliar"
+# Maestro casa o texto inteiro do nó; o título inclui o nome do prestador.
+- extendedWaitUntil:
+    visible: "Como foi o serviço de Jose Prestador?"
+    timeout: 10000
 - tapOn:
     text: "★"
     index: 4
 - tapOn: "Enviar avaliação"
-- assertVisible: "Obrigado!"
+- extendedWaitUntil:
+    visible: "Obrigado!"
+    timeout: 10000
 - tapOn: "Voltar ao início"
-- assertVisible: "Elétrica"
+- extendedWaitUntil:
+    visible: "Elétrica"
+    timeout: 10000

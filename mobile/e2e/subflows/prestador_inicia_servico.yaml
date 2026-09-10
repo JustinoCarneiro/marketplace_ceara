@@ -1,0 +1,14 @@
+appId: com.onda.marketplace
+---
+# O endpoint /service-requests/active inclui ACEITO e EM_ANDAMENTO. Ao abrir a
+# aba, ActiveJobScreen resolve o pedido e encaminha ao detalhe onde o prestador
+# pode realizar a transição ACEITO → EM_ANDAMENTO.
+- runFlow: login_prestador.yaml
+- tapOn: "Em Andamento"
+- extendedWaitUntil:
+    visible: "Iniciar serviço"
+    timeout: 10000
+- tapOn: "Iniciar serviço"
+- extendedWaitUntil:
+    visible: "EM ANDAMENTO"
+    timeout: 10000

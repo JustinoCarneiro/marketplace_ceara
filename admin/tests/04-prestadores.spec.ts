@@ -13,7 +13,7 @@ test.describe('Moderação de Prestadores', () => {
   });
 
   test('exibe os chips de filtro (Em verificação / Todos)', async ({ page }) => {
-    await expect(page.getByText(/Em verificação/i)).toBeVisible();
+    await expect(page.getByText(/^Em verificação · \d+$/)).toBeVisible();
     await expect(page.getByText('Todos')).toBeVisible();
   });
 

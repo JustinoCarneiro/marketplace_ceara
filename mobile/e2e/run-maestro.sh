@@ -21,15 +21,13 @@ adb reverse tcp:8080 tcp:8080
 adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
 sleep 3
 
-# Roda um fluxo; 'known-fail' não derruba a suíte.
+# Roda um fluxo required; qualquer falha derruba a suíte.
 run_test() {
-  local f="$1" expected="${2:-required}"
+  local f="$1"
   echo ""
   echo "▶ $(basename "$f")"
   if maestro test "$f"; then
     echo "✓ PASS: $(basename "$f")"
-  elif [ "$expected" = "known-fail" ]; then
-    echo "⚠  KNOWN FAIL: $(basename "$f") — ver comentário no workflow"
   else
     echo "✗ FAIL: $(basename "$f")"
     return 1
@@ -41,6 +39,6 @@ run_test mobile/e2e/01_cadastro_cliente.yaml
 run_test mobile/e2e/03_cadastro_prestador.yaml
 run_test mobile/e2e/04_criar_pedido.yaml
 run_test mobile/e2e/05_enviar_proposta.yaml
-run_test mobile/e2e/06_aceitar_proposta.yaml known-fail
-run_test mobile/e2e/07_concluir_e_avaliar.yaml known-fail
+run_test mobile/e2e/06_aceitar_proposta.yaml
+run_test mobile/e2e/07_concluir_e_avaliar.yaml
 run_test mobile/e2e/02_login_cliente.yaml
