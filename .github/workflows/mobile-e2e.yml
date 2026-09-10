@@ -136,6 +136,11 @@ jobs:
           # produção) — CI não tem canal de alerta real, mesma flag usada no ambiente de
           # demo pública. Ver memoria-tecnica/bugs/maestro-e2e-backend-nao-sobe.md.
           ALLOW_MISSING_ALERT_CHANNEL: "true"
+          # O gateway real não existe no runner. Habilita exclusivamente neste ambiente a
+          # confirmação assíncrona simulada, pelo mesmo webhook que seria usado em produção.
+          # Sem a flag, a transação fica PENDENTE e impede ACEITO → EM_ANDAMENTO.
+          MARKETPLACE_GATEWAY_SIMULATE: "true"
+          MARKETPLACE_OUTBOX_DELAY_MS: "500"
 
       # ─── APK release (standalone) ─────────────────────────────────────────
       # IMPORTANTE: assembleDebug gera o Expo dev client (precisa de Metro) e no
