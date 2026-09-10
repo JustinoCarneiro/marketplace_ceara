@@ -190,14 +190,9 @@ jobs:
       #   03 → registra Jose (prestador) — clearState limpa sessão de Lucia
       #   04 → login Lucia (Splash visível após 03), cria pedido
       #   05 → login Jose, envia proposta
-      #   06 → known-fail PROVISÓRIO: fluxo de aceite agora é alcançável de
-      #        "Meus pedidos" via o botão "Ver propostas recebidas" no
-      #        RequestDetail (novo) → CompareProposals → aceitar → pagar (modal
-      #        de CPF). Mantido known-fail só até o 1º run validar de ponta a
-      #        ponta; depois promover a required.
-      #   07 → known-fail: depende de 06 + falta um fluxo "prestador inicia
-      #        serviço" (ACEITO → EM_ANDAMENTO) — o app tem o botão "Iniciar
-      #        serviço", falta o passo Maestro do lado do prestador.
+      #   06 → cliente aceita a proposta e confirma a retenção do pagamento Pix.
+      #   07 → prestador inicia o serviço; cliente conclui e avalia.
+      #        Ambos são required após duas execuções consecutivas verdes: #84 e #85.
       #   02 → standalone: verifica fluxo de login isolado
       - name: E2E no emulador Android 29
         uses: reactivecircus/android-emulator-runner@v2
