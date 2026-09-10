@@ -157,9 +157,39 @@ class MercadoPagoGatewayService implements GatewayService {
                         + "memoria-tecnica/decisoes/mercadopago-escrow-modelo-de-repasse.md).");
     }
 
+    /**
+     * Reembolso total do pagamento original no Mercado Pago
+     * ({@code POST /v1/payments/{id}/refunds}, corpo vazio = total). Disparado pelo
+     * OutboxProcessor em {@code PAYMENT_REFUNDED} (cancelamento com escrow retido ou
+     * mediação a favor do cliente).
+     *
+     * <p>{@code X-Idempotency-Key} estável ({@code <idempotency_key>:refund}) — reenvio
+     * do mesmo evento do Outbox não gera reembolso duplicado. Erro do MP propaga: o
+     * evento vira {@code FALHA} e aparece na reconciliação do painel (US27).
+     */
     @Override
     public void reembolsar(Transaction transaction) {
-        throw new UnsupportedOperationException(
-                "Reembolso via Mercado Pago ainda não implementado — ver MKT-49.");
+        String paymentId = transaction.getGatewayTransactionId();
+        if (paymentId == null || paymentId.isBlank()) {
+            throw new IllegalStateException(
+                    "Transação sem gateway_transaction_id — nada a reembolsar no MP (sr="
+                            + transaction.getServiceRequestId() + ")");
+        }
+        try {
+            http.post()
+                    .uri("/v1/payments/{id}/refunds", paymentId)
+                    .header("X-Idempotency-Key", transaction.getIdempotencyKey() + ":refund")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{}")
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Mercado Pago: reembolso total solicitado payment={} sr={}",
+                    paymentId, transaction.getServiceRequestId());
+        } catch (RestClientResponseException e) {
+            log.warn("Mercado Pago recusou o reembolso (HTTP {}) payment={} sr={}: {}",
+                    e.getStatusCode().value(), paymentId, transaction.getServiceRequestId(),
+                    e.getResponseBodyAsString());
+            throw e;
+        }
     }
 }

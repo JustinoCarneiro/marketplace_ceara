@@ -97,10 +97,42 @@ class MercadoPagoGatewayServiceTest {
     }
 
     @Test
-    void liberar_eReembolsar_aindaNaoImplementados() {
+    void liberar_aindaNaoImplementado() {
         assertThatThrownBy(() -> service.liberar(pixTx()))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void reembolsar_solicitaRefundTotalNoPagamentoOriginal() {
+        Transaction tx = pixTx();
+        tx.setGatewayTransactionId("123456789");
+
+        server.expect(requestTo("https://api.mercadopago.com/v1/payments/123456789/refunds"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", "Bearer TEST-TOKEN"))
+                .andExpect(header("X-Idempotency-Key", "idem-key-123:refund"))
+                .andRespond(withSuccess("{\"id\":987,\"status\":\"approved\"}", MediaType.APPLICATION_JSON));
+
+        service.reembolsar(tx);
+        server.verify();
+    }
+
+    @Test
+    void reembolsar_semGatewayTransactionId_falhaAntesDoHttp() {
         assertThatThrownBy(() -> service.reembolsar(pixTx()))
-                .isInstanceOf(UnsupportedOperationException.class);
+                .isInstanceOf(IllegalStateException.class);
+        server.verify(); // nenhuma chamada esperada
+    }
+
+    @Test
+    void reembolsar_quandoMercadoPagoRecusa_propagaOErro() {
+        Transaction tx = pixTx();
+        tx.setGatewayTransactionId("123456789");
+        server.expect(requestTo("https://api.mercadopago.com/v1/payments/123456789/refunds"))
+                .andRespond(withBadRequest().body("{\"message\":\"cannot refund\"}"));
+
+        assertThatThrownBy(() -> service.reembolsar(tx))
+                .isInstanceOf(RestClientResponseException.class);
+        server.verify();
     }
 }
