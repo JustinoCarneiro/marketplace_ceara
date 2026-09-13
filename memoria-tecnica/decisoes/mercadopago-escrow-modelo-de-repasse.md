@@ -99,6 +99,15 @@ Escolhido pelo humano em 2026-09-10 para o piloto (1 bairro, urgência de lança
 - `liberar`: repasse Pix de `valor_total − valor_comissao` para a **chave Pix do
   prestador** (cadastrada no perfil, cifrada em repouso). Idempotente pela referência
   da transação.
+  **Atualização 2026-09-13:** confirmado com o humano que a conta **ainda não tem**
+  payout/transferência Pix programática habilitada no Mercado Pago (deve passar a
+  ter). Enquanto isso, `liberar` lança `ManualPayoutRequiredException` — o evento cai
+  em `FALHA` e vira **fila de repasse manual** no admin
+  (`GET/POST /admin/transactions/{id}/repasse-pendente|confirmar-repasse-manual`,
+  commit `3e83dae`): o operador vê a chave Pix decifrada, paga fora do sistema e
+  confirma, o que libera o escrow sem chamar o gateway de novo. Trocar por payout
+  automático quando o MP habilitar é só reescrever `liberar()` — nada mais no fluxo
+  muda.
 - `reembolsar`: `POST /v1/payments/{gateway_transaction_id}/refunds` (total) no
   pagamento original.
 - Só **Pix** no piloto. Cartão fica pra depois (`PaymentMethod.CARTAO` já existe no
