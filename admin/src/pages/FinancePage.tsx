@@ -5,7 +5,14 @@ import { api, downloadFile } from '../api/client';
 // `tipo`/`entidade` — os nomes reais são `tipoEvento`/`agregado`, então toda linha da fila de
 // falhas renderizava em branco e o admin reprocessava sem saber o que era.
 interface Transaction { id: string; serviceRequestId: string; valorTotal: number; statusPagamento: string; }
-interface OutboxEvent { id: string; agregado: string; tipoEvento: string; tentativas: number; status: string; }
+interface OutboxEvent { id: string; agregado: string; agregadoId: string; tipoEvento: string; tentativas: number; status: string; }
+// Espelha RepassePendenteDto — fila de repasse manual enquanto o Mercado Pago não tem
+// payout Pix programático pra conta (MKT-49). A chave Pix só é buscada sob demanda,
+// nunca fica em nenhum estado carregado por padrão.
+interface RepassePendente {
+  transactionId: string; prestadorNome: string; valorARepassar: number;
+  chavePixCadastrada: boolean; chavePix: string | null;
+}
 
 // GET /admin/transactions filtra por 1 status só (?status=, default RETIDO) — sem essas 3
 // chamadas em paralelo, os KPIs "Liberado"/"Reembolsado" e a tabela nunca mostravam nada
@@ -31,6 +38,11 @@ export default function FinancePage() {
   const [exportErr, setExportErr] = useState('');
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const [reprocessErr, setReprocessErr] = useState('');
+  // Repasse manual (MKT-49): payload da transação aberta no modal + estado de carregar/confirmar.
+  const [repasse, setRepasse] = useState<RepassePendente | null>(null);
+  const [repasseLoading, setRepasseLoading] = useState(false);
+  const [repasseErr, setRepasseErr] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -60,6 +72,38 @@ export default function FinancePage() {
       setReprocessErr(e instanceof Error ? e.message : 'Erro ao reprocessar.');
     } finally {
       setReprocessingId(null);
+    }
+  }
+
+  // Abre o modal de repasse manual pra um evento PAYMENT_RELEASED em FALHA — hoje é o
+  // único jeito de liberar o escrow, porque o Mercado Pago ainda não tem payout Pix
+  // programático pra conta (GatewayService.liberar lança ManualPayoutRequiredException).
+  async function abrirRepassePendente(transactionId: string) {
+    setRepasseErr('');
+    setRepasseLoading(true);
+    try {
+      setRepasse(await api.get<RepassePendente>(`/admin/transactions/${transactionId}/repasse-pendente`));
+    } catch (e: unknown) {
+      setRepasseErr(e instanceof Error ? e.message : 'Erro ao buscar o repasse pendente.');
+    } finally {
+      setRepasseLoading(false);
+    }
+  }
+
+  // Só chamar DEPOIS de pagar o prestador de verdade fora do sistema — libera o
+  // escrow (Transaction -> LIBERADO) e fecha o evento outbox, sem chamar o gateway de novo.
+  async function confirmarRepasseManual() {
+    if (!repasse) return;
+    setConfirmando(true);
+    setRepasseErr('');
+    try {
+      await api.post(`/admin/transactions/${repasse.transactionId}/confirmar-repasse-manual`, {});
+      setRepasse(null);
+      await load();
+    } catch (e: unknown) {
+      setRepasseErr(e instanceof Error ? e.message : 'Erro ao confirmar o repasse.');
+    } finally {
+      setConfirmando(false);
     }
   }
 
@@ -126,7 +170,13 @@ export default function FinancePage() {
                       <div style={{ fontSize: 12, color: '#606E71' }}>{e.agregado} · {e.tentativas} tentativa{e.tentativas !== 1 ? 's' : ''}</div>
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
-                    <button onClick={() => reprocess(e.id)} disabled={reprocessingId === e.id} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: reprocessingId === e.id ? 'default' : 'pointer', opacity: reprocessingId === e.id ? 0.6 : 1 }}>{reprocessingId === e.id ? 'Reprocessando…' : 'Reprocessar'}</button>
+                    {/* PAYMENT_RELEASED em FALHA quase sempre é payout indisponível no MP (MKT-49),
+                        não um erro transitório — "Reprocessar" chamaria o gateway e falharia de novo. */}
+                    {e.tipoEvento === 'PAYMENT_RELEASED' ? (
+                      <button onClick={() => abrirRepassePendente(e.agregadoId)} disabled={repasseLoading} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#DA6A32', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Repasse pendente</button>
+                    ) : (
+                      <button onClick={() => reprocess(e.id)} disabled={reprocessingId === e.id} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: reprocessingId === e.id ? 'default' : 'pointer', opacity: reprocessingId === e.id ? 0.6 : 1 }}>{reprocessingId === e.id ? 'Reprocessando…' : 'Reprocessar'}</button>
+                    )}
                   </div>
                 ))}
                 <span style={{ fontSize: 12, color: '#9A4A22' }}>Reprocessamento é idempotente — seguro repetir.</span>
@@ -150,6 +200,43 @@ export default function FinancePage() {
           </>
         )}
       </div>
+
+      {/* Modal de repasse manual — payout Pix ainda não é automático nesta conta (MKT-49) */}
+      {(repasseLoading || repasse) && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(14,42,51,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: 380, maxWidth: '90vw', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Repasse pendente</span>
+            {repasseLoading && <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><div className="spinner" /></div>}
+            {repasseErr && <span style={{ fontSize: 13, color: '#C0392B' }}>{repasseErr}</span>}
+            {repasse && !repasseLoading && (
+              <>
+                <p style={{ fontSize: 13, color: '#606E71', margin: 0 }}>
+                  Mercado Pago ainda não faz esse repasse sozinho. Pague o prestador via Pix
+                  fora do sistema e só então confirme abaixo — isso libera o escrow.
+                </p>
+                <div style={{ background: '#F6EEDC', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: '#8E6508' }}>Prestador</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{repasse.prestadorNome}</span>
+                  <span style={{ fontSize: 12, color: '#8E6508', marginTop: 4 }}>Valor a repassar</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: '#0E2A33' }}>{fmt(repasse.valorARepassar)}</span>
+                  <span style={{ fontSize: 12, color: '#8E6508', marginTop: 4 }}>Chave Pix</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33', fontFamily: 'monospace' }}>
+                    {repasse.chavePixCadastrada ? repasse.chavePix : '— não cadastrada pelo prestador —'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                  <button onClick={() => setRepasse(null)} style={{ height: 42, padding: '0 16px', border: '1.5px solid var(--line-soft)', borderRadius: 100, background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
+                  <button onClick={confirmarRepasseManual} disabled={confirmando || !repasse.chavePixCadastrada}
+                          title={!repasse.chavePixCadastrada ? 'Prestador ainda não cadastrou a chave Pix' : ''}
+                          style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: confirmando ? 'default' : 'pointer', opacity: confirmando || !repasse.chavePixCadastrada ? 0.6 : 1 }}>
+                    {confirmando ? 'Confirmando…' : 'Já paguei — confirmar'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

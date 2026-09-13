@@ -149,12 +149,19 @@ class MercadoPagoGatewayService implements GatewayService {
         }
     }
 
+    /**
+     * A conta ainda não tem payout Pix programático habilitado no Mercado Pago
+     * (confirmado com o humano em 2026-09-13 — deve passar a ter). Enquanto isso o
+     * repasse vira pendência manual: o evento cai em FALHA e o admin resolve via
+     * {@code GET/POST /admin/transactions/{id}/repasse-pendente|confirmar-repasse-manual}.
+     * Trocar esta implementação por uma chamada real assim que o produto for liberado —
+     * o resto do fluxo (Outbox, Transaction, webhook) não muda.
+     */
     @Override
     public void liberar(Transaction transaction) {
-        throw new UnsupportedOperationException(
-                "Repasse Pix ao prestador ainda não implementado — depende do produto de "
-                        + "money-out do Mercado Pago (ver MKT-49 e o ADR "
-                        + "memoria-tecnica/decisoes/mercadopago-escrow-modelo-de-repasse.md).");
+        log.warn("Mercado Pago: repasse automático indisponível — pedido {} entra em "
+                + "pendência de repasse manual no admin.", transaction.getServiceRequestId());
+        throw new ManualPayoutRequiredException(transaction.getServiceRequestId());
     }
 
     /**

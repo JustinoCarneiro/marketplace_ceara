@@ -97,9 +97,9 @@ class MercadoPagoGatewayServiceTest {
     }
 
     @Test
-    void liberar_aindaNaoImplementado() {
+    void liberar_semPayoutDisponivel_lancaManualPayoutRequired() {
         assertThatThrownBy(() -> service.liberar(pixTx()))
-                .isInstanceOf(UnsupportedOperationException.class);
+                .isInstanceOf(ManualPayoutRequiredException.class);
     }
 
     @Test
