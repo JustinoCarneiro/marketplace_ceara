@@ -201,6 +201,21 @@ public class AdminController {
         return ResponseEntity.accepted().build();
     }
 
+    // Fila de repasse manual (MKT-49): enquanto o Mercado Pago não expõe payout Pix
+    // programático pra conta, GatewayService.liberar() lança ManualPayoutRequiredException
+    // e o operador paga fora do sistema com os dados abaixo, depois confirma aqui.
+    @GetMapping("/transactions/{transactionId}/repasse-pendente")
+    public ResponseEntity<RepassePendenteDto> repassePendente(@PathVariable UUID transactionId) {
+        return ResponseEntity.ok(adminQueryService.findRepassePendente(transactionId));
+    }
+
+    @PostMapping("/transactions/{transactionId}/confirmar-repasse-manual")
+    public ResponseEntity<Void> confirmarRepasseManual(@PathVariable UUID transactionId, Authentication auth) {
+        adminQueryService.confirmarRepasseManual(transactionId);
+        auditService.registrar(adminId(auth), "CONFIRMAR_REPASSE_MANUAL", "transaction", transactionId, null);
+        return ResponseEntity.ok().build();
+    }
+
     /** Marca todas as notificações não lidas como lidas (US30). */
     @PostMapping("/notifications/mark-all-read")
     public ResponseEntity<Void> markAllNotificationsRead() {

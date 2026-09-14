@@ -56,6 +56,7 @@ export type ProviderStackParams = {
   Sos: { requestId: string };
   SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
+  ChavePix: undefined;
 };
 
 // ─── Root Stack ───────────────────────────────────────────────────────────────

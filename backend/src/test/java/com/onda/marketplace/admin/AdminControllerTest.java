@@ -183,7 +183,7 @@ class AdminControllerTest {
     @Test
     void outbox_retorna200_comListaFiltrada() throws Exception {
         when(adminQueryService.findOutbox(OutboxStatus.FALHA)).thenReturn(
-                List.of(new OutboxAdminDto(UUID.randomUUID(), "transaction",
+                List.of(new OutboxAdminDto(UUID.randomUUID(), "transaction", UUID.randomUUID(),
                         "PAYMENT_RELEASED", 3, OutboxStatus.FALHA)));
 
         mvc.perform(get("/api/v1/admin/outbox").param("status", "FALHA"))
@@ -200,6 +200,33 @@ class AdminControllerTest {
                 .andExpect(status().isAccepted());
 
         verify(adminQueryService).reprocessarOutbox(outboxId);
+    }
+
+    // --- fila de repasse manual (MKT-49) ---
+
+    @Test
+    void repassePendente_retornaDadosParaOOperadorPagar() throws Exception {
+        UUID txId = UUID.randomUUID();
+        var dto = new RepassePendenteDto(txId, UUID.randomUUID(), UUID.randomUUID(),
+                "José", BigDecimal.valueOf(212.50), true, "jose@pix.com");
+        when(adminQueryService.findRepassePendente(txId)).thenReturn(dto);
+
+        mvc.perform(get("/api/v1/admin/transactions/{id}/repasse-pendente", txId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.prestadorNome").value("José"))
+                .andExpect(jsonPath("$.chavePixCadastrada").value(true))
+                .andExpect(jsonPath("$.chavePix").value("jose@pix.com"));
+    }
+
+    @Test
+    void confirmarRepasseManual_retorna200_delegaEAuditora() throws Exception {
+        UUID txId = UUID.randomUUID();
+
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(adminQueryService).confirmarRepasseManual(txId);
+        verify(auditService).registrar(any(), eq("CONFIRMAR_REPASSE_MANUAL"), eq("transaction"), eq(txId), any());
     }
 
     // --- novos endpoints: notificações, usuários e prestadores ---

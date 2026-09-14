@@ -29,3 +29,4 @@ __pycache__/
 
 # ─── OndaDev ───
 .ondadev/handoff/current.md
+.ondadev/handoff/archive-*.md

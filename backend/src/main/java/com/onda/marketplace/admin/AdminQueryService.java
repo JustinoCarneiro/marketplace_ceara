@@ -8,8 +8,12 @@ import com.onda.marketplace.payment.OutboxStatus;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.provider.CpfEncryptor;
+import com.onda.marketplace.provider.ProviderProfile;
+import com.onda.marketplace.provider.ProviderProfileRepository;
 import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
@@ -18,12 +22,14 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Consultas administrativas de leitura e reprocessamento de outbox (M11).
- * Todos os métodos são somente-leitura, exceto {@link #reprocessarOutbox}.
+ * Consultas administrativas de leitura e reprocessamento de outbox (M11), e a fila de
+ * repasse manual do Mercado Pago (MKT-49). Todos os métodos são somente-leitura, exceto
+ * {@link #reprocessarOutbox} e {@link #confirmarRepasseManual}.
  */
 @Service
 @SuppressWarnings("null")
@@ -36,6 +42,8 @@ public class AdminQueryService {
     private final ProposalRepository          proposalRepository;
     private final ServiceMediaRepository      mediaRepository;
     private final UserRepository              userRepository;
+    private final ProviderProfileRepository   providerProfileRepository;
+    private final CpfEncryptor                cpfEncryptor;
 
     public AdminQueryService(ServiceRequestRepository srRepository,
                              TransactionRepository transactionRepository,
@@ -43,7 +51,9 @@ public class AdminQueryService {
                              DisputeResolutionRepository resolutionRepository,
                              ProposalRepository proposalRepository,
                              ServiceMediaRepository mediaRepository,
-                             UserRepository userRepository) {
+                             UserRepository userRepository,
+                             ProviderProfileRepository providerProfileRepository,
+                             CpfEncryptor cpfEncryptor) {
         this.srRepository         = srRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository     = outboxRepository;
@@ -51,6 +61,8 @@ public class AdminQueryService {
         this.proposalRepository   = proposalRepository;
         this.mediaRepository      = mediaRepository;
         this.userRepository       = userRepository;
+        this.providerProfileRepository = providerProfileRepository;
+        this.cpfEncryptor         = cpfEncryptor;
     }
 
     @Transactional(readOnly = true)
@@ -114,7 +126,8 @@ public class AdminQueryService {
         return outboxRepository.findByStatus(status)
                 .stream()
                 .map(e -> new OutboxAdminDto(
-                        e.getId(), e.getAgregado(), e.getTipoEvento(), e.getTentativas(), e.getStatus()))
+                        e.getId(), e.getAgregado(), e.getAgregadoId(), e.getTipoEvento(),
+                        e.getTentativas(), e.getStatus()))
                 .toList();
     }
 
@@ -137,5 +150,66 @@ public class AdminQueryService {
 
         event.resetarParaRetry();
         outboxRepository.save(event);
+    }
+
+    /**
+     * Dados pro operador pagar manualmente o repasse (MKT-49, enquanto o Mercado Pago
+     * não expõe payout Pix programático pra conta). A chave Pix decifrada só aparece
+     * nesta consulta ROLE_ADMIN sob demanda — nunca em log, nunca em outro DTO.
+     */
+    @Transactional(readOnly = true)
+    public RepassePendenteDto findRepassePendente(UUID transactionId) {
+        Transaction tx = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new BusinessException(
+                        "TRANSACTION_NOT_FOUND", "Transação não encontrada."));
+
+        if (tx.getStatusPagamento() != TransactionStatus.RETIDO) {
+            throw new BusinessException("TRANSACTION_NOT_RETAINED",
+                    "Só transações RETIDO têm repasse pendente.");
+        }
+
+        UUID prestadorId = proposalRepository
+                .findByServiceRequestIdAndStatus(tx.getServiceRequestId(), ProposalStatus.ACEITA)
+                .stream().findFirst().map(Proposal::getPrestadorId)
+                .orElseThrow(() -> new BusinessException("PROPOSAL_NOT_FOUND",
+                        "Proposta aceita não encontrada para este pedido."));
+
+        String prestadorNome = userRepository.findById(prestadorId)
+                .map(User::getNome).orElse("Prestador");
+
+        ProviderProfile perfil = providerProfileRepository.findByUserId(prestadorId).orElse(null);
+        boolean cadastrada = perfil != null && perfil.getChavePixCifrada() != null
+                && !perfil.getChavePixCifrada().isBlank();
+        String chavePix = cadastrada ? cpfEncryptor.decrypt(perfil.getChavePixCifrada()) : null;
+
+        BigDecimal valorARepassar = tx.getValorTotal().subtract(tx.getValorComissao());
+
+        return new RepassePendenteDto(tx.getId(), tx.getServiceRequestId(), prestadorId,
+                prestadorNome, valorARepassar, cadastrada, chavePix);
+    }
+
+    /**
+     * Confirma que o operador pagou o prestador fora do sistema e libera o escrow:
+     * transição RETIDO→LIBERADO na Transaction (guardada/idempotente na entidade) e o(s)
+     * evento(s) PAYMENT_RELEASED em FALHA da mesma transação viram PROCESSADO — sem isso
+     * o "reprocessar" padrão chamaria {@code GatewayService.liberar} de novo e falharia
+     * de novo (payout ainda não é automático).
+     */
+    @Transactional
+    public void confirmarRepasseManual(UUID transactionId) {
+        Transaction tx = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new BusinessException(
+                        "TRANSACTION_NOT_FOUND", "Transação não encontrada."));
+
+        tx.liberar();
+        transactionRepository.save(tx);
+
+        outboxRepository.findByAgregadoIdAndTipoEvento(transactionId, "PAYMENT_RELEASED")
+                .stream()
+                .filter(e -> e.getStatus() != OutboxStatus.PROCESSADO)
+                .forEach(e -> {
+                    e.marcarProcessado();
+                    outboxRepository.save(e);
+                });
     }
 }

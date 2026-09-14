@@ -9,7 +9,10 @@ import com.onda.marketplace.payment.PaymentMethod;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
+import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.provider.ProviderProfile;
 import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
@@ -42,6 +45,8 @@ class AdminQueryServiceTest {
     @Mock ProposalRepository        proposalRepository;
     @Mock ServiceMediaRepository    mediaRepository;
     @Mock UserRepository            userRepository;
+    @Mock com.onda.marketplace.provider.ProviderProfileRepository providerProfileRepository;
+    @Mock com.onda.marketplace.provider.CpfEncryptor cpfEncryptor;
 
     AdminQueryService service;
 
@@ -52,7 +57,8 @@ class AdminQueryServiceTest {
     void setUp() {
         service = new AdminQueryService(
                 srRepository, transactionRepository, outboxRepository, resolutionRepository,
-                proposalRepository, mediaRepository, userRepository);
+                proposalRepository, mediaRepository, userRepository,
+                providerProfileRepository, cpfEncryptor);
     }
 
     // --- findDisputas ---
@@ -140,6 +146,7 @@ class AdminQueryServiceTest {
         assertThat(lista).hasSize(1);
         assertThat(lista.get(0).tipoEvento()).isEqualTo("PAYMENT_INITIATED");
         assertThat(lista.get(0).status()).isEqualTo(OutboxStatus.FALHA);
+        assertThat(lista.get(0).agregadoId()).isEqualTo(TX_ID); // MKT-49: liga o evento à transação
     }
 
     // --- reprocessarOutbox ---
@@ -175,6 +182,83 @@ class AdminQueryServiceTest {
         assertThatThrownBy(() -> service.reprocessarOutbox(UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "OUTBOX_NOT_FOUND");
+    }
+
+    // --- findRepassePendente / confirmarRepasseManual (MKT-49) ---
+
+    @Test
+    void findRepassePendente_comChavePixCadastrada_devolveDecifrada() {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(250));
+        UUID prestadorId = UUID.randomUUID();
+        var proposta = mock(Proposal.class);
+        when(proposta.getPrestadorId()).thenReturn(prestadorId);
+        var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        perfil.setChavePixCifrada("cifrado-base64");
+        var prestador = mock(User.class);
+        when(prestador.getNome()).thenReturn("José");
+
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(tx));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
+                .thenReturn(List.of(proposta));
+        when(userRepository.findById(prestadorId)).thenReturn(Optional.of(prestador));
+        when(providerProfileRepository.findByUserId(prestadorId)).thenReturn(Optional.of(perfil));
+        when(cpfEncryptor.decrypt("cifrado-base64")).thenReturn("jose@pix.com");
+
+        RepassePendenteDto dto = service.findRepassePendente(TX_ID);
+
+        assertThat(dto.prestadorNome()).isEqualTo("José");
+        assertThat(dto.chavePixCadastrada()).isTrue();
+        assertThat(dto.chavePix()).isEqualTo("jose@pix.com");
+        assertThat(dto.valorARepassar()).isEqualByComparingTo("212.50"); // 250 - 15%
+    }
+
+    @Test
+    void findRepassePendente_semChavePixCadastrada_naoDecifraNada() {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        UUID prestadorId = UUID.randomUUID();
+        var proposta = mock(Proposal.class);
+        when(proposta.getPrestadorId()).thenReturn(prestadorId);
+
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(tx));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
+                .thenReturn(List.of(proposta));
+        when(userRepository.findById(prestadorId)).thenReturn(Optional.empty());
+        when(providerProfileRepository.findByUserId(prestadorId)).thenReturn(Optional.empty());
+
+        RepassePendenteDto dto = service.findRepassePendente(TX_ID);
+
+        assertThat(dto.chavePixCadastrada()).isFalse();
+        assertThat(dto.chavePix()).isNull();
+        verify(cpfEncryptor, never()).decrypt(any());
+    }
+
+    @Test
+    void findRepassePendente_transacaoNaoRetida_lancaException() {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        tx.liberar(); // RETIDO -> LIBERADO
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(tx));
+
+        assertThatThrownBy(() -> service.findRepassePendente(TX_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "TRANSACTION_NOT_RETAINED");
+    }
+
+    @Test
+    void confirmarRepasseManual_liberaATransacao_eFechaOEventoFalho() {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        var eventoFalho = new OutboxEvent("transaction", TX_ID, "PAYMENT_RELEASED", "{}");
+        eventoFalho.marcarFalha();
+
+        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(tx));
+        when(outboxRepository.findByAgregadoIdAndTipoEvento(TX_ID, "PAYMENT_RELEASED"))
+                .thenReturn(List.of(eventoFalho));
+
+        service.confirmarRepasseManual(TX_ID);
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.LIBERADO);
+        assertThat(eventoFalho.getStatus()).isEqualTo(OutboxStatus.PROCESSADO);
+        verify(transactionRepository).save(tx);
+        verify(outboxRepository).save(eventoFalho);
     }
 
     // helpers

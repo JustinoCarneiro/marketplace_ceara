@@ -85,6 +85,30 @@ public class ProviderService {
         return buildAuthResponse(user);
     }
 
+    /**
+     * Cadastra/atualiza a chave Pix do prestador — destino do repasse na conclusão
+     * (Modelo A, MKT-49). Cifrada em repouso (mesmo esquema do CPF); nunca volta em
+     * claro num DTO.
+     */
+    @Transactional
+    public void atualizarChavePix(UUID userId, String chavePixClaro) {
+        if (chavePixClaro == null || chavePixClaro.isBlank()) {
+            throw new BusinessException("PIX_KEY_REQUIRED", "Informe a chave Pix.");
+        }
+        ProviderProfile perfil = profileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException(
+                        "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));
+        perfil.setChavePixCifrada(cpfEncryptor.encrypt(chavePixClaro.trim()));
+        profileRepository.save(perfil);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean chavePixCadastrada(UUID userId) {
+        return profileRepository.findByUserId(userId)
+                .map(p -> p.getChavePixCifrada() != null && !p.getChavePixCifrada().isBlank())
+                .orElse(false);
+    }
+
     private AuthResponse buildAuthResponse(User user) {
         String accessToken = jwtService.generateAccessToken(user);
         String rawRefresh  = UUID.randomUUID().toString();

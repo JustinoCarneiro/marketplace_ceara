@@ -23,6 +23,11 @@ export default function ProfileScreen() {
   const isProvider = role === 'ROLE_PROVIDER';
 
   const MENU_ITEMS: { icon: FeatherName; label: string; onPress: () => void }[] = [
+    ...(isProvider ? [{
+      icon: 'credit-card' as FeatherName,
+      label: 'Chave Pix',
+      onPress: () => nav.navigate('ChavePix'),
+    }] : []),
     {
       icon: 'clock',
       label: 'Histórico de serviços',

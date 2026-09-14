@@ -79,6 +79,18 @@ marketplace:
     # SEMPRE false em produção — lá quem confirma é o gateway de verdade.
     # Ativado no profile "seed" (dev/demo/CI), ver application-seed.yml.
     simulate-confirmation: ${MARKETPLACE_GATEWAY_SIMULATE:false}
+    # Integração real com o Mercado Pago (MKT-49, Modelo A do ADR
+    # memoria-tecnica/decisoes/mercadopago-escrow-modelo-de-repasse.md).
+    # enabled=false (default) → GatewayServiceImpl stub. enabled=true → MercadoPagoGatewayService
+    # (cobrança Pix real; repasse/reembolso ainda em construção). Nunca ligar junto de
+    # simulate-confirmation=true.
+    mercadopago:
+      enabled: ${MERCADOPAGO_ENABLED:false}
+      base-url: ${MERCADOPAGO_BASE_URL:https://api.mercadopago.com}
+      access-token: ${MERCADOPAGO_ACCESS_TOKEN:}          # segredo — só .env/secret do CI/Coolify
+      webhook-secret: ${MERCADOPAGO_WEBHOOK_SECRET:}       # assinatura x-signature das notificações
+      notification-url: ${MERCADOPAGO_NOTIFICATION_URL:}   # URL pública do webhook MP (vazio = não envia)
+      pix-expiration-minutes: ${MERCADOPAGO_PIX_EXP_MIN:30}
   review:
     # Double-blind: avaliação só fica pública quando ambas as partes avaliam, ou
     # quando vence este prazo de reciprocidade (padrão Airbnb = 14 dias).

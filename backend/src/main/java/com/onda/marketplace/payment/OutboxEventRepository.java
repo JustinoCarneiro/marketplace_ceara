@@ -10,4 +10,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
     // Visão admin da fila outbox (monitoramento/reprocessamento)
     List<OutboxEvent> findByStatus(OutboxStatus status);
+
+    // Fila de repasse manual (MKT-49): localiza o(s) evento(s) PAYMENT_RELEASED de uma
+    // transação pra marcar como PROCESSADO quando o admin confirma o pagamento feito
+    // fora do sistema — sem isso "reprocessar" chamaria o gateway de novo e falharia de novo.
+    List<OutboxEvent> findByAgregadoIdAndTipoEvento(UUID agregadoId, String tipoEvento);
 }

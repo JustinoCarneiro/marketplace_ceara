@@ -30,6 +30,12 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 
+    // E-mail do cliente para a cobrança Pix no gateway (payer.email do Mercado Pago).
+    // Consulta escalar: o gateway é chamado fora de @Transactional (OutboxProcessor),
+    // então nada de navegar lazy pela entidade — TS02.
+    @Query("SELECT s.cliente.email FROM ServiceRequest s WHERE s.id = :srId")
+    Optional<String> findClienteEmailBySrId(@Param("srId") UUID srId);
+
     /**
      * Pedidos agrupados por status dentro do período (US23). Uma consulta só resolve
      * o gráfico, o total e a taxa de conclusão do dashboard.
