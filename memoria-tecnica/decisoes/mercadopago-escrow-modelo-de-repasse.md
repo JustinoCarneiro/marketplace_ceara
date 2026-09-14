@@ -151,6 +151,26 @@ Itens comuns aos dois modelos (não dependem da escolha, podem começar já):
 - Se for Modelo B: token do vendedor é credencial de terceiro → cofre/cifra, nunca em
   log, refresh antes de expirar.
 
+## Estado atual (2026-09-14) — código pronto, validação ao vivo pausada por decisão do humano
+
+PR #6 mesclado no master (`2cd7b13`): cobrança Pix, webhook, chave Pix do prestador,
+reembolso e fila de repasse manual implementados e testados (`MockRestServiceServer`),
+tudo atrás de `marketplace.gateway.mercadopago.enabled=false` (default) — zero mudança
+de comportamento em CI/demo/produção atuais.
+
+**Falta só a confirmação ao vivo em sandbox**, e ela está bloqueada numa decisão de
+produto, não numa pendência técnica: ativar as credenciais de produção do Mercado
+Pago (necessárias mesmo pra sandbox — ver `mercadopago-sandbox-*` no `onda-starter`)
+travou num erro genérico do painel deles, e o humano decidiu **não ativar agora**
+(2026-09-14). Isso é uma pausa deliberada, não um bloqueio esquecido — não reabrir
+sozinho; só retomar quando o humano pedir.
+
+Quando retomar: (1) ativar credencial de produção (recriar a aplicação escolhendo
+"API de Orders" no assistente, se o erro genérico persistir — ver nota do
+`confidencial-calcados`); (2) rodar o roteiro de sandbox documentado no handoff;
+(3) só depois construir a tela de QR/copia-e-cola do Pix pro cliente (evitar
+adivinhar o formato da resposta do MP sem ver uma real).
+
 ## Ligado a
 
 - [[escrow-guardas-gateway-simulado]]
