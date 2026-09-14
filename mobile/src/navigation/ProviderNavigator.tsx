@@ -19,6 +19,7 @@ import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
 import SosActiveScreen from '../screens/shared/SosActiveScreen';
 import LegalScreen from '../screens/legal/LegalScreen';
+import ChavePixScreen from '../screens/provider/ChavePixScreen';
 
 const Stack = createNativeStackNavigator<ProviderStackParams>();
 
@@ -36,6 +37,7 @@ export default function ProviderNavigator() {
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="SosActive" component={SosActiveScreen} />
       <Stack.Screen name="Legal" component={LegalScreen} />
+      <Stack.Screen name="ChavePix" component={ChavePixScreen} />
     </Stack.Navigator>
   );
 }
