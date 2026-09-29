@@ -98,7 +98,9 @@ public class ProviderService {
         ProviderProfile perfil = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));
-        perfil.setChavePixCifrada(cpfEncryptor.encrypt(chavePixClaro.trim()));
+        // Validada e guardada na forma canônica: é o destino de dinheiro real do repasse.
+        PixKey chave = PixKey.parse(chavePixClaro);
+        perfil.setChavePixCifrada(cpfEncryptor.encrypt(chave.valor()));
         profileRepository.save(perfil);
     }
 

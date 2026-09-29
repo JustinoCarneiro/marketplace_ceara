@@ -107,7 +107,7 @@ export default function ChavePixScreen() {
               <TextInput
                 testID="input-chave-pix"
                 style={styles.input}
-                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                placeholder="CPF, CNPJ, e-mail, telefone (+55…) ou aleatória"
                 placeholderTextColor={color.textFaint}
                 value={chavePix}
                 onChangeText={setChavePix}

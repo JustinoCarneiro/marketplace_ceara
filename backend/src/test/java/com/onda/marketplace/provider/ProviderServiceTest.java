@@ -119,6 +119,33 @@ class ProviderServiceTest {
     }
 
     @Test
+    void atualizarChavePix_chaveMalFormada_ehRejeitadaESemSalvar() {
+        var userId = java.util.UUID.randomUUID();
+        var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
+
+        assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "minha chave qualquer"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PIX_KEY_INVALID");
+
+        assertThat(perfil.getChavePixCifrada()).isNull();
+        verify(profileRepository, never()).save(any());
+    }
+
+    @Test
+    void atualizarChavePix_guardaAChaveNormalizada_noMesmoFormatoQueORepasseVaiUsar() {
+        var userId = java.util.UUID.randomUUID();
+        var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
+        when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        providerService.atualizarChavePix(userId, "  111.444.777-35 ");
+
+        var decifrador = new CpfEncryptor("01234567890123456789012345678901");
+        assertThat(decifrador.decrypt(perfil.getChavePixCifrada())).isEqualTo("11144477735");
+    }
+
+    @Test
     void chavePixCadastrada_refleteOEstadoDoPerfil() {
         var comChave = new ProviderProfile(null, "EL", "cpf");
         comChave.setChavePixCifrada("cifrado");
