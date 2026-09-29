@@ -73,6 +73,49 @@ class MercadoPagoGatewayServiceTest {
     }
 
     @Test
+    void cobrar_guardaQrCodeECopiaECola_paraExibicaoNaTela() {
+        // Formato real confirmado ao vivo em 2026-09-28 (cobrança de R$1 real, ver
+        // memoria-tecnica/bugs/mercadopago-payer-email-forbidden-sandbox.md) — não é
+        // suposição de contrato.
+        server.expect(requestTo("https://api.mercadopago.com/v1/payments"))
+                .andRespond(withSuccess("""
+                        {
+                          "id": 180383866387,
+                          "status": "pending",
+                          "point_of_interaction": {
+                            "transaction_data": {
+                              "qr_code": "00020126500014br.gov.bcb.pix...6304068B",
+                              "qr_code_base64": "iVBORw0KGgoAAAANSU...",
+                              "ticket_url": "https://www.mercadopago.com.br/payments/180383866387/ticket"
+                            }
+                          }
+                        }""", MediaType.APPLICATION_JSON));
+
+        Transaction tx = pixTx();
+        service.cobrar(tx);
+
+        assertThat(tx.getPixQrCode()).isEqualTo("00020126500014br.gov.bcb.pix...6304068B");
+        assertThat(tx.getPixQrCodeBase64()).isEqualTo("iVBORw0KGgoAAAANSU...");
+        assertThat(tx.getPixTicketUrl())
+                .isEqualTo("https://www.mercadopago.com.br/payments/180383866387/ticket");
+    }
+
+    @Test
+    void cobrar_semDadosDePix_naoQuebraENaoPreencheOsCampos() {
+        // Resposta mínima (o teste original da suíte, antes de existir QR) continua válida —
+        // point_of_interaction ausente não pode virar NullPointerException.
+        server.expect(requestTo("https://api.mercadopago.com/v1/payments"))
+                .andRespond(withSuccess("{\"id\": 1, \"status\": \"pending\"}", MediaType.APPLICATION_JSON));
+
+        Transaction tx = pixTx();
+        service.cobrar(tx);
+
+        assertThat(tx.getPixQrCode()).isNull();
+        assertThat(tx.getPixQrCodeBase64()).isNull();
+        assertThat(tx.getPixTicketUrl()).isNull();
+    }
+
+    @Test
     void cobrar_quandoMercadoPagoRecusa_propagaOErro() {
         server.expect(requestTo("https://api.mercadopago.com/v1/payments"))
                 .andRespond(withBadRequest().body("{\"message\":\"invalid parameter\"}"));

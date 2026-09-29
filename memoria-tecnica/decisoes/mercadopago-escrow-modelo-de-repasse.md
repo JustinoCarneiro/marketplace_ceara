@@ -226,6 +226,15 @@ produção. Etapa 3 destravada: formato real da resposta Pix conhecido
 `ticket_url`). Pendências (URL definitiva do webhook no painel, nome do
 recebedor, tarifa no reembolso) no arquivo do bug.
 
+**Etapa 3 concluída (2026-09-29):** `MercadoPagoGatewayService.cobrar()` agora
+grava `pixQrCode`/`pixQrCodeBase64`/`pixTicketUrl` na `Transaction` (migration
+`V19__transaction_pix_dados.sql`), expostos via `TransactionDto`.
+`PaymentPixScreen` no mobile deixou de mostrar o QR mockado/chave hardcoded —
+faz polling (`pollPixDados`) e renderiza a imagem base64 real + copia-e-cola
+real, com fallback sem travar o botão "Paguei" quando o gateway é o stub
+(demo/CI). As "3 etapas" do "Quando retomar" desta seção estão todas
+concluídas.
+
 ## Ligado a
 
 - [[mercadopago-payer-email-forbidden-sandbox]]

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Linking } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -7,7 +7,7 @@ import type { RouteProp } from '@react-navigation/native';
 import type { ClientNavProp, ClientStackParams } from '../../navigation/types';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
-import { pollPaymentConfirmed } from '../../api/pollTransaction';
+import { pollPaymentConfirmed, pollPixDados, type PixDados } from '../../api/pollTransaction';
 
 type RouteProps = RouteProp<ClientStackParams, 'PaymentPix'>;
 
@@ -25,8 +25,6 @@ const C = {
   sunTint: '#FDF3D6',
 };
 
-const PIX_KEY = '00020126360014BR.GOV.BCB.PIX0114+5585...';
-
 export default function PaymentPixScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
@@ -34,9 +32,24 @@ export default function PaymentPixScreen() {
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [pixDados, setPixDados] = useState<PixDados | null>(null);
+  const [loadingQr, setLoadingQr] = useState(true);
+
+  useEffect(() => {
+    let ativo = true;
+    pollPixDados(route.params.requestId, token).then(dados => {
+      if (ativo) {
+        setPixDados(dados);
+        setLoadingQr(false);
+      }
+    });
+    return () => { ativo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params.requestId]);
 
   async function copyPix() {
-    await Clipboard.setStringAsync(PIX_KEY);
+    if (!pixDados?.qrCode) return;
+    await Clipboard.setStringAsync(pixDados.qrCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -75,23 +88,41 @@ export default function PaymentPixScreen() {
           <View style={styles.qrCard}>
             <Text style={styles.qrHint}>Escaneie o QR Code no seu banco</Text>
 
-            <View style={styles.qrBox}>
-              <View style={styles.qrCornerTL} />
-              <View style={styles.qrCornerTR} />
-              <View style={styles.qrCornerBL} />
-              <View style={styles.qrPattern} />
-            </View>
+            {loadingQr ? (
+              <View style={styles.qrBox} testID="pix-qr-carregando">
+                <ActivityIndicator color={C.primary} size="small" />
+              </View>
+            ) : pixDados?.qrCodeBase64 ? (
+              <Image
+                testID="pix-qr-image"
+                accessibilityLabel="QR Code do Pix"
+                source={{ uri: `data:image/png;base64,${pixDados.qrCodeBase64}` }}
+                style={styles.qrImage}
+              />
+            ) : (
+              <View style={styles.qrBox} testID="pix-qr-indisponivel">
+                <Feather name="alert-circle" size={20} color={C.textFaint} />
+                <Text style={styles.qrUnavailableText}>QR Code indisponível no momento</Text>
+                {!!pixDados?.ticketUrl && (
+                  <TouchableOpacity onPress={() => Linking.openURL(pixDados.ticketUrl!)}>
+                    <Text style={styles.ticketLink}>Ver no Mercado Pago</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <Text style={styles.valor}>{valorFormatted}</Text>
           </View>
 
-          <TouchableOpacity style={styles.copyRow} onPress={copyPix} activeOpacity={0.7}>
-            <Text style={styles.pixKeyText} numberOfLines={1}>{PIX_KEY}</Text>
-            <View style={styles.copyBtn}>
-              <Feather name="copy" size={15} color={C.primary} />
-              <Text style={styles.copyBtnText}>{copied ? 'Copiado' : 'Copiar'}</Text>
-            </View>
-          </TouchableOpacity>
+          {!!pixDados?.qrCode && (
+            <TouchableOpacity testID="pix-copiar" style={styles.copyRow} onPress={copyPix} activeOpacity={0.7}>
+              <Text style={styles.pixKeyText} numberOfLines={1}>{pixDados.qrCode}</Text>
+              <View style={styles.copyBtn}>
+                <Feather name="copy" size={15} color={C.primary} />
+                <Text style={styles.copyBtnText}>{copied ? 'Copiado' : 'Copiar'}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.waitBanner}>
             <View style={styles.spinner} />
@@ -189,54 +220,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.lineSoft,
     padding: 14,
-    position: 'relative',
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  qrPattern: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    bottom: 14,
-    opacity: 0.92,
-    borderRadius: 4,
-    backgroundColor: '#fff',
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.lineSoft,
   },
-  qrCornerTL: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    width: 46,
-    height: 46,
-    borderRadius: 8,
-    borderWidth: 7,
-    borderColor: C.text,
-    backgroundColor: '#fff',
-    zIndex: 2,
+  qrUnavailableText: {
+    fontSize: 12.5,
+    color: C.textFaint,
+    textAlign: 'center',
   },
-  qrCornerTR: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 46,
-    height: 46,
-    borderRadius: 8,
-    borderWidth: 7,
-    borderColor: C.text,
-    backgroundColor: '#fff',
-    zIndex: 2,
-  },
-  qrCornerBL: {
-    position: 'absolute',
-    bottom: 14,
-    left: 14,
-    width: 46,
-    height: 46,
-    borderRadius: 8,
-    borderWidth: 7,
-    borderColor: C.text,
-    backgroundColor: '#fff',
-    zIndex: 2,
+  ticketLink: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: C.primary,
   },
   valor: {
     fontSize: 24,

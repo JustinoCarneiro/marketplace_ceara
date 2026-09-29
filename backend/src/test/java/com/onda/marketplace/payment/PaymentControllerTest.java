@@ -40,7 +40,7 @@ class PaymentControllerTest {
     @Test
     void initiatePayment_validRequest_returns201() throws Exception {
         var dto = new TransactionDto(UUID.randomUUID(), SR_ID, BigDecimal.valueOf(250),
-                BigDecimal.valueOf(37.50), "PIX", "PENDENTE", Instant.now());
+                BigDecimal.valueOf(37.50), "PIX", "PENDENTE", Instant.now(), null, null, null);
         when(paymentService.initiate(any(), any(), any(), any())).thenReturn(dto);
 
         mvc.perform(post("/api/v1/service-requests/{id}/payment", SR_ID)
@@ -101,7 +101,27 @@ class PaymentControllerTest {
         mvc.perform(get("/api/v1/transactions/{srId}", SR_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusPagamento").value("PENDENTE"))
-                .andExpect(jsonPath("$.valorTotal").value(200));
+                .andExpect(jsonPath("$.valorTotal").value(200))
+                // PENDENTE recém-criada, antes do OutboxProcessor confirmar com o gateway —
+                // sem QR ainda, mas o campo existe no JSON (só o valor é nulo).
+                .andExpect(jsonPath("$.pixQrCode").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void getTransaction_comQrCodeGerado_devolveDadosDoPixNoJson() throws Exception {
+        when(requestRepository.isParticipante(any(), any())).thenReturn(true);
+        Transaction tx = new Transaction(SR_ID, BigDecimal.valueOf(200), BigDecimal.valueOf(30),
+                BigDecimal.valueOf(0.15), PaymentMethod.PIX, "key-2");
+        tx.setPixQrCode("00020126...6304068B");
+        tx.setPixQrCodeBase64("iVBORw0KGgo...");
+        tx.setPixTicketUrl("https://www.mercadopago.com.br/payments/1/ticket");
+        when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
+
+        mvc.perform(get("/api/v1/transactions/{srId}", SR_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pixQrCode").value("00020126...6304068B"))
+                .andExpect(jsonPath("$.pixQrCodeBase64").value("iVBORw0KGgo..."))
+                .andExpect(jsonPath("$.pixTicketUrl").value("https://www.mercadopago.com.br/payments/1/ticket"));
     }
 
     @Test

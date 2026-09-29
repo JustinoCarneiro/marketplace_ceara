@@ -117,6 +117,16 @@ class MercadoPagoGatewayService implements GatewayService {
             if (id == null || id.isBlank()) {
                 throw new IllegalStateException("Resposta do Mercado Pago sem id de pagamento");
             }
+
+            // QR/copia-e-cola pra exibir na tela de pagamento (etapa 3 do ADR) — formato
+            // confirmado ao vivo em memoria-tecnica/bugs/mercadopago-payer-email-forbidden-sandbox.md.
+            // `transaction` é o mesmo objeto que o OutboxProcessor salva logo depois de cobrar()
+            // devolver, então mutar aqui basta — sem mudar a assinatura do GatewayService.
+            JsonNode dadosPix = res.path("point_of_interaction").path("transaction_data");
+            transaction.setPixQrCode(dadosPix.path("qr_code").asText(null));
+            transaction.setPixQrCodeBase64(dadosPix.path("qr_code_base64").asText(null));
+            transaction.setPixTicketUrl(dadosPix.path("ticket_url").asText(null));
+
             log.info("Mercado Pago: cobrança Pix criada id={} status={} sr={}",
                     id, res.path("status").asText("?"), transaction.getServiceRequestId());
             return id;

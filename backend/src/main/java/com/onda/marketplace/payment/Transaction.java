@@ -39,6 +39,18 @@ public class Transaction {
     @Column(name = "gateway_transaction_id")
     private String gatewayTransactionId;
 
+    // Dados do Pix (QR/copia-e-cola) devolvidos pelo gateway na criação da cobrança —
+    // só existe pra metodo=PIX, depois que o OutboxProcessor confirma com o gateway
+    // (ver MercadoPagoGatewayService.cobrar()). Null até lá, e sempre pra CARTAO.
+    @Column(name = "pix_qr_code", length = 1000)
+    private String pixQrCode;
+
+    @Column(name = "pix_qr_code_base64", columnDefinition = "TEXT")
+    private String pixQrCodeBase64;
+
+    @Column(name = "pix_ticket_url", length = 500)
+    private String pixTicketUrl;
+
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
@@ -71,6 +83,9 @@ public class Transaction {
     public PaymentMethod getMetodo()         { return metodo; }
     public TransactionStatus getStatusPagamento() { return statusPagamento; }
     public String getGatewayTransactionId()  { return gatewayTransactionId; }
+    public String getPixQrCode()             { return pixQrCode; }
+    public String getPixQrCodeBase64()       { return pixQrCodeBase64; }
+    public String getPixTicketUrl()          { return pixTicketUrl; }
     public String getIdempotencyKey()        { return idempotencyKey; }
     public Instant getCreatedAt()            { return createdAt; }
 
@@ -113,4 +128,7 @@ public class Transaction {
     }
 
     public void setGatewayTransactionId(String v) { this.gatewayTransactionId = v; }
+    public void setPixQrCode(String v)         { this.pixQrCode = v; }
+    public void setPixQrCodeBase64(String v)   { this.pixQrCodeBase64 = v; }
+    public void setPixTicketUrl(String v)      { this.pixTicketUrl = v; }
 }
