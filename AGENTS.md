@@ -101,7 +101,7 @@ Não afirme que testes, CI, deploy ou sincronização passaram sem evidência.
 
 ## Revisão e handoff entre agentes
 
-Claude e Codex seguem este arquivo como núcleo comum. Um autor por PR; o outro
+Claude, Codex e Antigravity seguem este arquivo como núcleo comum. Um autor por PR; o outro
 revisa o diff quando o risco (R1/R2) exige, com o mínimo suficiente (contrato,
 diff, logs de teste). Quando a cota de um agente acaba, o outro assume por
 handoff — protocolo na metodologia OndaDev 3.0 (`ONDA_VERSION`).
