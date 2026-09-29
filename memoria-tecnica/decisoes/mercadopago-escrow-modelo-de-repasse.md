@@ -445,9 +445,30 @@ dia; o suporte estava certo).
 
 Ofereceram ajudar a mapear erros com 1–2 respostas reais do modo de teste (sem dados pessoais).
 
+### Tentativa em modo de teste (2026-09-29): 403 por política — a autorização comercial é exigida até no teste
+
+Com o Access Token de teste do app (válido: `GET /users/me` → 200) e `X-Test-Token: true`,
+tanto `POST /v1/transaction-intents/process` quanto `GET /v1/transaction-intents/{id}` (id
+qualquer) devolvem `403` `{"blocked_by":"PolicyAgent","code":"PA_UNAUTHORIZED_RESULT_FROM_POLICIES",
+"message":"At least one policy returned UNAUTHORIZED."}`. Não depende do corpo (com/sem
+`type: current`; cenários `new` e `processed`). `x-request-id:
+487fd3d7-f6ea-4afb-8268-413b89bb0560` (2026-09-29T21:26:54Z, app `5313375069234064`).
+
+**Leitura:** o recurso `transaction-intents` está bloqueado por aplicação até a área comercial
+autorizar — **não há sandbox sem autorização**. Consequência: o passo de "testes de contrato
+com respostas reais" fica bloqueado, e **não implementar `liberar()` só com mocks** (o mock
+validaria a nossa própria suposição do contrato — o padrão "teste que mente"). O trabalho
+técnico só continua depois da autorização.
+
+**Chamado aberto (2026-09-29):** pedido de autorização comercial do Money Out registrado no
+suporte do MP (número no formato `WCS-XXXXX` chega por e-mail — **preencher aqui quando
+vier**). Pedido: encaminhar à área comercial; dizer se **PF** pode ser autorizada no piloto;
+quais dados/documentos a análise exige; prazo estimado. Acompanhamento: Central de
+atendimento (`developers/pt/support/center/tickets`). Sem resposta, o repasse segue manual.
+
 ### Plano de implementação do repasse automático (proposto — a aprovar; R2)
 
-Só depois de: (a) rodar cenários no modo de teste com o token de teste e (b) revisão cruzada
+Só depois de: (a) rodar cenários no modo de teste com o token de teste (**hoje bloqueado — ver a tentativa acima**) e (b) revisão cruzada
 (Codex) do plano/diff. Produção só depois da PJ + autorização comercial + chave pública
 Ed25519 enviada ao MP.
 
