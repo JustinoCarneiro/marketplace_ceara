@@ -71,7 +71,7 @@ cors:
 marketplace:
   webhook:
     secret: ${MARKETPLACE_WEBHOOK_SECRET}          # obrigatório em produção — segredo compartilhado com gateway
-  comissao: ${MARKETPLACE_COMISSAO:0.15}           # percentual padrão (15%)
+  comissao: ${MARKETPLACE_COMISSAO:0.10}           # percentual padrão (10% no piloto; sai do repasse ao prestador)
   outbox:
     delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
   gateway:

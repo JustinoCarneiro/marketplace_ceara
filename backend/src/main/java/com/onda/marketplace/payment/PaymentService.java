@@ -31,7 +31,7 @@ public class PaymentService {
             ServiceRequestRepository requestRepository,
             ProposalRepository proposalRepository,
             UserRepository userRepository,
-            @Value("${marketplace.comissao:0.15}") BigDecimal percentualComissao) {
+            @Value("${marketplace.comissao:0.10}") BigDecimal percentualComissao) {
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
         this.requestRepository     = requestRepository;

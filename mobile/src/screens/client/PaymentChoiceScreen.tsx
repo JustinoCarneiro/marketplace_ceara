@@ -14,15 +14,13 @@ import { useAuthStore } from '../../store/auth';
 type RouteProps = RouteProp<ClientStackParams, 'PaymentChoice'>;
 type Method = 'pix' | 'card';
 
-const COMISSAO = 0.1;
-
 export default function PaymentChoiceScreen() {
   const nav = useNavigation<ClientNavProp>();
   const route = useRoute<RouteProps>();
   const token = useAuthStore(s => s.accessToken);
+  // O cliente paga exatamente o valor da proposta: a cobrança Pix é `valor`. A comissão da
+  // plataforma (10% no piloto) sai do repasse ao prestador e nunca é somada nesta tela.
   const { requestId, valor, prestadorNome } = route.params;
-  const comissao = Math.round(valor * COMISSAO * 100) / 100;
-  const total = valor + comissao;
 
   const [method, setMethod] = useState<Method>('pix');
   const [loading, setLoading] = useState(false);
@@ -91,9 +89,9 @@ export default function PaymentChoiceScreen() {
         return;
       }
       if (method === 'pix') {
-        nav.replace('PaymentPix', { requestId, valor: total });
+        nav.replace('PaymentPix', { requestId, valor });
       } else {
-        nav.replace('PaymentCard', { requestId, valor: total });
+        nav.replace('PaymentCard', { requestId, valor });
       }
     } catch {
       setPayError('Falha de conexão. Tente novamente.');
@@ -123,14 +121,10 @@ export default function PaymentChoiceScreen() {
             <Text style={styles.summaryLabel}>{prestadorNome ? `Serviço · ${prestadorNome}` : 'Serviço'}</Text>
             <Text style={styles.summaryVal}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Comissão Onda (10%)</Text>
-            <Text style={styles.summaryVal}>R$ {comissao.toFixed(2).replace('.', ',')}</Text>
-          </View>
           <View style={styles.divider} />
           <View style={styles.summaryRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalVal}>R$ {total.toFixed(2).replace('.', ',')}</Text>
+            <Text style={styles.totalVal}>R$ {valor.toFixed(2).replace('.', ',')}</Text>
           </View>
         </View>
 
@@ -194,7 +188,7 @@ export default function PaymentChoiceScreen() {
           {loading ? (
             <ActivityIndicator color={color.textOnAccent} />
           ) : (
-            <Text style={styles.ctaText}>Pagar R$ {total.toFixed(2).replace('.', ',')}</Text>
+            <Text style={styles.ctaText}>Pagar R$ {valor.toFixed(2).replace('.', ',')}</Text>
           )}
         </TouchableOpacity>
       </View>

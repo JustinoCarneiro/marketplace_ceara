@@ -58,7 +58,9 @@ class MercadoPagoGatewayServiceTest {
                 .andExpect(header("Authorization", "Bearer TEST-TOKEN"))
                 .andExpect(header("X-Idempotency-Key", "idem-key-123"))
                 .andExpect(jsonPath("$.payment_method_id").value("pix"))
-                .andExpect(jsonPath("$.transaction_amount").exists())
+                // O Pix cobra exatamente o valor total da transação (o da proposta) — sem
+                // comissão somada por cima. Antes só se checava que o campo existia.
+                .andExpect(jsonPath("$.transaction_amount").value(250.00))
                 .andExpect(jsonPath("$.payer.email").value("cliente@example.com"))
                 .andExpect(jsonPath("$.external_reference").exists())
                 .andExpect(jsonPath("$.notification_url").value(

@@ -87,6 +87,10 @@ test('cliente aceita a proposta e paga com Pix (confirmando identidade no 1º pa
   await page.getByTestId('btn-aceitar-proposta').first().click();
 
   await expect(page.getByTestId('btn-pagar')).toBeVisible({ timeout: 8000 });
+  // O cliente paga o valor da proposta (R$ 150). A comissão sai do repasse ao prestador e
+  // nunca aparece somada na tela do cliente — antes a tela mostrava R$ 165 e o Pix cobrava 150.
+  await expect(page.getByText('Pagar R$ 150,00')).toBeVisible();
+  await expect(page.getByText(/Comissão/)).toHaveCount(0);
   await page.getByTestId('btn-pagar').click();
 
   // Antifraude Camada 2: 1º pagamento exige confirmar identidade (CPF) antes de seguir.
@@ -95,6 +99,8 @@ test('cliente aceita a proposta e paga com Pix (confirmando identidade no 1º pa
   await page.getByTestId('btn-confirmar-cpf').click();
 
   await expect(page.getByTestId('btn-paguei')).toBeVisible({ timeout: 8000 });
+  // O valor exibido acima do QR é o valor cobrado.
+  await expect(page.getByText('R$ 150,00', { exact: true }).last()).toBeVisible();
   await page.getByTestId('btn-paguei').click();
 
   await expect(page.getByText('Pagamento retido com segurança')).toBeVisible({ timeout: 8000 });

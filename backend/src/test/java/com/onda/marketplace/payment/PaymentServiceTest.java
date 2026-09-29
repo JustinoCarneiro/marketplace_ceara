@@ -75,6 +75,31 @@ class PaymentServiceTest {
     }
 
     @Test
+    void initiate_cobraOValorDaProposta_eAComissaoSaiDoRepasseDoPrestador() {
+        // Piloto: 10%. O cliente paga a proposta inteira (R$ 200); a comissão (R$ 20) é
+        // retida da parte do prestador no repasse — não é somada à cobrança.
+        var servico = new PaymentService(
+                transactionRepository, outboxRepository,
+                requestRepository, proposalRepository,
+                userRepository, new BigDecimal("0.10"));
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
+                .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(200))));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        servico.initiate(sr.getId(), new InitiatePaymentRequest("PIX"), "idem-comissao", CLIENTE_ID);
+
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(captor.capture());
+        assertThat(captor.getValue().getValorTotal()).isEqualByComparingTo("200.00");
+        assertThat(captor.getValue().getValorComissao()).isEqualByComparingTo("20.00");
+    }
+
+    @Test
     void initiate_outboxTipoEStatusCorretos() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
