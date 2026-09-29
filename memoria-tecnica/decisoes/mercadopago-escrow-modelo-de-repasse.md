@@ -461,10 +461,21 @@ validaria a nossa própria suposição do contrato — o padrão "teste que ment
 técnico só continua depois da autorização.
 
 **Chamado aberto (2026-09-29):** pedido de autorização comercial do Money Out registrado no
-suporte do MP (número no formato `WCS-XXXXX` chega por e-mail — **preencher aqui quando
-vier**). Pedido: encaminhar à área comercial; dizer se **PF** pode ser autorizada no piloto;
+suporte do MP (**WCS-52692**). Pedido: encaminhar à área comercial; dizer se **PF** pode ser autorizada no piloto;
 quais dados/documentos a análise exige; prazo estimado. Acompanhamento: Central de
 atendimento (`developers/pt/support/center/tickets`). Sem resposta, o repasse segue manual.
+
+**Resposta inicial ao chamado WCS-52692 (2026-09-29) — triagem, não a decisão:**
+- Confirmam o diagnóstico: o `403` **não** é problema de token nem de integração; é de natureza
+  comercial. `/v1/transaction-intents/process` faz parte do Money Out, que exige **habilitação
+  comercial prévia, inclusive em homologação**; sem ela o PolicyAgent bloqueia todas as chamadas,
+  independente de configuração técnica.
+- **PF:** não tem habilitação automática. A elegibilidade para piloto (inclusive operar sem CNPJ
+  enquanto a empresa é constituída) é avaliada caso a caso pela equipe comercial — o canal de
+  suporte **não confirma nem nega**.
+- Documentos exigidos e prazo de análise: definidos pela equipe de Money Out, indisponíveis nesse canal.
+- Caso categorizado como **escalada para a equipe comercial de Money Out**. **Aguardando o retorno
+  deles** (elegibilidade PF, documentação, prazo). Nada a enviar enquanto isso.
 
 ### Plano de implementação do repasse automático (proposto — a aprovar; R2)
 
