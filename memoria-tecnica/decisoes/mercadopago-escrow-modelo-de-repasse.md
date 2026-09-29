@@ -165,14 +165,70 @@ travou num erro genérico do painel deles, e o humano decidiu **não ativar agor
 (2026-09-14). Isso é uma pausa deliberada, não um bloqueio esquecido — não reabrir
 sozinho; só retomar quando o humano pedir.
 
-Quando retomar: (1) ativar credencial de produção (recriar a aplicação escolhendo
-"API de Orders" no assistente, se o erro genérico persistir — ver nota do
-`confidencial-calcados`); (2) rodar o roteiro de sandbox documentado no handoff;
-(3) só depois construir a tela de QR/copia-e-cola do Pix pro cliente (evitar
-adivinhar o formato da resposta do MP sem ver uma real).
+Quando retomar: (1) ativar credencial de produção; (2) rodar o roteiro de sandbox
+com essa mesma credencial (não existe credencial `TEST-` pra esse fluxo); (3) só
+depois construir a tela de QR/copia-e-cola do Pix pro cliente (evitar adivinhar o
+formato da resposta do MP sem ver uma real).
+
+### Retomada (2026-09-28) — wizard e roteiro de sandbox corrigidos com achado cross-projeto
+
+A menção anterior a "recriar a aplicação escolhendo API de Orders" estava **errada
+pro nosso caso** — vinha do bug `DXT40` do `confidencial-calcados`
+(`memoria-tecnica/decisoes/credenciais-mercado-pago-onboarding.md` daquele projeto),
+que integra via **Checkout Pro** (redireciona pro site do MP). Nosso backend
+(`MercadoPagoGatewayService.java:107`) chama `POST /v1/payments` **direto** —
+perfil **Checkout Transparente**. Uma nota de 2026-09-13 no `onda-starter`
+(`memoria-tecnica/decisoes/mercadopago-criar-aplicacao-checkout-transparente.md`)
+documenta exatamente esse perfil e é explícita: escolher "API de Orders" aqui
+exige reescrever a integração contra outro contrato (`/v1/orders`) e desalinha os
+eventos de webhook.
+
+**Wizard "Criar aplicação" — resposta certa pro nosso caso:**
+- Tipo de pagamento: Pagamentos online
+- Como criou a loja: Com um desenvolvimento próprio
+- Solução de pagamento: **Checkout Transparente**
+- API: **API de Pagamentos** (a "versão anterior" no wizard — não a recomendada)
+- Webhook a assinar: **"Pagamentos (legacy)"** — não "Order (Mercado Pago)"
+
+> **Superado no mesmo dia — não seguir o roteiro abaixo.** Em `/v1/payments`,
+> `payer.email` `@testuser.com` dá `403/4390` e Pix não tem aprovação fictícia; a
+> validação foi feita com transação real controlada (ver "Resolvido" mais abaixo e
+> [[mercadopago-payer-email-forbidden-sandbox]]). Mantido só como histórico.
+
+**Roteiro de sandbox — mecânica real (`onda-starter/memoria-tecnica/bugs/mercadopago-sandbox-exige-credencial-de-producao.md`,
+achado 2026-09-13):** credencial `TEST-` **não é suportada** em `POST /v1/payments`
+(a própria API recusa com `invalid_credentials`). O sandbox desse fluxo é: usar a
+credencial de **produção** (`APP_USR-...`) + `payer.email` de um **usuário de
+teste** (`test_user_...@testuser.com`, criado em Contas de teste ou
+`POST /users/test_user`) + `payer.first_name: "APRO"` pra aprovação automática —
+o que torna a transação fictícia é o comprador ser de teste, não a credencial.
+Nunca usar `payer.email` com domínio `.test`/`.example` (o MP rejeita com 400 —
+`onda-starter/memoria-tecnica/bugs/mercadopago-sandbox-rejeita-email-dominio-test.md`).
+Ativar a credencial de produção exige preencher "Setor" e "Site" no painel (serve
+URL temporária/preview; trocar quando o domínio real existir).
+
+Variáveis a setar (`application.yml:87-93`, nunca no Git): `MERCADOPAGO_ENABLED=true`,
+`MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `MERCADOPAGO_NOTIFICATION_URL`.
+
+**Atualização (2026-09-28) — sandbox travado num 403 novo, chamado de suporte pronto:**
+credencial de produção ativada (app "Onda Marketplace", appId `5313375069234064`),
+mas `POST /v1/payments` recusa qualquer comprador de teste com `403 Payer email
+forbidden` (code 4390) — detalhe completo, causas descartadas e corpo do chamado
+de suporte em [[mercadopago-payer-email-forbidden-sandbox]].
+
+**Resolvido no mesmo dia (2026-09-28):** o 403 era restrição documentada do MP a
+`payer.email` `@testuser.com` em `/v1/payments` — e Pix fictício não tem
+aprovação simulada nessa API. Etapa 2 do "Quando retomar" cumprida com uma
+**transação real controlada de R$ 1** (cobrança → pagamento → reembolso), com as
+4 notificações reais de webhook validando a assinatura no verificador de
+produção. Etapa 3 destravada: formato real da resposta Pix conhecido
+(`point_of_interaction.transaction_data.qr_code` / `qr_code_base64` /
+`ticket_url`). Pendências (URL definitiva do webhook no painel, nome do
+recebedor, tarifa no reembolso) no arquivo do bug.
 
 ## Ligado a
 
+- [[mercadopago-payer-email-forbidden-sandbox]]
 - [[escrow-guardas-gateway-simulado]]
 - [[pagamento-confirmacao-fake]]
 - [[testes-que-mentem]]
