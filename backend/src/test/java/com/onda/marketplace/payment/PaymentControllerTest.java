@@ -131,4 +131,15 @@ class PaymentControllerTest {
         mvc.perform(get("/api/v1/transactions/{srId}", SR_ID))
                 .andExpect(status().isUnprocessableEntity());
     }
+
+    @Test
+    void comissao_devolveOPercentualVigenteDaPlataforma() throws Exception {
+        // O app do prestador mostra "Você recebe após comissão" com este número. Antes era
+        // uma constante 0.1 escrita na tela, que divergia do backend a cada mudança de config.
+        when(paymentService.percentualComissao()).thenReturn(new BigDecimal("0.10"));
+
+        mvc.perform(get("/api/v1/payments/comissao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.percentualComissao").value(0.10));
+    }
 }

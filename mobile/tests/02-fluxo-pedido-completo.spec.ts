@@ -62,9 +62,26 @@ test('prestador vê o pedido em Disponíveis e envia proposta', async ({ page })
   await login(page, PRESTADOR.email, PRESTADOR.senha);
   await expect(page.getByText('Pedidos disponíveis')).toBeVisible({ timeout: 8000 });
 
+  // "Você recebe após comissão" tem que sair do percentual que o BACKEND informa
+  // (GET /payments/comissao), não de uma constante na tela — antes era `COMISSAO = 0.1`
+  // escrito no app, e mudar MARKETPLACE_COMISSAO deixava a tela prometendo o valor errado.
+  // A rota deixa a chamada REAL ao backend acontecer (prova rota, token do prestador e nome
+  // do campo) e troca só o número por 25%: um app que ignorasse a resposta e usasse 10% fixo
+  // mostraria 135,00 em vez de 112,50.
+  let comissaoNoBackend: { status: number; percentual: unknown } | undefined;
+  await page.route('**/payments/comissao', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const resposta = await route.fetch();
+    const corpo = await resposta.json().catch(() => ({}));
+    comissaoNoBackend = { status: resposta.status(), percentual: corpo.percentualComissao };
+    await route.fulfill({ response: resposta, json: { percentualComissao: 0.25 } });
+  });
+
   await page.getByTestId('btn-propor').first().click();
   await expect(page.getByText('SEU VALOR')).toBeVisible({ timeout: 8000 });
   await page.getByTestId('input-valor').fill('150');
+  await expect(page.getByTestId('proposta-voce-recebe')).toHaveText('R$ 112,50');
+  expect(comissaoNoBackend).toEqual({ status: 200, percentual: expect.any(Number) });
   // prazo já vem preenchido com "2" por padrão — só envia.
   const horario = futureHorarioProposto();
   await page.getByTestId('input-data-proposta').fill(horario.data);

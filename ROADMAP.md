@@ -215,9 +215,11 @@ Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação ad
 - `GET /api/v1/transactions/{serviceRequestId}` (US07/M06) — visão da transação para participantes do pedido.
 - `POST /api/v1/services/ai/suggest` (US14/M04) — endpoint de IA com fallback manual obrigatório.
 
-Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf` (`admin/metrics` aceita `de=`/`ate=`, mas não `bairro=` — ver US23 pendente). `nearby` **não** está alinhado: o parâmetro real é `raio` (metros, não `raioKm`) — corrigido no mobile em 2026-08-08 (ver M03 abaixo).
+Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf` (`admin/metrics` aceita `de=`, `ate=` e `bairro=` — este último recorta só pedidos/taxa de conclusão, ver M10; os relatórios `.csv|.pdf` aceitam só `bairro=`, e o painel ainda não tem seletor de período). `nearby` **não** está alinhado: o parâmetro real é `raio` (metros, não `raioKm`) — corrigido no mobile em 2026-08-08 (ver M03 abaixo).
 
 **Corrigido em 2026-08-09** (docs/PENDENCIAS_JURIDICAS.md item 3): `register/client` e `register/provider` agora exigem `aceitouTermos:true` no corpo (422 sem isso) e gravam prova de aceite em `terms_acceptance` (ver tabela na seção 1).
+
+**Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
 
 ### M01 — Identidade & Auth
 ```
@@ -306,6 +308,7 @@ POST /api/v1/payments              (ROLE_CLIENT)   Header: Idempotency-Key (obri
 
 POST /api/v1/payments/webhook      (gateway → plataforma)   # idempotente, dirige o estado
 GET  /api/v1/transactions/{serviceRequestId}   200 { statusPagamento, valorTotal, valorComissao }
+GET  /api/v1/payments/comissao     200 { percentualComissao }   # fração (0.10 = 10%); qualquer autenticado
 POST /api/v1/services/requests/{id}/disputes   req:{ motivo } → 200 { status:"EM_DISPUTA" }
 POST /api/v1/disputes/{id}/resolve (ROLE_ADMIN) req:{ resolucao:"LIBERADO"|"REEMBOLSADO" }
 # Conclusão confirmada → Outbox dispara split → transaction LIBERADO. SEM @Transactional sobre o gateway.

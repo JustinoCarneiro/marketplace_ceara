@@ -72,6 +72,16 @@ public class PaymentController {
                         "Transação não encontrada para este pedido."));
     }
 
+    /**
+     * Percentual de comissão vigente (0.10 = 10%). É informação da própria plataforma (consta
+     * nos Termos), aberta a qualquer usuário autenticado: o app do prestador precisa dela pra
+     * mostrar "Você recebe após comissão" sem repetir o número numa constante na tela.
+     */
+    @GetMapping("/payments/comissao")
+    public ComissaoDto comissao() {
+        return new ComissaoDto(paymentService.percentualComissao());
+    }
+
     // C-1: gateway webhook valida segredo compartilhado para evitar forjamento de status
     @PostMapping("/payments/webhook")
     public ResponseEntity<Void> webhook(

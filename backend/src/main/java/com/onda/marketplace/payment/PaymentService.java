@@ -40,6 +40,11 @@ public class PaymentService {
         this.percentualComissao    = percentualComissao;
     }
 
+    /** Percentual de comissão vigente (0.10 = 10%) — o mesmo que a cobrança aplica. */
+    public BigDecimal percentualComissao() {
+        return percentualComissao;
+    }
+
     /**
      * Inicia o pagamento: escreve Transaction + OutboxEvent em UMA transação de banco.
      * O gateway NÃO é chamado aqui — é chamado pelo OutboxProcessor (sem @Transactional).

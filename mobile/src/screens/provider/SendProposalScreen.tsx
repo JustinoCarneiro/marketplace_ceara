@@ -1,5 +1,5 @@
 import { API_BASE } from '../../api/config';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput,
   TouchableOpacity, ActivityIndicator,
@@ -11,10 +11,9 @@ import { Feather } from '@expo/vector-icons';
 import type { ProviderNavProp, ProviderStackParams } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
+import { fetchPercentualComissao, valorAposComissao } from '../../api/comissao';
 
 type RouteProps = RouteProp<ProviderStackParams, 'SendProposal'>;
-
-const COMISSAO = 0.1;
 
 export default function SendProposalScreen() {
   const nav = useNavigation<ProviderNavProp>();
@@ -27,8 +26,19 @@ export default function SendProposalScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // O percentual vem do backend — o mesmo que a cobrança aplica. Era uma constante 0.1 aqui;
+  // mudar MARKETPLACE_COMISSAO deixava esta tela prometendo um valor que o repasse não pagava.
+  const [percentual, setPercentual] = useState<number | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    fetchPercentualComissao(token).then(p => { if (ativo) setPercentual(p); });
+    return () => { ativo = false; };
+  }, [token]);
+
   const valorNum = parseFloat(valor.replace(',', '.')) || 0;
-  const recebeNum = valorNum * (1 - COMISSAO);
+  // Sem o percentual (rede ou backend fora) a linha some em vez de chutar um número: enviar a
+  // proposta não depende dele — quem aplica a comissão de verdade é o backend.
+  const recebeNum = percentual == null ? null : valorAposComissao(valorNum, percentual);
 
   // US15: o cliente decide entre propostas também pelo horário — sem isso não dava pra
   // calcular pontualidade nenhuma (não existe "horário combinado" em lugar nenhum do
@@ -166,10 +176,10 @@ export default function SendProposalScreen() {
           </View>
 
           {/* Recebe após comissão */}
-          {valorNum > 0 && (
+          {valorNum > 0 && recebeNum != null && (
             <View style={styles.comissaoRow}>
               <Text style={styles.comissaoLabel}>Você recebe após comissão</Text>
-              <Text style={styles.comissaoVal}>R$ {recebeNum.toFixed(2).replace('.', ',')}</Text>
+              <Text testID="proposta-voce-recebe" style={styles.comissaoVal}>R$ {recebeNum.toFixed(2).replace('.', ',')}</Text>
             </View>
           )}
 

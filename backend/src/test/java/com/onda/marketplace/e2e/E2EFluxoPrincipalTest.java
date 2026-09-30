@@ -293,9 +293,28 @@ class E2EFluxoPrincipalTest {
                 .then()
                 .statusCode(anyOf(is(200), is(201)))
                 .body("statusPagamento", equalTo("PENDENTE"))
+                // profile e2e define marketplace.comissao=0.15: 15% de 250 = 37.50 na cobrança
+                .body("valorComissao", equalTo(37.5f))
                 .extract().response();
 
         transactionId = resp.path("id");
+
+        // O percentual que o app do prestador mostra ("Você recebe após comissão") é o MESMO
+        // que a cobrança acabou de aplicar — uma fonte só. O prestador consulta com o próprio
+        // token: prova que a rota está liberada pra ele no SecurityConfig real (o slice
+        // @WebMvcTest libera tudo e não pegaria isso); sem token continua fechada.
+        given()
+                .header("Authorization", "Bearer " + tokenPrestador)
+                .when()
+                .get("/api/v1/payments/comissao")
+                .then()
+                .statusCode(200)
+                .body("percentualComissao", equalTo(0.15f));
+        given()
+                .when()
+                .get("/api/v1/payments/comissao")
+                .then()
+                .statusCode(401);
 
         // A cobrança é despachada ao gateway de forma assíncrona (OutboxProcessor, fora de
         // @Transactional) — o gateway_transaction_id só existe DEPOIS disso, nunca na
