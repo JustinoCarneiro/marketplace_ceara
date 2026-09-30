@@ -3,6 +3,10 @@ import { registerCliente, registerPrestador, login, futureHorarioProposto } from
 
 // Um cliente e um prestador dedicados a este arquivo — os testes rodam em sequência
 // (ordem de declaração, workers:1) e compartilham o único pedido criado no 2º teste.
+// Serial: no retry o Playwright refaz o grupo INTEIRO num worker novo. Sem isso rodava só o
+// teste que falhou; o worker novo reavalia o arquivo, `ts` muda e o login procurava contas
+// que nunca foram criadas (422) — o retry falhava por outro motivo e escondia o erro real.
+test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
 
 // users.cpf_hash é UNIQUE (antifraude Camada 2) — CPF fixo colide entre reruns contra o
@@ -44,8 +48,10 @@ test('cliente cria o pedido e publica (revisão com IA / fallback manual)', asyn
   await page.getByText('Continuar', { exact: true }).click();
 
   // AiAssistantScreen: "Analisando seu pedido…" -> formulário com o CTA de publicar.
-  // Fallback manual garante que o CTA aparece mesmo se a IA não sugerir nada (CLAUDE.md).
-  await expect(page.getByText('Confirmar e publicar pedido')).toBeVisible({ timeout: 15000 });
+  // Fallback manual garante que o formulário aparece mesmo se a IA não sugerir nada (CLAUDE.md).
+  // Espera o FORMULÁRIO, não o CTA: o botão existe (desabilitado) desde o "Analisando…" e um
+  // clique nele é engolido — no backend frio a IA demora e o teste clicava cedo demais.
+  await expect(page.getByText('Descrição sugerida')).toBeVisible({ timeout: 15000 });
   await page.getByText('Confirmar e publicar pedido', { exact: true }).click();
 
   await expect(page.getByText('Pedido criado!')).toBeVisible({ timeout: 10000 });

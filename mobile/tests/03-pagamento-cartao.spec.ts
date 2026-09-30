@@ -5,6 +5,9 @@ import { registerCliente, registerPrestador, login, futureHorarioProposto } from
 // sido exercitada por E2E nenhum (só Pix, em 02-fluxo-pedido-completo.spec.ts). O botão
 // "Pagar" chamava só um setTimeout fake e navegava pra "Pagamento retido" sem checar nada —
 // corrigido pra pollar a confirmação real (mesmo helper pollPaymentConfirmed do Pix).
+// Serial: no retry o grupo inteiro roda de novo (ver 02-fluxo-pedido-completo.spec.ts) — sem
+// isso o worker novo reavalia `ts` e o login procura contas que nunca foram criadas.
+test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
 
 function fakeCpf(seed: number): string {
@@ -37,7 +40,9 @@ test('cliente cria pedido, prestador propõe, cliente aceita e chega no pagament
   await page.getByText('Hidráulica', { exact: true }).last().click();
   await page.getByPlaceholder(/A tomada da cozinha solta faísca/).fill(DESCRICAO);
   await page.getByText('Continuar', { exact: true }).click();
-  await expect(page.getByText('Confirmar e publicar pedido')).toBeVisible({ timeout: 15000 });
+  // Espera o formulário (análise da IA concluída), não o CTA: ele nasce desabilitado e um
+  // clique nessa janela é engolido (ver 02-fluxo-pedido-completo.spec.ts).
+  await expect(page.getByText('Descrição sugerida')).toBeVisible({ timeout: 15000 });
   await page.getByText('Confirmar e publicar pedido', { exact: true }).click();
   await expect(page.getByText('Pedido criado!')).toBeVisible({ timeout: 10000 });
 });
