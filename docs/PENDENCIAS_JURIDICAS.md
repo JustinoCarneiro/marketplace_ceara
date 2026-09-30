@@ -56,10 +56,12 @@ Os rascunhos referenciam placeholders que precisam ser preenchidos antes do lan�
 - `privacidade@[domínio a definir]`
 - `[nome a definir]` (DPO)
 
-> **Também bloqueia o repasse automático (2026-09-29):** o Mercado Pago só libera o
-> Money Out (`POST /v1/payouts`) mediante autorização comercial e perguntou se a conta
-> de origem é PJ ou PF — hoje é pessoa física. A PJ que operar o marketplace precisa
-> existir para esse pedido. Ver `memoria-tecnica/decisoes/mercadopago-escrow-modelo-de-repasse.md`.
+> **Também trava o repasse automático (2026-09-29):** o Mercado Pago só libera o
+> Money Out (`POST /v1/transaction-intents/process`) mediante autorização comercial
+> (chamado WCS-52692) e perguntou se a conta de origem é PJ ou PF — hoje é pessoa
+> física. O MP não disse que PF é recusada, mas o pedido costuma incluir CNPJ/razão
+> social, então a PJ que operar o marketplace provavelmente é necessária. Ver
+> `memoria-tecnica/decisoes/mercadopago-escrow-modelo-de-repasse.md`.
 
 ---
 

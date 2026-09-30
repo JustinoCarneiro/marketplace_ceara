@@ -113,11 +113,23 @@ Escolhido pelo humano em 2026-09-10 para o piloto (1 bairro, urgência de lança
 - Só **Pix** no piloto. Cartão fica pra depois (`PaymentMethod.CARTAO` já existe no
   enum, sem fluxo real).
 
-**Dívida técnica assumida:** migrar pro **Modelo B** (marketplace MP nativo, sem
-custódia pela plataforma) antes de escalar pra mais bairros ou antes de captação —
-o que vier primeiro. Registrar aqui quando isso for repriorizado.
-Gatilho de reavaliação: veto do advogado/investidor a custódia transitória, ou 2º
-bairro entrando.
+**Dívida técnica assumida — OBSOLETA desde 2026-09-29.** O texto original (2026-09-10)
+dizia: *"migrar pro Modelo B (marketplace MP nativo, sem custódia pela plataforma)
+antes de escalar pra mais bairros ou antes de captação"*. O suporte do MP confirmou por
+escrito que o Split **não retém Pix** (seção "Resposta do suporte MP (2026-09-29)",
+abaixo): o Modelo B não entrega escrow com Pix, então não há migração a fazer — a
+alternativa foi **descartada**, não adiada. No Mercado Pago, o único caminho que retém
+Pix é o próprio Modelo A (a plataforma recebe e repassa).
+
+O que continua em aberto de verdade:
+
+- **Custódia transitória** segue sendo da plataforma. O gatilho de reavaliação original
+  (veto do advogado/investidor à custódia, ou 2º bairro entrando) continua valendo, mas
+  agora aponta pra reavaliar a **estrutura** (PJ, arranjo de pagamento, parceiro
+  licenciado) com o advogado — ver `docs/PENDENCIAS_JURIDICAS.md` — e não pra trocar de
+  modelo dentro do MP.
+- **Repasse automático** depende da habilitação do Money Out (chamado WCS-52692); o
+  plano está em "Plano de implementação do repasse automático", no fim deste ADR.
 
 Itens comuns aos dois modelos (não dependem da escolha, podem começar já):
 
@@ -148,8 +160,10 @@ Itens comuns aos dois modelos (não dependem da escolha, podem começar já):
   false, `@PostConstruct` que loga aviso).
 - Go-live precisa só de credencial de **produção aprovada** do MP; todo o
   desenvolvimento e QA rodam em **sandbox** sem bloquear.
-- Se for Modelo B: token do vendedor é credencial de terceiro → cofre/cifra, nunca em
-  log, refresh antes de expirar.
+- ~~Se for Modelo B: token do vendedor é credencial de terceiro → cofre/cifra, nunca em
+  log, refresh antes de expirar.~~ Sem efeito: Modelo B descartado em 2026-09-29 (ver
+  "Dívida técnica assumida" acima). Ficou o princípio, caso OAuth de vendedor volte por
+  outro motivo: token de terceiro nunca em log, sempre cifrado.
 
 ## Estado atual (2026-09-14) — código pronto, validação ao vivo pausada por decisão do humano
 
