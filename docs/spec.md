@@ -252,6 +252,9 @@ Como **Admin**, quero manter o catálogo de categorias, para refletir os serviç
 ### US29 — Exportação de relatórios
 Como **Admin**, quero exportar relatórios, para análise externa e prestação de contas.
 - **Dado** o dashboard ou uma listagem (transações, disputas, pedidos), **quando** aciono exportar, **então** recebo o arquivo em **CSV** (e **PDF** para o resumo de métricas) respeitando os filtros aplicados.
+  - (2026-10-01) Filtros: **período** (pela data de criação) e **bairro**. O PDF traz no cabeçalho
+    o período e o bairro usados; como no dashboard (US23), só os números de pedidos respeitam o
+    bairro, e o PDF avisa isso. O PDF exportado do dashboard usa exatamente o período da tela.
 - **Dado** dados sensíveis (LGPD), **então** o relatório não expõe CPF nem dados além do necessário.
 
 ### US30 — Alertas operacionais ao Admin

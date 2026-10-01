@@ -215,7 +215,7 @@ Os contratos abaixo são o **desenho API-First da Fase 3**. A implementação ad
 - `GET /api/v1/transactions/{serviceRequestId}` (US07/M06) — visão da transação para participantes do pedido.
 - `POST /api/v1/services/ai/suggest` (US14/M04) — endpoint de IA com fallback manual obrigatório.
 
-Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf` (`admin/metrics` aceita `de=`, `ate=` e `bairro=` — este último recorta só pedidos/taxa de conclusão, ver M10; os relatórios `.csv|.pdf` aceitam só `bairro=`, e o painel ainda não tem seletor de período). `nearby` **não** está alinhado: o parâmetro real é `raio` (metros, não `raioKm`) — corrigido no mobile em 2026-08-08 (ver M03 abaixo).
+Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications`, `admin/disputes`, `admin/transactions`, `admin/outbox(+reprocess)`, `admin/reports/*.csv|metrics.pdf` (`admin/metrics` aceita `de=`, `ate=` e `bairro=` — este último recorta só pedidos/taxa de conclusão, ver M10; os relatórios `.csv|.pdf` aceitam `de=`, `ate=` e `bairro=` desde 2026-10-01 — US29 — e a tela de Relatórios tem seletor de período). `nearby` **não** está alinhado: o parâmetro real é `raio` (metros, não `raioKm`) — corrigido no mobile em 2026-08-08 (ver M03 abaixo).
 
 **Corrigido em 2026-08-09** (docs/PENDENCIAS_JURIDICAS.md item 3): `register/client` e `register/provider` agora exigem `aceitouTermos:true` no corpo (422 sem isso) e gravam prova de aceite em `terms_acceptance` (ver tabela na seção 1).
 
@@ -396,8 +396,8 @@ GET  /api/v1/admin/notifications?lida=           200 [ { id, tipo:"SOS"|"DISPUTA
 POST /api/v1/admin/notifications/{id}/read       200
 # alertas SOS/DISPUTA também disparam push/e-mail fora do painel (garantido p/ SOS)
 
-GET  /api/v1/admin/reports/metrics.pdf?bairro=               200  application/pdf   # resumo de métricas, histórico completo; de=/ate= ainda pendentes nesta tela
-GET  /api/v1/admin/reports/{recurso}.csv?bairro=              200  text/csv          # recurso: transactions|requests ("requests" cobre pedidos e disputas, que são pedidos em EM_DISPUTA); bairro só filtra "requests" (transactions não tem bairro — herdaria via join, não implementado); sem filtro de período
+GET  /api/v1/admin/reports/metrics.pdf?de=&ate=&bairro=       200  application/pdf   # resumo de métricas (US29); de/ate = yyyy-MM-dd no fuso de Fortaleza, ate inclusivo; o cabeçalho do PDF diz período e bairro e avisa que só os números de pedidos respeitam o bairro
+GET  /api/v1/admin/reports/{recurso}.csv?de=&ate=&bairro=      200  text/csv          # recurso: transactions|requests ("requests" cobre pedidos e disputas, que são pedidos em EM_DISPUTA); período vale pela data de criação (coluna criadoEm); bairro é do pedido — em transactions entra por join transação→pedido; sem filtros = histórico inteiro
 # relatórios NUNCA expõem CPF (TS04/LGPD)
 ```
 
