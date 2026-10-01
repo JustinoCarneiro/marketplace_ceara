@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { api, downloadFile } from '../api/client';
+import { filtrosDoPainel, PERIODOS } from '../utils/periodo';
 
 export default function ReportsPage() {
-  const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
+  const [format, setFormat] = useState<'csv' | 'transactions' | 'pdf'>('csv');
+  // Padrão "Todo o período": é o que esta tela sempre exportou antes do filtro existir.
+  const [dias, setDias] = useState<number | null>(null);
   const [bairro, setBairro] = useState('');
   const [bairros, setBairros] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -18,12 +21,14 @@ export default function ReportsPage() {
     setGenerating(true); setProgress(0); setDone(false); setErr('');
     const iv = setInterval(() => setProgress(p => Math.min(p + Math.random() * 18, 90)), 300);
     try {
-      const qs = bairro ? `?bairro=${encodeURIComponent(bairro)}` : '';
-      // CSV só tem "requests"/"transactions" no backend — "requests" cobre
-      // pedidos e disputas (disputa = pedido com status EM_DISPUTA). Bairro filtra só o
-      // CSV de pedidos — o PDF de métricas aceita o parâmetro mas o resumo de GMV/comissão
-      // continua agregado pra base inteira (ver AdminReportService.metrics()).
+      // US29: o arquivo respeita os filtros escolhidos (período e bairro), nos três formatos.
+      // "requests" cobre pedidos e disputas (disputa = pedido com status EM_DISPUTA). No PDF o
+      // bairro só recorta os números de pedidos — GMV/comissão/disputas/SOS continuam da base
+      // inteira (AdminReportService.metrics()), e o próprio PDF avisa isso no cabeçalho.
+      const filtros = filtrosDoPainel({ dias, bairro });
+      const qs = filtros ? `?${filtros}` : '';
       if (format === 'csv') await downloadFile(`/admin/reports/requests.csv${qs}`, 'pedidos.csv');
+      else if (format === 'transactions') await downloadFile(`/admin/reports/transactions.csv${qs}`, 'transacoes.csv');
       else await downloadFile(`/admin/reports/metrics.pdf${qs}`, 'metrics.pdf');
       setProgress(100);
       setDone(true);
@@ -49,7 +54,7 @@ export default function ReportsPage() {
                 <span style={{ width: 44, height: 44, borderRadius: '50%', border: '3.5px solid #B7DCE3', borderTopColor: '#10847D', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
                 <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: '#0E2A33' }}>Gerando relatório…</span>
-                  <span style={{ fontSize: 13, color: '#4C636A' }}>{format === 'csv' ? 'CSV · pedidos (inclui os em disputa)' : 'PDF · resumo de métricas'}</span>
+                  <span style={{ fontSize: 13, color: '#4C636A' }}>{format === 'csv' ? 'CSV · pedidos (inclui os em disputa)' : format === 'transactions' ? 'CSV · transações' : 'PDF · resumo de métricas'}</span>
                 </div>
               </div>
               <div style={{ height: 6, borderRadius: 100, background: '#E6DDC9', overflow: 'hidden' }}>
@@ -80,6 +85,18 @@ export default function ReportsPage() {
                   </div>
                   {format === 'csv' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#10847D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
                 </div>
+                {/* Transações — o rótulo evita a palavra "CSV" de propósito: o teste que confere a
+                    opção de CSV procura esse texto e não pode achar dois. */}
+                <div data-testid="opcao-transacoes" onClick={() => setFormat('transactions')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: format === 'transactions' ? '#F3ECDC' : '#fff', border: `2px solid ${format === 'transactions' ? '#10847D' : '#E6DDC9'}`, borderRadius: 12, padding: 13, cursor: 'pointer' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: '#E2EEF2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>Transações</div>
+                    <div style={{ fontSize: 12, color: '#4C636A' }}>Pagamentos e repasses, em planilha</div>
+                  </div>
+                  {format === 'transactions' ? <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#10847D', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 12 10 17 19 7"/></svg></div> : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #DCD2BC', flexShrink: 0 }} />}
+                </div>
                 {/* PDF option */}
                 <div onClick={() => setFormat('pdf')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: format === 'pdf' ? '#F3ECDC' : '#fff', border: `2px solid ${format === 'pdf' ? '#10847D' : '#E6DDC9'}`, borderRadius: 12, padding: 13, cursor: 'pointer' }}>
                   <div style={{ width: 40, height: 40, borderRadius: 11, background: '#F7E3D6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -106,11 +123,19 @@ export default function ReportsPage() {
                   {bairros.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#E2EEF2', borderRadius: 10, padding: '9px 12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F3ECDC', border: '1px solid #E6DDC9', borderRadius: 10, padding: '9px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15596E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
-                {/* Período ainda não tem seletor nesta tela — só bairro (US23 parte 2). */}
-                <span style={{ fontSize: 12, color: '#15596E', fontWeight: 600 }}>Traz o histórico completo (sem filtro de período).</span>
-              </div>
+                <span style={{ fontSize: 12.5, color: '#15596E', fontWeight: 600 }}>Período:</span>
+                <select
+                  aria-label="Período"
+                  data-testid="select-periodo-relatorio"
+                  value={String(dias)}
+                  onChange={e => setDias(e.target.value === 'null' ? null : Number(e.target.value))}
+                  style={{ flex: 1, border: 'none', background: 'transparent', font: 'inherit', fontSize: 12.5, color: '#0E2A33', cursor: 'pointer', outline: 'none' }}
+                >
+                  {PERIODOS.map(p => <option key={p.label} value={String(p.dias)}>{p.label}</option>)}
+                </select>
+              </label>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#606E71" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
                 <span style={{ fontSize: 12, lineHeight: 1.45, color: '#606E71' }}>Os relatórios não incluem dados pessoais sensíveis (CPF).</span>

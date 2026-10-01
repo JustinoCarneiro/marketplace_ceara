@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, downloadFile } from '../api/client';
+import { filtrosDoPainel, PERIODOS } from '../utils/periodo';
 
 interface OperationalAlert { tipo: string; quantidade: number; }
 
@@ -36,14 +37,6 @@ const STATUS_COLOR: Record<string, string> = {
   EM_DISPUTA: '#DA6A32',
 };
 
-/** Janelas oferecidas no filtro; null = histórico completo (backend aceita sem datas). */
-const PERIODOS = [
-  { dias: 7,    label: 'Últimos 7 dias' },
-  { dias: 30,   label: 'Últimos 30 dias' },
-  { dias: 90,   label: 'Últimos 90 dias' },
-  { dias: null, label: 'Todo o período' },
-] as const;
-
 export default function DashboardPage() {
   const nav = useNavigate();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -71,8 +64,10 @@ export default function DashboardPage() {
     setExporting(true);
     setExportErr('');
     try {
-      const qs = bairro ? `?bairro=${encodeURIComponent(bairro)}` : '';
-      await downloadFile(`/admin/reports/metrics.pdf${qs}`, 'metrics.pdf');
+      // US29: o PDF respeita os filtros aplicados na tela (período e bairro). Antes só o bairro
+      // ia junto e quem filtrava "últimos 7 dias" baixava o histórico inteiro, sem aviso.
+      const qs = filtrosDoPainel({ dias, bairro });
+      await downloadFile(`/admin/reports/metrics.pdf${qs ? `?${qs}` : ''}`, 'metrics.pdf');
     }
     catch (e: unknown) { setExportErr(e instanceof Error ? e.message : 'Erro ao exportar o PDF.'); }
     finally { setExporting(false); }
@@ -83,15 +78,8 @@ export default function DashboardPage() {
     (async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (dias !== null) {
-          const inicio = new Date();
-          inicio.setDate(inicio.getDate() - dias);
-          params.set('de', inicio.toISOString().slice(0, 10));
-          params.set('ate', new Date().toISOString().slice(0, 10));
-        }
-        if (bairro) params.set('bairro', bairro);
-        const qs = params.toString();
+        // Mesma conta do botão Exportar (filtrosDoPainel): o PDF cobre o que a tela mostra.
+        const qs = filtrosDoPainel({ dias, bairro });
         const data = await api.get<Metrics>(`/admin/metrics${qs ? `?${qs}` : ''}`);
         if (!cancelado) setMetrics(data);
       } catch {
