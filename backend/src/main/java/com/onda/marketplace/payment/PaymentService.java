@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.UUID;
 
 @Service
@@ -105,7 +106,10 @@ public class PaymentService {
                 .orElseThrow(() -> new BusinessException("PROPOSAL_NOT_FOUND",
                         "Proposta aceita não encontrada para calcular o valor."));
 
-        BigDecimal valorComissao = valorTotal.multiply(percentualComissao);
+        // Em centavos, meio pra cima: é o que o NUMERIC(12,2) do banco faria ao gravar, e é a
+        // regra que o app do prestador usa pra mostrar "Você recebe" (valorAposComissao).
+        BigDecimal valorComissao = valorTotal.multiply(percentualComissao)
+                .setScale(2, RoundingMode.HALF_UP);
         PaymentMethod metodo     = PaymentMethod.valueOf(req.metodo().toUpperCase());
 
         // Escrita atômica: Transaction + OutboxEvent na mesma transação de banco

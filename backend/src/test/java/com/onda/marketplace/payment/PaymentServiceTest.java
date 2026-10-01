@@ -99,6 +99,40 @@ class PaymentServiceTest {
         assertThat(captor.getValue().getValorComissao()).isEqualByComparingTo("20.00");
     }
 
+    /** Comissão que o POST /payment devolve (o DTO) para uma proposta e um percentual. */
+    private BigDecimal comissaoDevolvidaSobre(String valorProposta, String percentual) {
+        var servico = new PaymentService(
+                transactionRepository, outboxRepository,
+                requestRepository, proposalRepository,
+                userRepository, new BigDecimal(percentual));
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
+                .thenReturn(List.of(proposalAceita(sr, new BigDecimal(valorProposta))));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        return servico.initiate(sr.getId(), new InitiatePaymentRequest("PIX"),
+                "idem-" + valorProposta + "-" + percentual, CLIENTE_ID).valorComissao();
+    }
+
+    @Test
+    void initiate_arredondaAComissaoEmCentavosComOMeioParaCima() {
+        // O banco guarda valor_comissao em NUMERIC(12,2) e arredonda o meio pra cima. Sem
+        // arredondar aqui, a resposta do pagamento trazia 1.0050 enquanto o repasse usava 1.01
+        // (o app do prestador mostra "Você recebe" com essa mesma regra).
+        assertThat(comissaoDevolvidaSobre("10.05", "0.10"))
+                .as("10,05 a 10% = 1,005 → 1,01").isEqualTo(new BigDecimal("1.01"));
+        assertThat(comissaoDevolvidaSobre("0.04", "0.10"))
+                .as("0,04 a 10% = 0,004 → 0,00").isEqualTo(new BigDecimal("0.00"));
+        assertThat(comissaoDevolvidaSobre("99.99", "0.15"))
+                .as("99,99 a 15% = 14,9985 → 15,00").isEqualTo(new BigDecimal("15.00"));
+        assertThat(comissaoDevolvidaSobre("200.00", "0.10"))
+                .as("valor exato continua exato").isEqualTo(new BigDecimal("20.00"));
+    }
+
     @Test
     void initiate_outboxTipoEStatusCorretos() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
