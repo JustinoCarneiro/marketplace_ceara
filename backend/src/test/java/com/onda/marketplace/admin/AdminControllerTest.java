@@ -132,13 +132,30 @@ class AdminControllerTest {
 
     @Test
     void reportCsv_retornaTextCsv() throws Exception {
-        when(adminReportService.exportarCsv("transactions", null))
+        when(adminReportService.exportarCsv("transactions", null, null, null))
                 .thenReturn("id,serviceRequestId,valorTotal\n1,2,200");
 
         mvc.perform(get("/api/v1/admin/reports/{recurso}.csv", "transactions"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith("text/csv"))
                 .andExpect(content().string(containsString("valorTotal")));
+    }
+
+    @Test
+    void reportCsv_repassaPeriodoEBairro_noFusoDoNegocio() throws Exception {
+        // US29: o CSV respeita os filtros aplicados. Mesma regra das métricas: o dia é o de
+        // Fortaleza (UTC-3) e "ate" é inclusivo → vira o começo do dia seguinte.
+        Instant de  = Instant.parse("2026-09-24T03:00:00Z");
+        Instant ate = Instant.parse("2026-10-01T03:00:00Z");
+        when(adminReportService.exportarCsv("requests", de, ate, "Aldeota"))
+                .thenReturn("id,categoria,bairro,status,criadoEm");
+
+        mvc.perform(get("/api/v1/admin/reports/{recurso}.csv", "requests")
+                        .param("de", "2026-09-24").param("ate", "2026-09-30").param("bairro", "Aldeota"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("categoria")));
+
+        verify(adminReportService).exportarCsv("requests", de, ate, "Aldeota");
     }
 
     // --- M11: endpoints de query e reprocessamento ---

@@ -16,9 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -95,16 +93,11 @@ public class AdminController {
     }
 
     /**
-     * Fuso do negócio (marketplace hiperlocal do Ceará). O dia do filtro é o dia de
-     * quem opera o painel, não o dia UTC: convertendo em UTC, tudo que acontecia entre
-     * 21h e a meia-noite local já contava como o dia seguinte e sumia do "hoje".
-     */
-    private static final ZoneId ZONA_NEGOCIO = ZoneId.of("America/Fortaleza");
-
-    /**
      * Métricas do dashboard (US23). {@code de}/{@code ate} são datas (yyyy-MM-dd)
-     * opcionais; sem elas devolve o histórico inteiro. O fim é exclusivo — {@code ate}
-     * entra como o começo do dia seguinte, senão o próprio dia informado ficaria de fora.
+     * opcionais; sem elas devolve o histórico inteiro. O dia é o do fuso do negócio e o fim é
+     * exclusivo — {@code ate} entra como o começo do dia seguinte, senão o próprio dia
+     * informado ficaria de fora (ver {@link AdminReportService#ZONA_NEGOCIO}). As exportações
+     * (CSV/PDF) usam a mesma conversão: o arquivo tem que cobrir o que a tela mostra.
      */
     @GetMapping("/metrics")
     public ResponseEntity<MetricsDto> metrics(
@@ -112,9 +105,8 @@ public class AdminController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate,
             @RequestParam(required = false) String bairro) {
 
-        Instant inicio = de  != null ? de.atStartOfDay(ZONA_NEGOCIO).toInstant()              : null;
-        Instant fim    = ate != null ? ate.plusDays(1).atStartOfDay(ZONA_NEGOCIO).toInstant() : null;
-        return ResponseEntity.ok(adminReportService.metrics(inicio, fim, bairro));
+        return ResponseEntity.ok(adminReportService.metrics(
+                AdminReportService.inicioDoDia(de), AdminReportService.fimExclusivoDoDia(ate), bairro));
     }
 
     /** Bairros com pelo menos um pedido — popula o seletor da tela de métricas/relatórios. */
@@ -128,10 +120,18 @@ public class AdminController {
         return ResponseEntity.ok(adminReportService.alertas());
     }
 
+    /**
+     * Exporta CSV (US29) respeitando os filtros da tela: {@code de}/{@code ate} (yyyy-MM-dd,
+     * mesmas regras de {@link #metrics}) e {@code bairro}. Sem eles, o histórico inteiro.
+     */
     @GetMapping(value = "/reports/{recurso}.csv", produces = "text/csv")
-    public ResponseEntity<String> reportCsv(@PathVariable String recurso,
-                                            @RequestParam(required = false) String bairro) {
-        String csv = adminReportService.exportarCsv(recurso, bairro);
+    public ResponseEntity<String> reportCsv(
+            @PathVariable String recurso,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate de,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate,
+            @RequestParam(required = false) String bairro) {
+        String csv = adminReportService.exportarCsv(recurso,
+                AdminReportService.inicioDoDia(de), AdminReportService.fimExclusivoDoDia(ate), bairro);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .header("Content-Disposition", "attachment; filename=\"" + recurso + ".csv\"")
@@ -162,8 +162,12 @@ public class AdminController {
      * NUNCA expõe CPF — somente agregados (TS04/LGPD).
      */
     @GetMapping(value = "/reports/metrics.pdf", produces = "application/pdf")
-    public ResponseEntity<byte[]> reportMetricsPdf(@RequestParam(required = false) String bairro) {
-        byte[] pdf = adminReportService.exportarMetricasPdf(bairro);
+    public ResponseEntity<byte[]> reportMetricsPdf(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate de,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate ate,
+            @RequestParam(required = false) String bairro) {
+        byte[] pdf = adminReportService.exportarMetricasPdf(
+                AdminReportService.inicioDoDia(de), AdminReportService.fimExclusivoDoDia(ate), bairro);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition", "attachment; filename=\"metrics.pdf\"")

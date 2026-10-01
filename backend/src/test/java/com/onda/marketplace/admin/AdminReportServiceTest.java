@@ -14,19 +14,24 @@ import com.onda.marketplace.servicerequest.ServiceRequestStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
 import com.onda.marketplace.sos.SosAlertRepository;
 import com.onda.marketplace.sos.SosAlertStatus;
+import com.lowagie.text.pdf.PdfReader;
+import com.lowagie.text.pdf.parser.PdfTextExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,6 +59,10 @@ class AdminReportServiceTest {
     private static Object[] linha(ServiceRequestStatus status, long qtd) {
         return new Object[] { status, qtd };
     }
+
+    // 24/09 00:00 e 01/10 00:00 em Fortaleza (UTC-3). O fim é exclusivo: 30/09 entra inteiro.
+    private static final Instant DE  = Instant.parse("2026-09-24T03:00:00Z");
+    private static final Instant ATE = Instant.parse("2026-10-01T03:00:00Z");
 
     @Test
     void metrics_agregaFluxoFinanceiroEPedidosPorStatus() {
@@ -204,9 +213,9 @@ class AdminReportServiceTest {
     void exportarCsv_transactions_geraCabecalhoELinhas_semCpf() {
         var tx = new Transaction(java.util.UUID.randomUUID(), BigDecimal.valueOf(200),
                 BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-csv");
-        when(transactionRepository.findAll()).thenReturn(List.of(tx));
+        when(transactionRepository.listarNoPeriodo(any(), any())).thenReturn(List.of(tx));
 
-        String csv = service.exportarCsv("transactions", null);
+        String csv = service.exportarCsv("transactions", null, null, null);
 
         assertThat(csv).startsWith("id,serviceRequestId,valorTotal,valorComissao,metodo,statusPagamento");
         assertThat(csv).contains("PIX").contains("200");
@@ -222,9 +231,9 @@ class AdminReportServiceTest {
         sr.setCategoria("Elétrica");
         sr.setStatus(ServiceRequestStatus.PENDENTE);
         sr.setBairro("=cmd|'/C calc'!A1");
-        when(srRepository.findAll()).thenReturn(List.of(sr));
+        when(srRepository.listarNoPeriodo(any(), any())).thenReturn(List.of(sr));
 
-        String csv = service.exportarCsv("requests", null);
+        String csv = service.exportarCsv("requests", null, null, null);
 
         // Nenhuma linha pode começar (depois da vírgula anterior) com "=" cru — só com "'="
         // prefixado, que o Excel/LibreOffice trata como texto, não fórmula.
@@ -238,35 +247,73 @@ class AdminReportServiceTest {
         sr.setCategoria("Pintura");
         sr.setStatus(ServiceRequestStatus.CONCLUIDO);
         sr.setBairro("Aldeota, perto da praça");
-        when(srRepository.findAll()).thenReturn(List.of(sr));
+        when(srRepository.listarNoPeriodo(any(), any())).thenReturn(List.of(sr));
 
-        String csv = service.exportarCsv("requests", null);
+        String csv = service.exportarCsv("requests", null, null, null);
 
         assertThat(csv).contains("\"Aldeota, perto da praça\"");
     }
 
     @Test
-    void exportarCsv_requests_filtraPorBairro() {
-        var srAldeota = new ServiceRequest();
-        srAldeota.setCategoria("Elétrica");
-        srAldeota.setStatus(ServiceRequestStatus.PENDENTE);
-        srAldeota.setBairro("Aldeota");
+    void exportarCsv_requests_respeitaPeriodoEBairro() {
+        // O recorte é feito no banco (período + bairro na mesma consulta); aqui se prova que o
+        // serviço pede a consulta certa, com as datas recebidas. O recorte em si roda contra o
+        // Postgres real no E2E (passo "relatórios respeitam período e bairro").
+        var sr = new ServiceRequest();
+        sr.setCategoria("Elétrica");
+        sr.setStatus(ServiceRequestStatus.PENDENTE);
+        sr.setBairro("Aldeota");
+        when(srRepository.listarNoPeriodoEBairro(DE, ATE, "Aldeota")).thenReturn(List.of(sr));
 
-        var srMeireles = new ServiceRequest();
-        srMeireles.setCategoria("Hidráulica");
-        srMeireles.setStatus(ServiceRequestStatus.PENDENTE);
-        srMeireles.setBairro("Meireles");
+        String csv = service.exportarCsv("requests", DE, ATE, "Aldeota");
 
-        when(srRepository.findAll()).thenReturn(List.of(srAldeota, srMeireles));
+        assertThat(csv).contains("Elétrica").contains("Aldeota");
+        verify(srRepository).listarNoPeriodoEBairro(DE, ATE, "Aldeota");
+        verify(srRepository, never()).listarNoPeriodo(any(), any());
+    }
 
-        String csv = service.exportarCsv("requests", "Aldeota");
+    @Test
+    void exportarCsv_transactions_respeitaPeriodoEBairro() {
+        var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
+                BigDecimal.valueOf(20), BigDecimal.valueOf(0.10), PaymentMethod.PIX, "idem-periodo");
+        when(transactionRepository.listarNoPeriodoEBairro(DE, ATE, "Aldeota")).thenReturn(List.of(tx));
 
-        assertThat(csv).contains("Elétrica").doesNotContain("Hidráulica");
+        String csv = service.exportarCsv("transactions", DE, ATE, "Aldeota");
+
+        assertThat(csv).contains(tx.getServiceRequestId().toString());
+        verify(transactionRepository).listarNoPeriodoEBairro(DE, ATE, "Aldeota");
+        verify(transactionRepository, never()).listarNoPeriodo(any(), any());
+    }
+
+    @Test
+    void exportarCsv_bairroEmBranco_naoFiltraPorBairro() {
+        when(transactionRepository.listarNoPeriodo(DE, ATE)).thenReturn(List.of());
+
+        String csv = service.exportarCsv("transactions", DE, ATE, "   ");
+
+        assertThat(csv).isEqualTo(
+                "id,serviceRequestId,valorTotal,valorComissao,metodo,statusPagamento,criadoEm");
+        verify(transactionRepository, never()).listarNoPeriodoEBairro(any(), any(), any());
+    }
+
+    @Test
+    void exportarCsv_semPeriodo_usaFaixaAbertaEmVezDeParametroNulo() {
+        // Parâmetro NULL solto faz o Postgres falhar ("could not determine data type of
+        // parameter"); "sem filtro" tem que virar uma faixa aberta, igual às métricas.
+        when(transactionRepository.listarNoPeriodo(any(), any())).thenReturn(List.of());
+
+        service.exportarCsv("transactions", null, null, null);
+
+        var de  = ArgumentCaptor.forClass(Instant.class);
+        var ate = ArgumentCaptor.forClass(Instant.class);
+        verify(transactionRepository).listarNoPeriodo(de.capture(), ate.capture());
+        assertThat(de.getValue()).isEqualTo(Instant.EPOCH);
+        assertThat(ate.getValue()).isAfter(Instant.parse("9000-01-01T00:00:00Z"));
     }
 
     @Test
     void exportarCsv_recursoDesconhecido_lancaException() {
-        assertThatThrownBy(() -> service.exportarCsv("usuarios", null))
+        assertThatThrownBy(() -> service.exportarCsv("usuarios", null, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "UNKNOWN_REPORT");
     }
@@ -289,7 +336,7 @@ class AdminReportServiceTest {
         when(userRepository.countByRoleAndAtivoTrue(UserRole.ROLE_CLIENT)).thenReturn(40L);
         when(sosRepository.contarNoPeriodo(any(), any())).thenReturn(0L);
 
-        byte[] pdf = service.exportarMetricasPdf(null);
+        byte[] pdf = service.exportarMetricasPdf(null, null, null);
 
         // PDF deve começar com assinatura PDF
         assertThat(pdf).isNotEmpty();
@@ -298,5 +345,79 @@ class AdminReportServiceTest {
         // TS04/LGPD: relatório nunca expõe CPF
         String conteudoLegivel = new String(pdf);
         assertThat(conteudoLegivel.toLowerCase()).doesNotContain("cpf");
+    }
+
+    /** Stubs das métricas que independem do filtro de pedidos (o GROUP BY cada teste define). */
+    private void stubMetricasDeEstoqueEFluxoFinanceiro() {
+        when(transactionRepository.somaValorTotalNoPeriodo(any(), any(), any()))
+                .thenReturn(BigDecimal.valueOf(3000));
+        when(transactionRepository.contarNoPeriodo(any(), any(), any())).thenReturn(10L);
+        when(transactionRepository.somaComissaoNoPeriodo(eq(TransactionStatus.LIBERADO), any(), any()))
+                .thenReturn(BigDecimal.valueOf(500));
+        when(srRepository.countByStatus(ServiceRequestStatus.EM_DISPUTA)).thenReturn(1L);
+        when(resolutionRepository.tempoMedioResolucaoHoras(any(), any())).thenReturn(6.0);
+        when(providerProfileRepository.countByStatusVerificacao(ProviderStatus.VERIFICADO)).thenReturn(5L);
+        when(providerProfileRepository.countByStatusVerificacao(ProviderStatus.EM_VERIFICACAO)).thenReturn(0L);
+        when(userRepository.countByRoleAndAtivoTrue(UserRole.ROLE_CLIENT)).thenReturn(40L);
+        when(sosRepository.contarNoPeriodo(any(), any())).thenReturn(0L);
+    }
+
+    /** Texto que o leitor do PDF enxerga. Os bytes do arquivo vêm comprimidos: um teste que
+     *  procura "cpf" ou uma data neles nunca acharia nada, passando por motivo nenhum. */
+    private static String textoDoPdf(byte[] pdf) throws Exception {
+        PdfReader reader = new PdfReader(pdf);
+        try {
+            return new PdfTextExtractor(reader).getTextFromPage(1);
+        } finally {
+            reader.close();
+        }
+    }
+
+    @Test
+    void exportarMetricasPdf_respeitaPeriodoEBairro_eDizIssoNoCabecalho() throws Exception {
+        stubMetricasDeEstoqueEFluxoFinanceiro();
+        when(srRepository.contarPorStatusNoPeriodoEBairro(DE, ATE, "Aldeota")).thenReturn(List.of(
+                linha(ServiceRequestStatus.CONCLUIDO, 3L),
+                linha(ServiceRequestStatus.PENDENTE, 1L)));
+
+        byte[] pdf = service.exportarMetricasPdf(DE, ATE, "Aldeota");
+
+        // o relatório foi calculado com o recorte pedido, não com o histórico inteiro
+        verify(srRepository).contarPorStatusNoPeriodoEBairro(DE, ATE, "Aldeota");
+        verify(transactionRepository).somaValorTotalNoPeriodo(any(), eq(DE), eq(ATE));
+        verify(sosRepository).contarNoPeriodo(DE, ATE);
+
+        // e o arquivo diz qual foi o recorte (24/09 a 30/09: o fim exclusivo volta a ser
+        // o último dia inclusive) e avisa o que o bairro NÃO recorta
+        String texto = textoDoPdf(pdf);
+        assertThat(texto).contains("Período: 24/09/2026 a 30/09/2026");
+        assertThat(texto).contains("Bairro: Aldeota");
+        assertThat(texto).contains("não são filtradas por bairro");
+        assertThat(texto).contains("Total de pedidos: 4");
+        assertThat(texto.toLowerCase()).doesNotContain("cpf");
+    }
+
+    @Test
+    void exportarMetricasPdf_semFiltro_dizTodoOHistoricoENaoMencionaBairro() throws Exception {
+        stubMetricasDeEstoqueEFluxoFinanceiro();
+        // List.<Object[]>of: com UM só array, List.of(array) vira varargs e infere List<Object>
+        when(srRepository.contarPorStatusNoPeriodo(any(), any())).thenReturn(List.<Object[]>of(
+                linha(ServiceRequestStatus.CONCLUIDO, 2L)));
+
+        String texto = textoDoPdf(service.exportarMetricasPdf(null, null, null));
+
+        assertThat(texto).contains("Período: todo o histórico");
+        assertThat(texto).doesNotContain("Bairro:").doesNotContain("não são filtradas por bairro");
+    }
+
+    @Test
+    void exportarMetricasPdf_periodoAberto_dizAPartirDeOuAte() throws Exception {
+        stubMetricasDeEstoqueEFluxoFinanceiro();
+        when(srRepository.contarPorStatusNoPeriodo(any(), any())).thenReturn(List.<Object[]>of());
+
+        assertThat(textoDoPdf(service.exportarMetricasPdf(DE, null, null)))
+                .contains("Período: a partir de 24/09/2026");
+        assertThat(textoDoPdf(service.exportarMetricasPdf(null, ATE, null)))
+                .contains("Período: até 30/09/2026");
     }
 }

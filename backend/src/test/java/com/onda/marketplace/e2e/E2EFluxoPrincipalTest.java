@@ -1,12 +1,25 @@
 package com.onda.marketplace.e2e;
 
+import com.lowagie.text.pdf.PdfReader;
+import com.lowagie.text.pdf.parser.PdfTextExtractor;
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
+import com.onda.marketplace.auth.UserRole;
+import com.onda.marketplace.payment.PaymentMethod;
+import com.onda.marketplace.payment.Transaction;
+import com.onda.marketplace.payment.TransactionRepository;
+import com.onda.marketplace.servicerequest.ServiceRequest;
+import com.onda.marketplace.servicerequest.ServiceRequestRepository;
+import com.onda.marketplace.servicerequest.ServiceRequestStatus;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
+import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -15,11 +28,15 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
 /**
@@ -62,6 +79,12 @@ class E2EFluxoPrincipalTest {
 
     /** Lê o id que o gateway gerou — é o que o gateway real saberia ao chamar nosso webhook. */
     @Autowired JdbcTemplate jdbc;
+
+    // Só o passo dos relatórios (US29) usa estes: cria um admin e um 2º pedido direto no banco.
+    @Autowired UserRepository           userRepository;
+    @Autowired ServiceRequestRepository serviceRequestRepository;
+    @Autowired TransactionRepository    transactionRepository;
+    @Autowired PasswordEncoder          passwordEncoder;
 
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
@@ -165,7 +188,8 @@ class E2EFluxoPrincipalTest {
                           "categoria":  "eletrica",
                           "descricao":  "Tomada sem funcionar no quarto",
                           "lat":        -3.7172,
-                          "lng":       -38.5433
+                          "lng":       -38.5433,
+                          "bairro":     "Aldeota"
                         }
                         """)
                 .when()
@@ -519,5 +543,137 @@ class E2EFluxoPrincipalTest {
                 .then()
                 .statusCode(200)
                 .body("$", instanceOf(java.util.List.class));
+    }
+
+    // ─── Épico 9 — Relatórios (US29) ──────────────────────────────────────
+
+    @Test @Order(19)
+    @DisplayName("19 · Relatórios CSV/PDF respeitam período e bairro — consultas reais no Postgres")
+    void relatoriosRespeitamPeriodoEBairro() throws Exception {
+        // Os testes de serviço mockam o repositório e não executam JPQL: o recorte por período
+        // e o join transação→pedido (o bairro é do pedido) só rodam de verdade aqui.
+        // Admin direto no banco — o profile e2e não roda o seed.
+        userRepository.save(User.builder().nome("Admin E2E").email("admin.e2e@onda.test")
+                .senhaHash(passwordEncoder.encode("Admin@123")).role(UserRole.ROLE_ADMIN).build());
+        String tokenAdmin = given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        { "email": "admin.e2e@onda.test", "senha": "Admin@123" }
+                        """)
+                .when().post("/api/v1/auth/login")
+                .then().statusCode(200)
+                .extract().path("accessToken");
+
+        // 2º pedido, em OUTRO bairro, com a própria transação. Com um pedido só, um join que
+        // ligasse a transação ao pedido errado passaria despercebido.
+        User cliente = userRepository.findByEmail("maria.e2e@onda.test").orElseThrow();
+        ServiceRequest outro = new ServiceRequest();
+        outro.setCliente(cliente);
+        outro.setCategoria("pintura");
+        outro.setStatus(ServiceRequestStatus.PENDENTE);
+        outro.setBairro("Meireles");
+        serviceRequestRepository.save(outro);
+        transactionRepository.save(new Transaction(outro.getId(), new BigDecimal("100.00"),
+                new BigDecimal("10.00"), new BigDecimal("0.10"), PaymentMethod.PIX, "idem-e2e-meireles"));
+        String idAldeota  = requestId;                 // criado no passo 04, bairro Aldeota
+        String idMeireles = outro.getId().toString();
+
+        LocalDate hoje   = LocalDate.now(ZoneId.of("America/Fortaleza"));
+        String ontem     = hoje.minusDays(1).toString();
+        String amanha    = hoje.plusDays(1).toString();
+        String cabecalhoTransacoes = "id,serviceRequestId,valorTotal,valorComissao,metodo,statusPagamento,criadoEm";
+
+        // ── transactions.csv: bairro (join) ──
+        String todas = csvAdmin(tokenAdmin, "transactions");
+        assertThat(todas, containsString(idAldeota));
+        assertThat(todas, containsString(idMeireles));
+
+        String aldeota = csvAdmin(tokenAdmin, "transactions", "bairro", "Aldeota");
+        assertThat(aldeota, containsString(idAldeota));
+        assertThat("a transação do outro bairro não pode vazar", aldeota, not(containsString(idMeireles)));
+
+        String meireles = csvAdmin(tokenAdmin, "transactions", "bairro", "Meireles");
+        assertThat(meireles, containsString(idMeireles));
+        assertThat(meireles, not(containsString(idAldeota)));
+
+        assertThat("bairro sem pedidos devolve só o cabeçalho",
+                csvAdmin(tokenAdmin, "transactions", "bairro", "Centro"), equalTo(cabecalhoTransacoes));
+
+        // ── transactions.csv: período (de inclusivo, ate inclusivo → fim exclusivo no dia seguinte) ──
+        String naJanela = csvAdmin(tokenAdmin, "transactions", "de", ontem, "ate", amanha);
+        assertThat(naJanela, containsString(idAldeota));
+        assertThat(naJanela, containsString(idMeireles));
+        assertThat(csvAdmin(tokenAdmin, "transactions", "de", hoje.toString(), "ate", hoje.toString()),
+                allOf(containsString(idAldeota), containsString(idMeireles)));   // o dia de "ate" entra inteiro
+        assertThat("período no passado não traz nada",
+                csvAdmin(tokenAdmin, "transactions", "de", "2000-01-01", "ate", "2000-01-02"),
+                equalTo(cabecalhoTransacoes));
+        assertThat("só 'de' no futuro não traz nada",
+                csvAdmin(tokenAdmin, "transactions", "de", amanha), equalTo(cabecalhoTransacoes));
+        assertThat("só 'ate' antes de hoje não traz nada",
+                csvAdmin(tokenAdmin, "transactions", "ate", ontem), equalTo(cabecalhoTransacoes));
+
+        // ── período e bairro juntos ──
+        String meireleshoje = csvAdmin(tokenAdmin, "transactions", "de", ontem, "ate", amanha, "bairro", "Meireles");
+        assertThat(meireleshoje, containsString(idMeireles));
+        assertThat(meireleshoje, not(containsString(idAldeota)));
+        assertThat(csvAdmin(tokenAdmin, "transactions", "de", "2000-01-01", "ate", "2000-01-02", "bairro", "Meireles"),
+                equalTo(cabecalhoTransacoes));
+
+        // ── requests.csv ──
+        String pedidosAldeota = csvAdmin(tokenAdmin, "requests", "bairro", "Aldeota");
+        assertThat(pedidosAldeota, containsString(idAldeota));
+        assertThat(pedidosAldeota, not(containsString(idMeireles)));
+        String pedidosNaJanela = csvAdmin(tokenAdmin, "requests", "de", ontem, "ate", amanha);
+        assertThat(pedidosNaJanela, allOf(containsString(idAldeota), containsString(idMeireles)));
+        assertThat(csvAdmin(tokenAdmin, "requests", "de", "2000-01-01", "ate", "2000-01-02"),
+                equalTo("id,categoria,bairro,status,criadoEm"));
+
+        // ── metrics.pdf: o recorte chega nas métricas e o arquivo diz qual foi ──
+        String pdfAldeota = textoDoPdf(pdfAdmin(tokenAdmin, "de", ontem, "ate", amanha, "bairro", "Aldeota"));
+        assertThat(pdfAldeota, containsString("Bairro: Aldeota"));
+        assertThat("só o pedido de Aldeota conta", pdfAldeota, containsString("Total de pedidos: 1"));
+        String pdfCentro = textoDoPdf(pdfAdmin(tokenAdmin, "bairro", "Centro"));
+        assertThat(pdfCentro, containsString("Total de pedidos: 0"));
+        String pdfPassado = textoDoPdf(pdfAdmin(tokenAdmin, "de", "2000-01-01", "ate", "2000-01-02"));
+        assertThat(pdfPassado, containsString("Período: 01/01/2000 a 02/01/2000"));
+        assertThat(pdfPassado, containsString("Total de pedidos: 0"));
+        assertThat(textoDoPdf(pdfAdmin(tokenAdmin)), containsString("Período: todo o histórico"));
+
+        // quem não é admin continua sem acesso
+        given().header("Authorization", "Bearer " + tokenCliente)
+                .when().get("/api/v1/admin/reports/transactions.csv")
+                .then().statusCode(403);
+    }
+
+    private String csvAdmin(String token, String recurso, String... paramsNomeValor) {
+        return comParametros(given().header("Authorization", "Bearer " + token), paramsNomeValor)
+                .when().get("/api/v1/admin/reports/{recurso}.csv", recurso)
+                .then().statusCode(200)
+                .extract().asString().strip();
+    }
+
+    private byte[] pdfAdmin(String token, String... paramsNomeValor) {
+        return comParametros(given().header("Authorization", "Bearer " + token), paramsNomeValor)
+                .when().get("/api/v1/admin/reports/metrics.pdf")
+                .then().statusCode(200).contentType("application/pdf")
+                .extract().asByteArray();
+    }
+
+    private static RequestSpecification comParametros(RequestSpecification spec, String... nomeValor) {
+        for (int i = 0; i < nomeValor.length; i += 2) {
+            spec = spec.queryParam(nomeValor[i], nomeValor[i + 1]);
+        }
+        return spec;
+    }
+
+    /** Texto que o leitor de PDF enxerga (os bytes do arquivo vêm comprimidos). */
+    private static String textoDoPdf(byte[] pdf) throws Exception {
+        PdfReader reader = new PdfReader(pdf);
+        try {
+            return new PdfTextExtractor(reader).getTextFromPage(1);
+        } finally {
+            reader.close();
+        }
     }
 }

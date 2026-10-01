@@ -22,6 +22,9 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,6 +53,28 @@ public class AdminReportService {
      */
     private static final Instant INICIO_DOS_TEMPOS = Instant.EPOCH;
     private static final Instant FIM_DOS_TEMPOS    = Instant.parse("9999-12-31T00:00:00Z");
+
+    /**
+     * Fuso do negócio (marketplace hiperlocal do Ceará). O dia do filtro é o dia de quem opera
+     * o painel, não o dia UTC: convertendo em UTC, tudo que acontecia entre 21h e a meia-noite
+     * local já contava como o dia seguinte e sumia do "hoje". Fortaleza não tem horário de verão.
+     */
+    static final ZoneId ZONA_NEGOCIO = ZoneId.of("America/Fortaleza");
+
+    private static final DateTimeFormatter DATA_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /** Início do dia informado no fuso do negócio; {@code null} continua {@code null} (sem filtro). */
+    static Instant inicioDoDia(LocalDate dia) {
+        return dia != null ? dia.atStartOfDay(ZONA_NEGOCIO).toInstant() : null;
+    }
+
+    /**
+     * Fim EXCLUSIVO do período: o dia informado entra inteiro, então o limite é o começo do dia
+     * seguinte — senão o próprio dia escolhido ficaria de fora.
+     */
+    static Instant fimExclusivoDoDia(LocalDate dia) {
+        return dia != null ? dia.plusDays(1).atStartOfDay(ZONA_NEGOCIO).toInstant() : null;
+    }
 
     private final ServiceRequestRepository    srRepository;
     private final TransactionRepository       transactionRepository;
@@ -155,20 +180,35 @@ public class AdminReportService {
         }
     }
 
+    /**
+     * Exporta um recurso em CSV respeitando os filtros da tela (US29): o recorte vale pela
+     * data de criação ({@code criadoEm}, a coluna que o próprio arquivo mostra) e pelo bairro
+     * do pedido — na transação, via o pedido dela.
+     *
+     * @param de     início do período (inclusive), ou null para "desde sempre"
+     * @param ate    fim do período (exclusive), ou null para "até agora"
+     * @param bairro filtro opcional; em branco não filtra
+     */
     @Transactional(readOnly = true)
-    public String exportarCsv(String recurso, String bairro) {
+    public String exportarCsv(String recurso, Instant deOuNull, Instant ateOuNull, String bairro) {
+        Instant de  = deOuNull  != null ? deOuNull  : INICIO_DOS_TEMPOS;
+        Instant ate = ateOuNull != null ? ateOuNull : FIM_DOS_TEMPOS;
         return switch (recurso) {
-            case "transactions" -> exportarTransacoes();
-            case "requests"     -> exportarPedidos(bairro);
+            case "transactions" -> exportarTransacoes(de, ate, bairro);
+            case "requests"     -> exportarPedidos(de, ate, bairro);
             default -> throw new BusinessException("UNKNOWN_REPORT",
                     "Relatório desconhecido: " + recurso);
         };
     }
 
-    private String exportarTransacoes() {
+    private String exportarTransacoes(Instant de, Instant ate, String bairro) {
+        boolean temBairro = bairro != null && !bairro.isBlank();
+        List<Transaction> transacoes = temBairro
+                ? transactionRepository.listarNoPeriodoEBairro(de, ate, bairro)
+                : transactionRepository.listarNoPeriodo(de, ate);
         StringBuilder sb = new StringBuilder(
                 "id,serviceRequestId,valorTotal,valorComissao,metodo,statusPagamento,criadoEm");
-        for (Transaction t : transactionRepository.findAll()) {
+        for (Transaction t : transacoes) {
             sb.append('\n').append(linha(
                     t.getId(), t.getServiceRequestId(), t.getValorTotal(), t.getValorComissao(),
                     t.getMetodo(), t.getStatusPagamento(), t.getCreatedAt()));
@@ -176,11 +216,13 @@ public class AdminReportService {
         return sb.toString();
     }
 
-    private String exportarPedidos(String bairro) {
+    private String exportarPedidos(Instant de, Instant ate, String bairro) {
         boolean temBairro = bairro != null && !bairro.isBlank();
+        List<ServiceRequest> pedidos = temBairro
+                ? srRepository.listarNoPeriodoEBairro(de, ate, bairro)
+                : srRepository.listarNoPeriodo(de, ate);
         StringBuilder sb = new StringBuilder("id,categoria,bairro,status,criadoEm");
-        for (ServiceRequest s : srRepository.findAll()) {
-            if (temBairro && !bairro.equals(s.getBairro())) continue;
+        for (ServiceRequest s : pedidos) {
             sb.append('\n').append(linha(
                     s.getId(), s.getCategoria(), s.getBairro() != null ? s.getBairro() : "",
                     s.getStatus(), s.getCreatedAt()));
@@ -219,13 +261,15 @@ public class AdminReportService {
      * Gera PDF em memória com resumo de métricas do painel (US29).
      * NUNCA expõe CPF — somente agregados (TS04/LGPD).
      *
+     * @param de     início do período (inclusive), ou null para "desde sempre"
+     * @param ate    fim do período (exclusive), ou null para "até agora"
      * @param bairro filtro opcional (US23 parte 2) — mesmo recorte de {@link #metrics}:
      *               só pedidosPorStatus/totalPedidos/taxaConclusao respeitam o bairro.
      * @return array de bytes do PDF
      */
     @Transactional(readOnly = true)
-    public byte[] exportarMetricasPdf(String bairro) {
-        MetricsDto m = metrics(null, null, bairro);
+    public byte[] exportarMetricasPdf(Instant de, Instant ate, String bairro) {
+        MetricsDto m = metrics(de, ate, bairro);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             Document doc = new Document(PageSize.A4);
             PdfWriter.getInstance(doc, baos);
@@ -235,8 +279,13 @@ public class AdminReportService {
             Font tituloFont = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16);
             doc.add(new Paragraph("Marketplace Ceará — Relatório de Métricas", tituloFont));
             doc.add(new Paragraph("Gerado em: " + java.time.Instant.now()));
+            // O arquivo diz com que recorte foi gerado: sem isso, um PDF de "últimos 7 dias"
+            // e um de "todo o histórico" são indistinguíveis depois de baixados.
+            doc.add(new Paragraph("Período: " + descricaoDoPeriodo(de, ate)));
             if (bairro != null && !bairro.isBlank()) {
                 doc.add(new Paragraph("Bairro: " + bairro));
+                doc.add(new Paragraph("Obs.: só os números de pedidos (total, concluídos e taxa de "
+                        + "conclusão) respeitam o bairro; as demais métricas não são filtradas por bairro."));
             }
             doc.add(Chunk.NEWLINE);
 
@@ -264,6 +313,19 @@ public class AdminReportService {
             log.error("Falha ao gerar PDF de métricas", e);
             throw new BusinessException("PDF_GENERATION_FAILED", "Falha ao gerar PDF de métricas.");
         }
+    }
+
+    /**
+     * Texto do período no cabeçalho do PDF. O fim é exclusivo (começo do dia seguinte), então
+     * volta um instante pra mostrar o último dia que de fato entrou no relatório.
+     */
+    private static String descricaoDoPeriodo(Instant de, Instant ate) {
+        String inicio = de  != null ? DATA_BR.format(de.atZone(ZONA_NEGOCIO)) : null;
+        String fim    = ate != null ? DATA_BR.format(ate.minusMillis(1).atZone(ZONA_NEGOCIO)) : null;
+        if (inicio != null && fim != null) return inicio + " a " + fim;
+        if (inicio != null)                return "a partir de " + inicio;
+        if (fim != null)                   return "até " + fim;
+        return "todo o histórico";
     }
 
     private void adicionarLinha(Document doc, Font label, Font valor,

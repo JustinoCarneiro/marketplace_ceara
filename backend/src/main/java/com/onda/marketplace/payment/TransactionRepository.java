@@ -60,4 +60,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
            """)
     long contarNoPeriodo(@Param("statuses") java.util.Collection<TransactionStatus> statuses,
                          @Param("de") Instant de, @Param("ate") Instant ate);
+
+    // --- Exportação CSV (US29) ---
+
+    @Query("""
+           SELECT t FROM Transaction t
+            WHERE t.createdAt >= :de AND t.createdAt < :ate
+            ORDER BY t.createdAt, t.id
+           """)
+    java.util.List<Transaction> listarNoPeriodo(@Param("de") Instant de, @Param("ate") Instant ate);
+
+    // A transação não guarda bairro: ele é do pedido. serviceRequestId é uma coluna simples
+    // (não uma associação), então o join é pela igualdade dos ids.
+    @Query("""
+           SELECT t FROM Transaction t, ServiceRequest s
+            WHERE s.id = t.serviceRequestId AND s.bairro = :bairro
+              AND t.createdAt >= :de AND t.createdAt < :ate
+            ORDER BY t.createdAt, t.id
+           """)
+    java.util.List<Transaction> listarNoPeriodoEBairro(@Param("de") Instant de, @Param("ate") Instant ate,
+                                                       @Param("bairro") String bairro);
 }

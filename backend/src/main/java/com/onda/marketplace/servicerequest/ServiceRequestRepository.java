@@ -61,6 +61,25 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
                                                              @Param("ate") java.time.Instant ate,
                                                              @Param("bairro") String bairro);
 
+    // Exportação CSV (US29): as linhas do período, mesma faixa fechada das métricas e na
+    // ordem em que foram criadas (o arquivo sai igual em duas exportações seguidas).
+    @Query("""
+           SELECT s FROM ServiceRequest s
+            WHERE s.createdAt >= :de AND s.createdAt < :ate
+            ORDER BY s.createdAt, s.id
+           """)
+    java.util.List<ServiceRequest> listarNoPeriodo(@Param("de") java.time.Instant de,
+                                                   @Param("ate") java.time.Instant ate);
+
+    @Query("""
+           SELECT s FROM ServiceRequest s
+            WHERE s.createdAt >= :de AND s.createdAt < :ate AND s.bairro = :bairro
+            ORDER BY s.createdAt, s.id
+           """)
+    java.util.List<ServiceRequest> listarNoPeriodoEBairro(@Param("de") java.time.Instant de,
+                                                          @Param("ate") java.time.Instant ate,
+                                                          @Param("bairro") String bairro);
+
     // Lista de bairros distintos já usados em algum pedido — popula o seletor do admin sem
     // precisar manter uma tabela separada de bairros válidos.
     @Query("SELECT DISTINCT s.bairro FROM ServiceRequest s WHERE s.bairro IS NOT NULL ORDER BY s.bairro")

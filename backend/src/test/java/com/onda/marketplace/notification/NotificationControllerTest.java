@@ -84,7 +84,7 @@ class NotificationControllerTest {
     @Test
     void reportMetricsPdf_retorna200ComContentTypeApplicationPdf() throws Exception {
         byte[] fakePdf = "%PDF-1.4 fake content".getBytes();
-        when(adminReportService.exportarMetricasPdf(null)).thenReturn(fakePdf);
+        when(adminReportService.exportarMetricasPdf(null, null, null)).thenReturn(fakePdf);
 
         mvc.perform(get("/api/v1/admin/reports/metrics.pdf"))
                 .andExpect(status().isOk())
@@ -95,10 +95,27 @@ class NotificationControllerTest {
 
     @Test
     void reportMetricsPdf_retornaByteArrayNaoVazio() throws Exception {
-        when(adminReportService.exportarMetricasPdf(null)).thenReturn(new byte[]{1, 2, 3});
+        when(adminReportService.exportarMetricasPdf(null, null, null)).thenReturn(new byte[]{1, 2, 3});
 
         mvc.perform(get("/api/v1/admin/reports/metrics.pdf"))
                 .andExpect(status().isOk())
                 .andExpect(content().bytes(new byte[]{1, 2, 3}));
+    }
+
+    @Test
+    void reportMetricsPdf_repassaPeriodoEBairro_noFusoDoNegocio() throws Exception {
+        // US29: o PDF respeita os filtros aplicados na tela. Antes só o bairro chegava ao
+        // serviço e quem filtrava "últimos 7 dias" baixava o histórico inteiro, sem aviso.
+        // O dia é o de Fortaleza (UTC-3) e "ate" entra inteiro → começo do dia seguinte.
+        Instant de  = Instant.parse("2026-09-24T03:00:00Z");
+        Instant ate = Instant.parse("2026-10-01T03:00:00Z");
+        when(adminReportService.exportarMetricasPdf(de, ate, "Aldeota")).thenReturn(new byte[]{9});
+
+        mvc.perform(get("/api/v1/admin/reports/metrics.pdf")
+                        .param("de", "2026-09-24").param("ate", "2026-09-30").param("bairro", "Aldeota"))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(new byte[]{9}));
+
+        verify(adminReportService).exportarMetricasPdf(de, ate, "Aldeota");
     }
 }
