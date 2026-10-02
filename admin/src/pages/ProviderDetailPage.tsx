@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -31,8 +31,16 @@ const S = {
   textarea: { minHeight: 80, border: '1px solid #E6DDC9', borderRadius: 10, padding: 12, fontSize: 13.5, color: '#0E2A33', background: '#fff', outline: 'none', resize: 'vertical' as const, fontFamily: 'inherit' },
 };
 
+/**
+ * Remonta a tela ao trocar de prestador (key={id}): `loading` volta a nascer true sem precisar de
+ * setState dentro do efeito (react-hooks/set-state-in-effect) e a carga depende só do `id`.
+ */
 export default function ProviderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  return <ProviderDetail key={id} id={id} />;
+}
+
+function ProviderDetail({ id }: { id: string | undefined }) {
   const nav = useNavigate();
   const [provider, setProvider] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,16 +49,20 @@ export default function ProviderDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
 
-  async function load() {
+  const carregar = useCallback(() =>
+    api.get<Provider[]>('/admin/providers')
+      .then(list => setProvider((Array.isArray(list) ? list : []).find(p => p.id === id) ?? null))
+      .catch(() => setProvider(null))
+      .finally(() => setLoading(false)),
+  [id]);
+
+  // Recarga depois de uma moderação: volta ao estado de carregamento, como sempre fez.
+  function load() {
     setLoading(true);
-    try {
-      const list = await api.get<Provider[]>('/admin/providers');
-      setProvider((Array.isArray(list) ? list : []).find(p => p.id === id) ?? null);
-    } catch { setProvider(null); }
-    finally { setLoading(false); }
+    return carregar();
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function moderate(action: 'APROVAR' | 'REPROVAR' | 'SUSPENDER') {
     setErr(''); setSubmitting(true);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -47,14 +47,20 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [markErr, setMarkErr] = useState('');
 
-  async function load() {
+  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
+  const carregar = useCallback(() =>
+    api.get<Notification[]>('/admin/notifications')
+      .then(d => setNotifs(Array.isArray(d) ? d : []))
+      .catch(() => setNotifs([]))
+      .finally(() => setLoading(false)),
+  []);
+
+  function load() {
     setLoading(true);
-    try { const d = await api.get<Notification[]>('/admin/notifications'); setNotifs(Array.isArray(d) ? d : []); }
-    catch { setNotifs([]); }
-    finally { setLoading(false); }
+    return carregar();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function markAllRead() {
     setMarkErr('');

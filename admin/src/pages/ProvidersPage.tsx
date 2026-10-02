@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -36,16 +36,20 @@ export default function ProvidersPage() {
   const [filter, setFilter] = useState<'EM_VERIFICACAO' | ''>('EM_VERIFICACAO');
   const [actionErr, setActionErr] = useState('');
 
-  async function load() {
+  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
+  const carregar = useCallback(() =>
+    api.get<Provider[]>('/admin/providers')
+      .then(data => setProviders(Array.isArray(data) ? data : []))
+      .catch(() => setProviders([]))
+      .finally(() => setLoading(false)),
+  []);
+
+  function load() {
     setLoading(true);
-    try {
-      const data = await api.get<Provider[]>('/admin/providers');
-      setProviders(Array.isArray(data) ? data : []);
-    } catch { setProviders([]); }
-    finally { setLoading(false); }
+    return carregar();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function verify(id: string) {
     setActionErr('');

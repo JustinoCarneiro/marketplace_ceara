@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 
 interface User { id: string; nome: string; email: string; role: string; status: string; }
@@ -14,14 +14,23 @@ export default function UsersPage() {
   const [actionErr, setActionErr] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  async function load() {
+  // A 1ª carga não liga `loading` (já nasce true): setState síncrono dentro de um efeito dispara
+  // render em cascata (react-hooks/set-state-in-effect). Recargas após uma ação passam por load().
+  // setState em callbacks de promessa (.then/.catch/.finally), nunca em try/catch no corpo: o
+  // analisador do React trata o catch como se pudesse rodar de forma síncrona.
+  const carregar = useCallback(() =>
+    api.get<User[]>('/admin/users')
+      .then(d => setUsers(Array.isArray(d) ? d : []))
+      .catch(() => setUsers([]))
+      .finally(() => setLoading(false)),
+  []);
+
+  function load() {
     setLoading(true);
-    try { const d = await api.get<User[]>('/admin/users'); setUsers(Array.isArray(d) ? d : []); }
-    catch { setUsers([]); }
-    finally { setLoading(false); }
+    return carregar();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function toggleStatus(id: string, current: string) {
     const action = current === 'ATIVO' ? 'suspend' : 'reactivate';

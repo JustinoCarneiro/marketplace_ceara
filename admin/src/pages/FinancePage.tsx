@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, downloadFile } from '../api/client';
 
 // Espelham TransacaoAdminDto e OutboxAdminDto do backend, campo a campo. O outbox declarava
@@ -44,9 +44,9 @@ export default function FinancePage() {
   const [repasseErr, setRepasseErr] = useState('');
   const [confirmando, setConfirmando] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    setLoadError(false);
+  // 1ª carga sem setState síncrono no efeito (`loading` e `loadError` já nascem true/false);
+  // recargas depois de uma ação passam por load().
+  const carregar = useCallback(async () => {
     try {
       let anyFailed = false;
       const [statuses, o] = await Promise.all([
@@ -58,9 +58,15 @@ export default function FinancePage() {
       setOutbox(Array.isArray(o) ? o : []);
       setLoadError(anyFailed);
     } finally { setLoading(false); }
+  }, []);
+
+  function load() {
+    setLoading(true);
+    setLoadError(false);
+    return carregar();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function reprocess(id: string) {
     setReprocessErr('');

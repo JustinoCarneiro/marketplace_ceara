@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
@@ -17,32 +17,36 @@ export default function DisputesPage() {
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
 
-  async function load() {
-    setLoading(true);
-    setLoadErr('');
-    try {
-      // GET /admin/disputes não aceita ?status= (sempre retorna os EM_DISPUTA) — o filtro
-      // que existia aqui era ignorado pelo servidor e passava a impressão de ser real.
-      const data = await api.get<Dispute[]>('/admin/disputes');
-      setDisputes(Array.isArray(data) ? data : []);
-    } catch (e: unknown) {
-      // Falha de carga mostrava o estado vazio "Nenhuma disputa aberta 🎉" — parecia
-      // boa notícia justamente quando a fila de mediação não pôde ser lida.
-      setLoadErr(e instanceof Error ? e.message : 'Erro ao carregar as disputas.');
-      setDisputes([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // "Agora" das idades da fila: atualizado a cada carga. Date.now() direto na renderização é
+  // impuro (react-hooks/purity). A 1ª carga também não liga `loading` nem zera o erro (já
+  // nascem true e ''): setState síncrono num efeito dispara render em cascata.
+  const [agora, setAgora] = useState(() => Date.now());
 
-  useEffect(() => { load(); }, []);
+  // GET /admin/disputes não aceita ?status= (sempre retorna os EM_DISPUTA) — o filtro
+  // que existia aqui era ignorado pelo servidor e passava a impressão de ser real.
+  const carregar = useCallback(() =>
+    api.get<Dispute[]>('/admin/disputes')
+      .then(data => setDisputes(Array.isArray(data) ? data : []))
+      .catch((e: unknown) => {
+        // Falha de carga mostrava o estado vazio "Nenhuma disputa aberta 🎉" — parecia
+        // boa notícia justamente quando a fila de mediação não pôde ser lida.
+        setLoadErr(e instanceof Error ? e.message : 'Erro ao carregar as disputas.');
+        setDisputes([]);
+      })
+      .finally(() => {
+        setAgora(Date.now());
+        setLoading(false);
+      }),
+  []);
+
+  useEffect(() => { carregar(); }, [carregar]);
 
   function fmt(n: number) {
     return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
 
   function age(s: string) {
-    const ms = Date.now() - new Date(s).getTime();
+    const ms = agora - new Date(s).getTime();
     const h = Math.floor(ms / 3600000);
     if (h < 24) return `${h}h`;
     const d = Math.floor(h / 24);
@@ -107,7 +111,7 @@ export default function DisputesPage() {
             {/* Rows */}
     {disputes.map(d => {
               const ageStr = age(d.criadoEm);
-              const ageH = Math.floor((Date.now() - new Date(d.criadoEm).getTime()) / 3600000);
+              const ageH = Math.floor((agora - new Date(d.criadoEm).getTime()) / 3600000);
               const ageColor = ageH > 48 ? 'var(--danger)' : ageH > 24 ? 'var(--warm-terra)' : 'var(--text-soft)';
               return (
                 <div key={d.serviceRequestId} style={S.tableRow}>

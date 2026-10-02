@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 
 // Contrato real do backend (DenunciaAdminDto).
@@ -20,19 +20,22 @@ export default function DenunciasPage() {
   const [resolvendo, setResolvendo] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState('');
 
-  async function load() {
-    setLoading(true);
-    try {
-      const data = await api.get<Denuncia[]>('/admin/denuncias');
-      setDenuncias(Array.isArray(data) ? data : []);
-    } catch {
-      setDenuncias([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // "Agora" das idades da fila: atualizado a cada carga. Date.now() direto na renderização é
+  // impuro (react-hooks/purity). A 1ª carga também não liga `loading` (já nasce true): setState
+  // síncrono num efeito dispara render em cascata (react-hooks/set-state-in-effect).
+  const [agora, setAgora] = useState(() => Date.now());
 
-  useEffect(() => { load(); }, []);
+  const carregar = useCallback(() =>
+    api.get<Denuncia[]>('/admin/denuncias')
+      .then(data => setDenuncias(Array.isArray(data) ? data : []))
+      .catch(() => setDenuncias([]))
+      .finally(() => {
+        setAgora(Date.now());
+        setLoading(false);
+      }),
+  []);
+
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function resolver(id: string) {
     setResolvendo(id);
@@ -47,7 +50,7 @@ export default function DenunciasPage() {
   }
 
   function age(s: string) {
-    const ms = Date.now() - new Date(s).getTime();
+    const ms = agora - new Date(s).getTime();
     const h = Math.floor(ms / 3600000);
     if (h < 24) return `${h}h`;
     const d = Math.floor(h / 24);

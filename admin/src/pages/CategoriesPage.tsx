@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from '../api/client';
 
@@ -20,14 +20,20 @@ export default function CategoriesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [actionErr, setActionErr] = useState('');
 
-  async function load() {
+  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
+  const carregar = useCallback(() =>
+    api.get<Category[]>('/admin/categories')
+      .then(d => setCats(Array.isArray(d) ? d : []))
+      .catch(() => setCats([]))
+      .finally(() => setLoading(false)),
+  []);
+
+  function load() {
     setLoading(true);
-    try { const d = await api.get<Category[]>('/admin/categories'); setCats(Array.isArray(d) ? d : []); }
-    catch { setCats([]); }
-    finally { setLoading(false); }
+    return carregar();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function create(e: FormEvent) {
     e.preventDefault();
