@@ -17,8 +17,7 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "usesCleartextTraffic": true
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -44,7 +43,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "O Onda usa sua localização para buscar prestadores próximos e registrar onde o pedido foi feito."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {

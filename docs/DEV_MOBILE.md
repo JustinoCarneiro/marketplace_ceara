@@ -182,4 +182,4 @@ Depois: `Ctrl+Shift+P` → **Java: Clean Java Language Server Workspace** → **
 - Metro: `http://localhost:8081` (via `adb reverse`)
 - Canal OTA: `preview`
 - Runtime version: `1.0.0`
-- Cleartext: habilitado (`network_security_config.xml` + `usesCleartextTraffic`)
+- Cleartext: liberado pela variante debug que o próprio Expo gera (o `usesCleartextTraffic` do `app.json` era campo morto e foi removido)
