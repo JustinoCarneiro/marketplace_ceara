@@ -1,5 +1,5 @@
 import { API_BASE } from '../../api/config';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   KeyboardAvoidingView, Platform, TouchableOpacity, TextInput,
@@ -9,13 +9,11 @@ import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import type { AuthNavProp } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
-import { useAuthStore } from '../../store/auth';
 
 const CATEGORIES = ['Elétrica', 'Hidráulica', 'Limpeza', 'Pintura', 'Reforma', 'Jardinagem', 'Geral'];
 
 export default function RegisterProviderScreen() {
   const nav = useNavigation<AuthNavProp>();
-  const login = useAuthStore(s => s.login);
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');

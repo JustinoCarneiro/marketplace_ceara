@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity,
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { ClientNavProp } from '../../navigation/types';
-import { color, font, space, radius } from '../../theme';
+import { color, font, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import { fetchNearby, isVerificado, distanciaKm as toKm, type NearbyProvider } from '../../api/nearby';
 import { screenStateError, type ScreenErrorInfo } from '../../api/errors';

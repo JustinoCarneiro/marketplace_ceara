@@ -1,10 +1,9 @@
 import { API_BASE } from '../../api/config';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
 import type { ProviderNavProp } from '../../navigation/types';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';

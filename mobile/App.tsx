@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import NetInfo from '@react-native-community/netinfo';
-import { color } from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
 import OfflineScreen from './src/components/OfflineScreen';
 

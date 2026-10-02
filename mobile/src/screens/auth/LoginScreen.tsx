@@ -1,5 +1,5 @@
 import { API_BASE } from '../../api/config';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform, Image,

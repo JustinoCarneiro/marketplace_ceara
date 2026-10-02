@@ -1,5 +1,5 @@
 import { API_BASE } from '../../api/config';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TextInput, TouchableOpacity, KeyboardAvoidingView, Platform,

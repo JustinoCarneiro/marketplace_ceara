@@ -1,6 +1,6 @@
 import { API_BASE } from '../../api/config';
 import { getCurrentCoords } from '../../api/location';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';

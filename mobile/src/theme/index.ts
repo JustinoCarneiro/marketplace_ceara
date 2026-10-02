@@ -182,10 +182,3 @@ export const motion = {
   durFast:  180,        // ms
   durBase:  320,
 } as const;
-
-// ─── Export agrupado ─────────────────────────────────────────────────────────
-
-const theme = { color, font, space, radius, shadow, motion } as const;
-
-export type Theme = typeof theme;
-export default theme;

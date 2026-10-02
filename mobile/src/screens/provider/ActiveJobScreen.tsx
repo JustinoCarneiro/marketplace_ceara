@@ -1,6 +1,6 @@
 import { API_BASE } from '../../api/config';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { ProviderNavProp } from '../../navigation/types';

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 
 const COLORS = {
@@ -14,7 +14,6 @@ const COLORS = {
 };
 
 export default function SosActiveScreen() {
-  const nav = useNavigation<any>();
   const route = useRoute<any>();
   const [pulse] = useState(new Animated.Value(1));
 

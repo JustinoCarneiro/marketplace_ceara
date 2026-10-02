@@ -1,6 +1,6 @@
 import { API_BASE } from '../../api/config';
 import { HttpError, screenStateError, type ScreenErrorInfo } from '../../api/errors';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Alert,

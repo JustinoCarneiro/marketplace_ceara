@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet, Easing } from 'react-native';
 import { color, radius } from '../theme';
 
@@ -32,7 +32,7 @@ function SkeletonBlock({ width, height, borderRadius = 6, style }: {
 }
 
 /** Skeleton do card "prestador" (avatar + nome + meta + preço) — HomeScreen/ResultsScreen. */
-export function SkeletonProviderCard() {
+function SkeletonProviderCard() {
   return (
     <View style={styles.providerCard}>
       <SkeletonBlock width={54} height={54} borderRadius={12} />
@@ -46,7 +46,7 @@ export function SkeletonProviderCard() {
 }
 
 /** Skeleton do card "pedido" (badge + título + linha de meta) — MyRequestsScreen/AvailableRequestsScreen. */
-export function SkeletonRequestCard() {
+function SkeletonRequestCard() {
   return (
     <View style={styles.requestCard}>
       <View style={styles.requestTopRow}>

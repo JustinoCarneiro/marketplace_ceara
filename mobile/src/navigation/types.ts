@@ -1,5 +1,4 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 
 // ─── Auth Stack ───────────────────────────────────────────────────────────────
 export type AuthStackParams = {
@@ -72,4 +71,3 @@ export type RootStackParams = {
 export type AuthNavProp = NativeStackNavigationProp<AuthStackParams>;
 export type ClientNavProp = NativeStackNavigationProp<ClientStackParams>;
 export type ProviderNavProp = NativeStackNavigationProp<ProviderStackParams>;
-export type ClientTabNavProp = BottomTabNavigationProp<ClientTabParams>;

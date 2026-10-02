@@ -1,6 +1,6 @@
 import { fetchNearby, isVerificado, distanciaKm as toKm, type NearbyProvider } from '../../api/nearby';
 import { screenStateError, type ScreenErrorInfo } from '../../api/errors';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity,
