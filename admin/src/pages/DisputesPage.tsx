@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
+import { horasDesde, idadeDe } from '../utils/idade';
 
 // Contrato real do backend (DisputaAdminDto): serviceRequestId, categoria, valorRetido, criadoEm.
 // Não há id próprio, nem partes/motivo — a "fila" é o próprio service_request em EM_DISPUTA.
@@ -13,44 +13,15 @@ interface Dispute {
 
 export default function DisputesPage() {
   const navigate = useNavigate();
-  const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadErr, setLoadErr] = useState('');
-
-  // "Agora" das idades da fila: atualizado a cada carga. Date.now() direto na renderização é
-  // impuro (react-hooks/purity). A 1ª carga também não liga `loading` nem zera o erro (já
-  // nascem true e ''): setState síncrono num efeito dispara render em cascata.
-  const [agora, setAgora] = useState(() => Date.now());
-
   // GET /admin/disputes não aceita ?status= (sempre retorna os EM_DISPUTA) — o filtro
   // que existia aqui era ignorado pelo servidor e passava a impressão de ser real.
-  const carregar = useCallback(() =>
-    api.get<Dispute[]>('/admin/disputes')
-      .then(data => setDisputes(Array.isArray(data) ? data : []))
-      .catch((e: unknown) => {
-        // Falha de carga mostrava o estado vazio "Nenhuma disputa aberta 🎉" — parecia
-        // boa notícia justamente quando a fila de mediação não pôde ser lida.
-        setLoadErr(e instanceof Error ? e.message : 'Erro ao carregar as disputas.');
-        setDisputes([]);
-      })
-      .finally(() => {
-        setAgora(Date.now());
-        setLoading(false);
-      }),
-  []);
-
-  useEffect(() => { carregar(); }, [carregar]);
+  // Falha de carga mostrava o estado vazio "Nenhuma disputa aberta 🎉" — parecia boa notícia
+  // justamente quando a fila de mediação não pôde ser lida; por isso `loadErr`.
+  const { itens: disputes, loading, erro: loadErr, carregadoEm: agora } =
+    useLista<Dispute>('/admin/disputes');
 
   function fmt(n: number) {
     return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
-
-  function age(s: string) {
-    const ms = agora - new Date(s).getTime();
-    const h = Math.floor(ms / 3600000);
-    if (h < 24) return `${h}h`;
-    const d = Math.floor(h / 24);
-    return `${d}d ${h % 24}h`;
   }
 
   const totalRetido = disputes.reduce((s, d) => s + (d.valorRetido || 0), 0);
@@ -110,8 +81,8 @@ export default function DisputesPage() {
             </div>
             {/* Rows */}
     {disputes.map(d => {
-              const ageStr = age(d.criadoEm);
-              const ageH = Math.floor((agora - new Date(d.criadoEm).getTime()) / 3600000);
+              const ageStr = idadeDe(d.criadoEm, agora);
+              const ageH = horasDesde(d.criadoEm, agora);
               const ageColor = ageH > 48 ? 'var(--danger)' : ageH > 24 ? 'var(--warm-terra)' : 'var(--text-soft)';
               return (
                 <div key={d.serviceRequestId} style={S.tableRow}>

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
 
 // Contrato real do backend (AdminNotificationDto): id, tipo, refId, criadoEm, lida.
 // Não há titulo/descricao persistidos — derivamos do tipo no cliente.
@@ -42,29 +43,13 @@ function routeFor(n: Notification): string {
 
 export default function NotificationsPage() {
   const nav = useNavigate();
-  const [notifs, setNotifs] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { itens: notifs, loading, recarregar } = useLista<Notification>('/admin/notifications');
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [markErr, setMarkErr] = useState('');
 
-  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
-  const carregar = useCallback(() =>
-    api.get<Notification[]>('/admin/notifications')
-      .then(d => setNotifs(Array.isArray(d) ? d : []))
-      .catch(() => setNotifs([]))
-      .finally(() => setLoading(false)),
-  []);
-
-  function load() {
-    setLoading(true);
-    return carregar();
-  }
-
-  useEffect(() => { carregar(); }, [carregar]);
-
   async function markAllRead() {
     setMarkErr('');
-    try { await api.post('/admin/notifications/mark-all-read', {}); load(); }
+    try { await api.post('/admin/notifications/mark-all-read', {}); recarregar(); }
     catch (e: unknown) { setMarkErr(e instanceof Error ? e.message : 'Erro ao marcar como lidas.'); }
   }
 

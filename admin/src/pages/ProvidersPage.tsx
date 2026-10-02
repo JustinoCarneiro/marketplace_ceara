@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
 
 interface Provider {
   id: string;
@@ -31,34 +32,18 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function ProvidersPage() {
   const nav = useNavigate();
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { itens: providers, loading, recarregar } = useLista<Provider>('/admin/providers');
   const [filter, setFilter] = useState<'EM_VERIFICACAO' | ''>('EM_VERIFICACAO');
   const [actionErr, setActionErr] = useState('');
 
-  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
-  const carregar = useCallback(() =>
-    api.get<Provider[]>('/admin/providers')
-      .then(data => setProviders(Array.isArray(data) ? data : []))
-      .catch(() => setProviders([]))
-      .finally(() => setLoading(false)),
-  []);
-
-  function load() {
-    setLoading(true);
-    return carregar();
-  }
-
-  useEffect(() => { carregar(); }, [carregar]);
-
   async function verify(id: string) {
     setActionErr('');
-    try { await api.post(`/admin/providers/${id}/verify`, {}); load(); }
+    try { await api.post(`/admin/providers/${id}/verify`, {}); recarregar(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao verificar prestador.'); }
   }
   async function reject(id: string) {
     setActionErr('');
-    try { await api.post(`/admin/providers/${id}/reject`, {}); load(); }
+    try { await api.post(`/admin/providers/${id}/reject`, {}); recarregar(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao reprovar prestador.'); }
   }
 

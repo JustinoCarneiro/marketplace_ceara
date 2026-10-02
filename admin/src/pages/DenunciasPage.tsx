@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
+import { idadeDe } from '../utils/idade';
 
 // Contrato real do backend (DenunciaAdminDto).
 interface Denuncia {
@@ -15,27 +17,10 @@ interface Denuncia {
 }
 
 export default function DenunciasPage() {
-  const [denuncias, setDenuncias] = useState<Denuncia[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { itens: denuncias, setItens: setDenuncias, loading, carregadoEm: agora } =
+    useLista<Denuncia>('/admin/denuncias');
   const [resolvendo, setResolvendo] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState('');
-
-  // "Agora" das idades da fila: atualizado a cada carga. Date.now() direto na renderização é
-  // impuro (react-hooks/purity). A 1ª carga também não liga `loading` (já nasce true): setState
-  // síncrono num efeito dispara render em cascata (react-hooks/set-state-in-effect).
-  const [agora, setAgora] = useState(() => Date.now());
-
-  const carregar = useCallback(() =>
-    api.get<Denuncia[]>('/admin/denuncias')
-      .then(data => setDenuncias(Array.isArray(data) ? data : []))
-      .catch(() => setDenuncias([]))
-      .finally(() => {
-        setAgora(Date.now());
-        setLoading(false);
-      }),
-  []);
-
-  useEffect(() => { carregar(); }, [carregar]);
 
   async function resolver(id: string) {
     setResolvendo(id);
@@ -47,14 +32,6 @@ export default function DenunciasPage() {
     } finally {
       setResolvendo(null);
     }
-  }
-
-  function age(s: string) {
-    const ms = agora - new Date(s).getTime();
-    const h = Math.floor(ms / 3600000);
-    if (h < 24) return `${h}h`;
-    const d = Math.floor(h / 24);
-    return `${d}d ${h % 24}h`;
   }
 
   return (
@@ -108,7 +85,7 @@ export default function DenunciasPage() {
                 </div>
                 <span style={{ fontSize: 13.5, color: 'var(--text-soft)' }}>{d.motivo}</span>
                 <span style={{ fontSize: 13.5, color: 'var(--text-soft)' }}>{d.denuncianteNome}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-soft)' }}>{age(d.criadoEm)}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-soft)' }}>{idadeDe(d.criadoEm, agora)}</span>
                 <button
                   style={S.resolveBtn}
                   disabled={resolvendo === d.id}

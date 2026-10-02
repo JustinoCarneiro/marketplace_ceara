@@ -7,7 +7,7 @@ export const API_BASE =
 
 const BASE = API_BASE;
 
-export async function apiFetch<T = unknown>(
+async function apiFetch<T = unknown>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {

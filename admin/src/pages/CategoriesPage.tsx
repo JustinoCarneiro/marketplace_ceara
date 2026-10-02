@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
 
 // Espelha CategoryDto do backend. Não existe totalPrestadores — a tela exibia
 // "{c.totalPrestadores ?? 0} prestadores", ou seja, "0 prestadores" fixo para toda
@@ -10,8 +11,7 @@ interface Category { id: string; nome: string; slug: string; ativa: boolean; }
 const CAT_COLORS: Record<string, string> = { eletrica: '#F2B015', hidraulica: '#15596E', limpeza: '#1B8C84', pintura: '#DA6A32', reforma: '#244C86', jardinagem: '#3C7A4E', geral: '#10847D' };
 
 export default function CategoriesPage() {
-  const [cats, setCats] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { itens: cats, loading, recarregar } = useLista<Category>('/admin/categories');
   const [showForm, setShowForm] = useState(false);
   const [nome, setNome] = useState('');
   const [saving, setSaving] = useState(false);
@@ -20,27 +20,12 @@ export default function CategoriesPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [actionErr, setActionErr] = useState('');
 
-  // 1ª carga sem setState síncrono no efeito (`loading` já nasce true); recargas via load().
-  const carregar = useCallback(() =>
-    api.get<Category[]>('/admin/categories')
-      .then(d => setCats(Array.isArray(d) ? d : []))
-      .catch(() => setCats([]))
-      .finally(() => setLoading(false)),
-  []);
-
-  function load() {
-    setLoading(true);
-    return carregar();
-  }
-
-  useEffect(() => { carregar(); }, [carregar]);
-
   async function create(e: FormEvent) {
     e.preventDefault();
     if (!nome.trim()) return;
     setSaving(true);
     setActionErr('');
-    try { await api.post('/admin/categories', { nome, slug: nome.toLowerCase().replace(/\s+/g, '_') }); setNome(''); setShowForm(false); load(); }
+    try { await api.post('/admin/categories', { nome, slug: nome.toLowerCase().replace(/\s+/g, '_') }); setNome(''); setShowForm(false); recarregar(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao criar categoria.'); }
     finally { setSaving(false); }
   }
@@ -55,14 +40,14 @@ export default function CategoriesPage() {
     if (!editNome.trim()) return;
     setEditSaving(true);
     setActionErr('');
-    try { await api.patch(`/admin/categories/${id}`, { nome: editNome, ativa: cats.find(c => c.id === id)?.ativa }); setEditingId(null); load(); }
+    try { await api.patch(`/admin/categories/${id}`, { nome: editNome, ativa: cats.find(c => c.id === id)?.ativa }); setEditingId(null); recarregar(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao salvar categoria.'); }
     finally { setEditSaving(false); }
   }
 
   async function toggleAtiva(c: Category) {
     setActionErr('');
-    try { await api.patch(`/admin/categories/${c.id}`, { nome: c.nome, ativa: !c.ativa }); load(); }
+    try { await api.patch(`/admin/categories/${c.id}`, { nome: c.nome, ativa: !c.ativa }); recarregar(); }
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao atualizar categoria.'); }
   }
 

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api/client';
+import { useLista } from '../hooks/useLista';
 
 interface User { id: string; nome: string; email: string; role: string; status: string; }
 
@@ -8,29 +9,10 @@ function avatarBg(n: string) { return AVATAR_COLORS[n.charCodeAt(0) % AVATAR_COL
 function initials(n: string) { return n.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase(); }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { itens: users, loading, recarregar } = useLista<User>('/admin/users');
   const [search, setSearch] = useState('');
   const [actionErr, setActionErr] = useState('');
   const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  // A 1ª carga não liga `loading` (já nasce true): setState síncrono dentro de um efeito dispara
-  // render em cascata (react-hooks/set-state-in-effect). Recargas após uma ação passam por load().
-  // setState em callbacks de promessa (.then/.catch/.finally), nunca em try/catch no corpo: o
-  // analisador do React trata o catch como se pudesse rodar de forma síncrona.
-  const carregar = useCallback(() =>
-    api.get<User[]>('/admin/users')
-      .then(d => setUsers(Array.isArray(d) ? d : []))
-      .catch(() => setUsers([]))
-      .finally(() => setLoading(false)),
-  []);
-
-  function load() {
-    setLoading(true);
-    return carregar();
-  }
-
-  useEffect(() => { carregar(); }, [carregar]);
 
   async function toggleStatus(id: string, current: string) {
     const action = current === 'ATIVO' ? 'suspend' : 'reactivate';
@@ -38,7 +20,7 @@ export default function UsersPage() {
     setTogglingId(id);
     try {
       await api.post(`/admin/users/${id}/${action}`, {});
-      await load();
+      await recarregar();
     } catch (e: unknown) {
       setActionErr(e instanceof Error ? e.message : 'Erro ao atualizar o status do usuário.');
     } finally {
