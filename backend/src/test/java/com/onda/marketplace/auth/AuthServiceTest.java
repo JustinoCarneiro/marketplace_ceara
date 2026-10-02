@@ -103,6 +103,71 @@ class AuthServiceTest {
                 .hasFieldOrPropertyWithValue("code", "INVALID_CREDENTIALS");
     }
 
+    // ── US26: "suspender" tem que bloquear o acesso de verdade. O flag `ativo` era gravado pelo
+    //    painel mas nunca consultado: o usuário suspenso continuava entrando e renovando sessão.
+
+    private User usuarioSuspenso() {
+        var user = User.builder()
+                .email("s@s.com")
+                .senhaHash("$2a$hash")
+                .role(UserRole.ROLE_CLIENT)
+                .build();
+        user.suspender();
+        return user;
+    }
+
+    @Test
+    void login_contaSuspensa_comSenhaCorreta_ehBloqueada() {
+        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
+        when(passwordEncoder.matches("Senha@123", "$2a$hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("s@s.com", "Senha@123")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "ACCOUNT_SUSPENDED");
+
+        // nenhuma sessão nasce para a conta suspensa
+        verify(jwtService, never()).generateAccessToken(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void login_contaSuspensa_comSenhaErrada_naoRevelaQueEstaSuspensa() {
+        // Quem não sabe a senha não descobre o estado da conta: a suspensão só aparece depois
+        // das credenciais corretas, senão o login viraria um detector de contas suspensas.
+        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
+        when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("s@s.com", "errada")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_CREDENTIALS");
+    }
+
+    @Test
+    void login_contaReativada_voltaAEntrar() {
+        User user = usuarioSuspenso();
+        user.reativar();
+        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("Senha@123", "$2a$hash")).thenReturn(true);
+        when(jwtService.generateAccessToken(any())).thenReturn("access");
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(authService.login(new LoginRequest("s@s.com", "Senha@123")).accessToken())
+                .isEqualTo("access");
+    }
+
+    @Test
+    void refresh_contaSuspensa_naoRenovaASessao() {
+        var token = new RefreshToken(usuarioSuspenso(), "hash", java.time.Instant.now().plusSeconds(3600));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("qualquer")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+
+        assertThat(token.isRevogado()).as("o token não é rotacionado nem reaproveitado").isFalse();
+        verify(jwtService, never()).generateAccessToken(any());
+    }
+
     @Test
     void refresh_invalidToken_throwsBusinessException() {
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());

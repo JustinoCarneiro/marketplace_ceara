@@ -93,6 +93,12 @@ public class AuthService {
         if (!passwordEncoder.matches(req.senha(), user.getSenhaHash())) {
             throw new BusinessException("INVALID_CREDENTIALS", "Credenciais inválidas.");
         }
+        // US26: suspender bloqueia o acesso. Só DEPOIS de conferir a senha — quem não sabe as
+        // credenciais não descobre que a conta está suspensa.
+        if (!user.isAtivo()) {
+            throw new BusinessException("ACCOUNT_SUSPENDED",
+                    "Conta suspensa. Fale com o suporte em suporte@onda.app.");
+        }
         return buildAuthResponse(user);
     }
 
@@ -101,7 +107,8 @@ public class AuthService {
         String hash = sha256(req.refreshToken());
         RefreshToken stored = refreshTokenRepository.findByTokenHash(hash)
                 .orElseThrow(() -> new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado."));
-        if (!stored.isValid()) {
+        if (!stored.isValid() || !stored.getUser().isAtivo()) {
+            // conta suspensa (US26) não renova a sessão — mesma resposta de token inválido
             throw new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado.");
         }
         stored.revoke();

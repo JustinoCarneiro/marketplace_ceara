@@ -239,6 +239,7 @@ Como **Admin**, quero revisar prestadores, para garantir a qualidade e a seguran
 Como **Admin**, quero buscar e gerenciar usuários, para dar suporte e conter abusos.
 - **Dado** uma busca por e-mail/nome, **quando** localizo um usuário, **então** vejo seu perfil, histórico e status.
 - **Dado** um usuário em abuso, **quando** o suspendo/reativo, **então** o acesso dele é bloqueado/liberado e a ação fica auditável.
+  - (2026-10-01) "Bloqueado" vale de verdade no **login** e no **refresh**: conta suspensa não entra nem renova a sessão. Até 2026-10-01 o flag `ativo` era gravado mas nunca consultado, e o usuário suspenso continuava usando o app. O JWT já emitido segue válido até expirar (até 15 min).
 
 ### US27 — Reconciliação financeira (Escrow)
 Como **Admin**, quero acompanhar o estado das transações e dos eventos, para garantir que nenhum valor fique preso ou inconsistente.
