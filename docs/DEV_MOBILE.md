@@ -181,5 +181,5 @@ Depois: `Ctrl+Shift+P` → **Java: Clean Java Language Server Workspace** → **
 - API URL: `http://localhost:8080/api/v1` (via `adb reverse`)
 - Metro: `http://localhost:8081` (via `adb reverse`)
 - Canal OTA: `preview`
-- Runtime version: `1.0.0`
+- Runtime version: `1.1.0` — a política é `appVersion`, então o runtime acompanha o `version` do `app.json`. **Subiu de SDK ou de código nativo? Suba o `version` junto**: senão um `eas update` com JS novo chega em APKs antigos (runtime igual) e pode derrubá-los. O SDK 57 (React Native 0.86) entrou com a 1.1.0; APKs da 1.0.0 (SDK 56) continuam funcionando com a API, só não recebem mais OTA.
 - Cleartext: liberado pela variante debug que o próprio Expo gera (o `usesCleartextTraffic` do `app.json` era campo morto e foi removido)

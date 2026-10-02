@@ -2,7 +2,7 @@
   "expo": {
     "name": "Onda",
     "slug": "onda-marketplace",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -44,7 +44,8 @@
           "locationAlwaysAndWhenInUsePermission": "O Onda usa sua localização para buscar prestadores próximos e registrar onde o pedido foi feito."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
