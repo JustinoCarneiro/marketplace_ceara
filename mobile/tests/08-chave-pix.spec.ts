@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { registerPrestador, login } from './helpers/auth';
+import { registerPrestador, login, fakeCpf } from './helpers/auth';
 
 // Chave Pix do prestador (ChavePixScreen, MKT-49): é pra ela que o repasse vai quando o
 // serviço fecha. Até aqui só o backend tinha teste (PixKeyTest, ProviderServiceTest); a tela
@@ -8,11 +8,6 @@ import { registerPrestador, login } from './helpers/auth';
 // isso o worker novo reavalia `ts` e o login procura uma conta que nunca foi criada.
 test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
-
-function fakeCpf(seed: number): string {
-  const d = String(seed).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
-}
 
 const PRESTADOR = {
   nome: 'Pedro Pix', cpf: fakeCpf(ts),

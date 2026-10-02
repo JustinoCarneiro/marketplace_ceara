@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login, futureHorarioProposto } from './helpers/auth';
+import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
 
 // Um cliente e um prestador dedicados a este arquivo — os testes rodam em sequência
 // (ordem de declaração, workers:1) e compartilham o único pedido criado no 2º teste.
@@ -8,15 +8,6 @@ import { registerCliente, registerPrestador, login, futureHorarioProposto } from
 // que nunca foram criadas (422) — o retry falhava por outro motivo e escondia o erro real.
 test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
-
-// users.cpf_hash é UNIQUE (antifraude Camada 2) — CPF fixo colide entre reruns contra o
-// mesmo banco (ficou vinculado à conta da rodada anterior). Sem checksum exigido pelo
-// backend (só formato), deriva do timestamp pra nunca repetir; +1 garante que cliente e
-// prestador nunca coincidem entre si.
-function fakeCpf(seed: number): string {
-  const d = String(seed).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
-}
 
 const CLIENTE = { nome: 'Lucia Fluxo', email: `lucia-fluxo-${ts}@onda.dev`, senha: 'senha1234' };
 const PRESTADOR = {

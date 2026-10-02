@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login, futureHorarioProposto } from './helpers/auth';
+import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
 
 // Chat pré-transação entre cliente e prestador (docs/BOAS_PRATICAS_UX.md §1) — telefone e
 // e-mail digitados são mascarados pelo backend antes de persistir (anti-desintermediação).
@@ -7,11 +7,6 @@ import { registerCliente, registerPrestador, login, futureHorarioProposto } from
 // isso o worker novo reavalia `ts` e o login procura contas que nunca foram criadas.
 test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
-
-function fakeCpf(seed: number): string {
-  const d = String(seed).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
-}
 
 const CLIENTE = { nome: 'Nina Chat', email: `nina-chat-${ts}@onda.dev`, senha: 'senha1234' };
 const PRESTADOR = {

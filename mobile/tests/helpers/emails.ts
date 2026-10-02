@@ -7,7 +7,7 @@ import { join } from 'node:path';
  * de recuperação de senha só existe no e-mail — não há endpoint nem log que o exponha —, então o
  * teste o lê daqui, como o usuário leria na caixa de entrada.
  */
-export const PASTA_EMAILS = process.env.MAIL_SINK_DIR ?? '/tmp/onda-emails';
+const PASTA_EMAILS = process.env.MAIL_SINK_DIR ?? '/tmp/onda-emails';
 
 function arquivosPara(email: string): { caminho: string; quando: number }[] {
   try {

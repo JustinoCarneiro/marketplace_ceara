@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login, futureHorarioProposto } from './helpers/auth';
+import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
 
 // Até hoje, "Abrir disputa" não tinha NENHUM botão em lugar nenhum do app — o botão sob a
 // mesma condição de visibilidade (showDispute) navegava pro SOS, sem relação com disputa
@@ -10,11 +10,6 @@ import { registerCliente, registerPrestador, login, futureHorarioProposto } from
 // isso o worker novo reavalia `ts` e o login procura contas que nunca foram criadas.
 test.describe.configure({ mode: 'serial' });
 const ts = Date.now();
-
-function fakeCpf(seed: number): string {
-  const d = String(seed).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
-}
 
 const CLIENTE = { nome: 'Dora Disputa', email: `dora-disputa-${ts}@onda.dev`, senha: 'senha1234' };
 const PRESTADOR = {

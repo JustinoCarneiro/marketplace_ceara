@@ -87,3 +87,14 @@ export function futureHorarioProposto(): { data: string; hora: string } {
   const mes = String(d.getMonth() + 1).padStart(2, '0');
   return { data: `${dia}/${mes}/${d.getFullYear()}`, hora: '14:00' };
 }
+
+/**
+ * CPF fictício, só no formato (o backend não exige dígito verificador). `users.cpf_hash` é UNIQUE
+ * (antifraude Camada 2): um CPF fixo colide entre execuções contra o mesmo banco, porque fica
+ * vinculado à conta da rodada anterior. Deriva do timestamp para nunca repetir; some 1 à semente
+ * para o cliente e o prestador do mesmo teste nunca coincidirem.
+ */
+export function fakeCpf(seed: number): string {
+  const d = String(seed).slice(-9).padStart(9, '0');
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
+}
