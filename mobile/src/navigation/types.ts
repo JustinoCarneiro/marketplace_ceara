@@ -5,6 +5,8 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 export type AuthStackParams = {
   Splash: undefined;
   Login: undefined;
+  ForgotPassword: { email?: string } | undefined;
+  ResetPassword: { email: string };
   RegisterClient: undefined;
   RegisterProvider: undefined;
   VerificationPending: { status: 'EM_VERIFICACAO' | 'VERIFICADO' | 'REPROVADO' };

@@ -2,7 +2,7 @@ import { API_BASE } from '../../api/config';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert,
+  TouchableOpacity, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -84,8 +84,9 @@ export default function LoginScreen() {
               <View style={styles.labelRow}>
                 <Text style={styles.fieldLabel}>Senha</Text>
                 <TouchableOpacity
+                  testID="link-esqueci-senha"
                   hitSlop={8}
-                  onPress={() => Alert.alert('Em breve', 'Recuperação de senha estará disponível na próxima versão. Fale com o suporte em suporte@onda.app.')}
+                  onPress={() => nav.navigate('ForgotPassword', { email: email.trim() || undefined })}
                 >
                   <Text style={styles.forgotLink}>Esqueci a senha</Text>
                 </TouchableOpacity>
