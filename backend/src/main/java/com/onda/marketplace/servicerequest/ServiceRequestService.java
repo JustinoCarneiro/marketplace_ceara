@@ -2,7 +2,6 @@ package com.onda.marketplace.servicerequest;
 
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
-import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
