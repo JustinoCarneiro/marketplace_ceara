@@ -72,6 +72,9 @@ public class User {
 
     public void setCpfHash(String hash) { this.cpfHash = hash; }
 
+    /** Troca a senha (US35). Recebe o hash já calculado — a senha em claro nunca entra aqui. */
+    public void trocarSenha(String novoSenhaHash) { this.senhaHash = novoSenhaHash; }
+
     /** Suspende o acesso do usuário (US26 — gestão pelo admin). */
     public void suspender() { this.ativo = false; }
 

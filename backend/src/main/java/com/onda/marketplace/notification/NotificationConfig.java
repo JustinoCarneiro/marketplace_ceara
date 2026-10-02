@@ -40,4 +40,31 @@ class NotificationConfig {
         log.info("E-mail de alerta ativo — destinatário: {}", adminEmail);
         return new JavaMailEmailSender(javaMailSender, adminEmail, fromEmail);
     }
+
+    /**
+     * E-mail ao USUÁRIO (recuperação de senha, US35). Mesma regra de credencial do alerta: sem
+     * {@code spring.mail.username} não há SMTP de verdade. Sem ele, só vira "gravar em arquivo" se
+     * alguém declarar {@code notification.mail-sink-dir} de propósito (dev/CI); senão fica
+     * desligado e o fluxo avisa que está indisponível.
+     */
+    @Bean
+    UserMailSender userMailSender(
+            ObjectProvider<JavaMailSender> javaMailSenderProvider,
+            @Value("${spring.mail.username:}") String fromEmail,
+            @Value("${notification.mail-sink-dir:}") String sinkDir) {
+
+        JavaMailSender javaMailSender = javaMailSenderProvider.getIfAvailable();
+
+        if (javaMailSender != null && !fromEmail.isBlank()) {
+            return new JavaMailUserMailSender(javaMailSender, fromEmail);
+        }
+        if (!sinkDir.isBlank()) {
+            log.warn("=== E-MAIL AO USUÁRIO GRAVADO EM ARQUIVO ({}): só dev/CI. NUNCA em produção — "
+                    + "o código de recuperação de senha fica legível em disco. ===", sinkDir);
+            return new FileSinkUserMailSender(java.nio.file.Path.of(sinkDir));
+        }
+        log.warn("E-mail ao usuário DESLIGADO: sem SMTP (spring.mail.username) e sem notification.mail-sink-dir. "
+                + "A recuperação de senha responderá que está indisponível.");
+        return new NoOpUserMailSender();
+    }
 }

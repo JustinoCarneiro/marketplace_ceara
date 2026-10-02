@@ -40,6 +40,10 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | id UUID PK · user_id FK→users · token_hash · expires_at · revoked bool · created_at |
 - 1 user : N refresh_tokens. Rotação/revogação por hash.
 
+**`password_reset_codes`** — recuperação de senha (US35, V20)
+| id UUID PK · user_id FK→users · code_hash (HMAC-SHA256 do código, com o usuário no cálculo — o código nunca é gravado) · expires_at · attempts int · closed_at · created_at |
+- `closed_at` fecha o código por qualquer motivo (usado, substituído por pedido novo, esgotado por 5 erros); as linhas ficam porque o limite de 3 pedidos/hora conta as emitidas.
+
 **`providers_profile`** — perfil e reputação do prestador
 | id UUID PK · user_id FK→users UNIQUE · categoria · bio · localizacao `geography(Point,4326)` · status_verificacao enum(`EM_VERIFICACAO`,`VERIFICADO`,`REPROVADO`) · saldo_retido numeric(12,2) · nota_media numeric(2,1) · created_at |
 - Índice **GiST** em `localizacao` (TS03 — `nearby` p95 < 300ms).
@@ -111,6 +115,7 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 ### Diagrama de relacionamentos (texto)
 ```
 users 1─N refresh_tokens
+users 1─N password_reset_codes
 users 1─1 providers_profile 1─N background_checks
 users(cliente) 1─N service_requests N─1 users(prestador)
 service_requests 1─N service_media
@@ -221,6 +226,8 @@ Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications
 
 **Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
 
+**Adicionado em 2026-10-01:** recuperação de senha (US35) — `POST /api/v1/auth/forgot-password` e `POST /api/v1/auth/reset-password`, tabela `password_reset_codes` (V20) e as telas "Esqueci a senha" / "Nova senha" do app. O e-mail ao usuário (`UserMailSender`) é um contrato à parte do `EmailSender` (que só avisa o admin) e **exige SMTP configurado** (`MAIL_USERNAME`/`MAIL_PASSWORD`); sem ele o app avisa que a recuperação está indisponível. Em dev/CI, `NOTIFICATION_MAIL_SINK_DIR` grava o e-mail em arquivo para os testes lerem o código. Junto, **corrigido**: o flag `ativo` (suspensão, US26) nunca era consultado — conta suspensa continuava entrando e renovando a sessão; agora login e refresh a recusam.
+
 ### M01 — Identidade & Auth
 ```
 POST /api/v1/auth/register/client
@@ -230,6 +237,17 @@ POST /api/v1/auth/register/client
 
 POST /api/v1/auth/login           req:{ email, senha } → 200 { accessToken, refreshToken, role }
 POST /api/v1/auth/refresh         req:{ refreshToken } → 200 { accessToken, refreshToken } | 401
+# login e refresh recusam conta suspensa (US26): 422 ACCOUNT_SUSPENDED (só depois da senha certa) / INVALID_REFRESH_TOKEN
+
+# US35 — recuperação de senha (rotas abertas: quem esqueceu a senha não tem sessão)
+POST /api/v1/auth/forgot-password  req:{ email }
+  202:  { mensagem }   # SEMPRE a mesma, exista o e-mail ou não (e o tempo de resposta tem piso de 300 ms)
+  422:  { code:"PASSWORD_RESET_UNAVAILABLE" } se o servidor não tem e-mail configurado | VALIDATION_ERROR
+POST /api/v1/auth/reset-password   req:{ email, codigo, novaSenha }   # novaSenha: 8–72 caracteres (≤ 72 bytes)
+  204:  senha trocada; todas as sessões (refresh tokens) encerradas; aviso por e-mail
+  422:  { code:"INVALID_RESET_CODE", message:"Código inválido ou expirado." }   # único para errado/expirado/usado/e-mail desconhecido/conta suspensa
+        | { code:"INVALID_PASSWORD" } | VALIDATION_ERROR
+# código: 8 caracteres (alfabeto sem I/L/O/U), 30 min, uso único, 5 erros o invalidam, 3 pedidos/hora por usuário, só o último vale
 ```
 
 ### M02 — Verificação de Prestador

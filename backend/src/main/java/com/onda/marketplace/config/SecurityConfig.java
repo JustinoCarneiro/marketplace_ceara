@@ -47,7 +47,10 @@ public class SecurityConfig {
                                 "/api/v1/auth/register/client",
                                 "/api/v1/auth/register/provider",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh").permitAll()
+                                "/api/v1/auth/refresh",
+                                // US35: quem esqueceu a senha, por definição, não tem sessão
+                                "/api/v1/auth/forgot-password",
+                                "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook").permitAll()
                         // Webhook do Mercado Pago (MKT-49): sem auth de sessão — a

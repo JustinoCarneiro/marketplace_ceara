@@ -63,6 +63,10 @@ notification:
   # canal externo, e a aplicação se recusa a subir — assim a ausência nunca passa
   # despercebida em produção. Dev/demo/CI declaram a exceção (ver application-seed.yml).
   allow-missing-alert-channel: ${ALLOW_MISSING_ALERT_CHANNEL:false}
+  # US35: e-mail ao USUÁRIO (recuperação de senha). Sem SMTP (MAIL_USERNAME) só vira "gravar em
+  # arquivo" se este diretório for declarado — dev/CI, NUNCA em produção (o código de recuperação
+  # ficaria legível em disco). Vazio + sem SMTP = recuperação indisponível (o app avisa).
+  mail-sink-dir: ${NOTIFICATION_MAIL_SINK_DIR:}
 
 cors:
   # 3000 = admin build · 5173 = admin dev (Vite) · 8081 = preview web do Expo (mobile)
@@ -72,6 +76,11 @@ marketplace:
   webhook:
     secret: ${MARKETPLACE_WEBHOOK_SECRET}          # obrigatório em produção — segredo compartilhado com gateway
   comissao: ${MARKETPLACE_COMISSAO:0.10}           # percentual padrão (10% no piloto; sai do repasse ao prestador)
+  password-reset:                                  # US35 — recuperação de senha por código no e-mail
+    validade-minutos: 30                           # vida do código
+    max-por-hora: 3                                # códigos por usuário por hora (não inunda caixa alheia)
+    max-tentativas: 5                              # erros que invalidam o código
+    resposta-minima-ms: 300                        # piso do tempo de resposta do pedido (não denuncia e-mail cadastrado)
   outbox:
     delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
   gateway:

@@ -33,6 +33,8 @@ class AuthControllerTest {
     @Autowired ObjectMapper mapper;
 
     @MockBean AuthService authService;
+    // o controller também serve a recuperação de senha (US35) — testada em AuthControllerPasswordResetTest
+    @MockBean PasswordResetService passwordResetService;
 
     static final AuthResponse FAKE_RESPONSE = new AuthResponse(
             "access.token.jwt", "refresh-uuid-token", "ROLE_CLIENT",

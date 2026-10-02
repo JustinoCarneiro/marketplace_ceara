@@ -5,6 +5,7 @@ import com.lowagie.text.pdf.parser.PdfTextExtractor;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
+import com.onda.marketplace.notification.UserMailSender;
 import com.onda.marketplace.payment.PaymentMethod;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
@@ -17,7 +18,10 @@ import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -33,7 +37,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -75,6 +83,22 @@ class E2EFluxoPrincipalTest {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
+    /**
+     * Caixa de entrada de mentira (só no contexto de teste): o código de recuperação de senha só
+     * existe no e-mail — não há endpoint nem log que o exponha — então o teste o lê daqui, igual
+     * ao usuário lendo o e-mail. @Primary vence o remetente real/desligado do NotificationConfig.
+     */
+    @TestConfiguration
+    static class CaixaDeEntrada {
+        record Email(String para, String assunto, String corpo) {}
+        static final List<Email> EMAILS = new CopyOnWriteArrayList<>();
+
+        @Bean @Primary
+        UserMailSender remetenteDeTeste() {
+            return (para, assunto, texto) -> EMAILS.add(new Email(para, assunto, texto));
+        }
+    }
+
     @LocalServerPort int port;
 
     /** Lê o id que o gateway gerou — é o que o gateway real saberia ao chamar nosso webhook. */
@@ -85,6 +109,8 @@ class E2EFluxoPrincipalTest {
     @Autowired ServiceRequestRepository serviceRequestRepository;
     @Autowired TransactionRepository    transactionRepository;
     @Autowired PasswordEncoder          passwordEncoder;
+    @Autowired com.onda.marketplace.auth.PasswordResetCodeRepository passwordResetCodeRepository;
+    @Autowired org.springframework.transaction.support.TransactionTemplate transacao;
 
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
@@ -675,5 +701,254 @@ class E2EFluxoPrincipalTest {
         } finally {
             reader.close();
         }
+    }
+
+    // ─── Épico 1 — Recuperação de senha (US35) ────────────────────────────
+    //
+    // Estes passos rodam contra o Postgres e o SecurityConfig reais, sem token nas rotas
+    // (quem esqueceu a senha não tem sessão). O que os testes de serviço, com repositório
+    // mockado, não conseguem provar: o contador de tentativas PERSISTE mesmo com a exceção
+    // (noRollbackFor), as consultas com trava e os UPDATE em lote funcionam, e o e-mail só
+    // sai depois do commit.
+
+    private static final Pattern CODIGO_NO_EMAIL = Pattern.compile("\\b([0-9A-HJKMNP-TV-Z]{4})-([0-9A-HJKMNP-TV-Z]{4})\\b");
+    static String codigoDoPrimeiroPedido;
+    static String codigoVigente;
+    static final String MARIA = "maria.e2e@onda.test";
+
+    private static String extrairCodigo(String corpoDoEmail) {
+        Matcher m = CODIGO_NO_EMAIL.matcher(corpoDoEmail);
+        Assertions.assertTrue(m.find(), "o e-mail deveria conter o código no formato XXXX-XXXX");
+        return m.group(1) + m.group(2);
+    }
+
+    /** O envio é assíncrono (depois do commit): espera o e-mail chegar na caixa de teste. */
+    private static void aguardarEmails(int quantidade) throws InterruptedException {
+        for (int i = 0; i < 60 && CaixaDeEntrada.EMAILS.size() < quantidade; i++) Thread.sleep(100);
+        assertThat("e-mails recebidos", CaixaDeEntrada.EMAILS.size(), greaterThanOrEqualTo(quantidade));
+    }
+
+    private String pedirCodigo(String email) {
+        return given().contentType(ContentType.JSON).body("{\"email\":\"" + email + "\"}")
+                .when().post("/api/v1/auth/forgot-password")
+                .then().statusCode(202).extract().asString();
+    }
+
+    private io.restassured.response.ValidatableResponse redefinir(String email, String codigo, String novaSenha) {
+        return given().contentType(ContentType.JSON)
+                .body("{\"email\":\"%s\",\"codigo\":\"%s\",\"novaSenha\":\"%s\"}".formatted(email, codigo, novaSenha))
+                .when().post("/api/v1/auth/reset-password").then();
+    }
+
+    private io.restassured.response.Response login(String email, String senha) {
+        return given().contentType(ContentType.JSON)
+                .body("{\"email\":\"%s\",\"senha\":\"%s\"}".formatted(email, senha))
+                .when().post("/api/v1/auth/login");
+    }
+
+    @Test @Order(20)
+    @DisplayName("20 · Recuperação de senha: resposta idêntica p/ e-mail cadastrado e desconhecido; o código só chega por e-mail e não fica em claro")
+    void recuperacaoDeSenha_pedidoDeCodigo() throws Exception {
+        CaixaDeEntrada.EMAILS.clear();
+
+        String desconhecido = pedirCodigo("ninguem@onda.test");
+        String cadastrado   = pedirCodigo(MARIA);
+        assertThat("a resposta não pode revelar se o e-mail existe", cadastrado, equalTo(desconhecido));
+
+        aguardarEmails(1);
+        Thread.sleep(500);   // dá tempo de um e-mail indevido (p/ o desconhecido) aparecer
+        assertThat("só a conta que existe recebe e-mail", CaixaDeEntrada.EMAILS, hasSize(1));
+        var email = CaixaDeEntrada.EMAILS.get(0);
+        assertThat(email.para(), equalTo(MARIA));
+        codigoDoPrimeiroPedido = extrairCodigo(email.corpo());
+        codigoVigente = codigoDoPrimeiroPedido;
+
+        // no banco só o HMAC: 64 hex, sem o código
+        String mariaId = userRepository.findByEmail(MARIA).orElseThrow().getId().toString();
+        String hashGravado = jdbc.queryForObject(
+                "SELECT code_hash FROM password_reset_codes WHERE user_id = ?::uuid", String.class, mariaId);
+        assertThat(hashGravado, allOf(hasLength(64), not(containsString(codigoVigente))));
+    }
+
+    @Test @Order(21)
+    @DisplayName("21 · Cinco erros invalidam o código (as tentativas persistem mesmo com a exceção) e o certo deixa de servir")
+    void recuperacaoDeSenha_cincoErrosInvalidamOCodigo() {
+        for (int i = 0; i < 5; i++) {
+            redefinir(MARIA, "ZZZZ-999" + i, "NovaSenha@1")
+                    .statusCode(422)
+                    .body("code", equalTo("INVALID_RESET_CODE"))
+                    .body("message", equalTo("Código inválido ou expirado."));
+        }
+
+        // As 5 tentativas FORAM gravadas apesar de cada requisição ter terminado em exceção:
+        // sem noRollbackFor a transação voltava inteira e o contador ficava em 0 para sempre.
+        String mariaId = userRepository.findByEmail(MARIA).orElseThrow().getId().toString();
+        var linha = jdbc.queryForMap(
+                "SELECT attempts, closed_at IS NOT NULL AS fechado FROM password_reset_codes WHERE user_id = ?::uuid", mariaId);
+        assertThat(linha.get("attempts"), equalTo(5));
+        assertThat(linha.get("fechado"), equalTo(true));
+
+        // e agora nem o código CERTO serve: é preciso pedir outro
+        redefinir(MARIA, codigoDoPrimeiroPedido, "NovaSenha@1")
+                .statusCode(422).body("code", equalTo("INVALID_RESET_CODE"));
+    }
+
+    @Test @Order(22)
+    @DisplayName("22 · No máximo 3 códigos por hora (o 4º pedido responde igual, mas não envia) e só o último vale")
+    void recuperacaoDeSenha_limitePorHoraESoOUltimoVale() throws Exception {
+        CaixaDeEntrada.EMAILS.clear();
+
+        // o passo 20 já usou 1 dos 3: os pedidos 2 e 3 enviam; o 4º e o 5º respondem igual e não enviam
+        String r2 = pedirCodigo(MARIA);
+        String r3 = pedirCodigo(MARIA);
+        String r4 = pedirCodigo(MARIA);
+        String r5 = pedirCodigo(MARIA);
+        assertThat(r4, allOf(equalTo(r2), equalTo(r3), equalTo(r5)));
+
+        aguardarEmails(2);
+        Thread.sleep(500);
+        assertThat("o limite por hora segurou o 4º e o 5º", CaixaDeEntrada.EMAILS, hasSize(2));
+        String codigoDoPedido2 = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+        codigoVigente = extrairCodigo(CaixaDeEntrada.EMAILS.get(1).corpo());
+
+        // um pedido novo invalida o anterior
+        redefinir(MARIA, codigoDoPedido2, "NovaSenha@1")
+                .statusCode(422).body("code", equalTo("INVALID_RESET_CODE"));
+    }
+
+    @Test @Order(23)
+    @DisplayName("23 · Código certo troca a senha, encerra TODAS as sessões, avisa por e-mail e é de uso único")
+    void recuperacaoDeSenha_trocaASenhaEEncerraSessoes() throws Exception {
+        // sessão aberta ANTES da troca
+        String refreshAntigo = login(MARIA, "Senha@123").then().statusCode(200).extract().path("refreshToken");
+        CaixaDeEntrada.EMAILS.clear();
+
+        redefinir(MARIA, codigoVigente, "NovaSenha@1").statusCode(204);
+
+        login(MARIA, "Senha@123").then().statusCode(422).body("code", equalTo("INVALID_CREDENTIALS"));
+        login(MARIA, "NovaSenha@1").then().statusCode(200).body("accessToken", notNullValue());
+
+        // a sessão que estava aberta com a senha antiga foi encerrada
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + refreshAntigo + "\"}")
+                .when().post("/api/v1/auth/refresh")
+                .then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+
+        // aviso de senha alterada
+        aguardarEmails(1);
+        assertThat(CaixaDeEntrada.EMAILS.get(0).assunto(), containsString("senha foi alterada"));
+        assertThat("o aviso não leva código nenhum", CaixaDeEntrada.EMAILS.get(0).corpo(),
+                not(matchesPattern("(?s).*\\b[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}\\b.*")));
+
+        // uso único: o mesmo código não troca a senha de novo
+        redefinir(MARIA, codigoVigente, "OutraSenha@1").statusCode(422).body("code", equalTo("INVALID_RESET_CODE"));
+        login(MARIA, "NovaSenha@1").then().statusCode(200);
+    }
+
+    @Test @Order(24)
+    @DisplayName("24 · Conta suspensa não entra, não renova a sessão e não recebe código; ao reativar, volta (US26)")
+    void contaSuspensa_naoEntraNaoRenovaNaoRecebeCodigo() throws Exception {
+        String tokenAdmin = login("admin.e2e@onda.test", "Admin@123").then().statusCode(200).extract().path("accessToken");
+        String joao = "joao.e2e@onda.test";
+        String refreshAberto = login(joao, "Senha@123").then().statusCode(200).extract().path("refreshToken");
+
+        given().header("Authorization", "Bearer " + tokenAdmin)
+                .when().post("/api/v1/admin/users/{id}/suspend", prestadorId).then().statusCode(200);
+
+        // com a senha CERTA a conta suspensa não entra; com a errada nem fica sabendo que está suspensa
+        login(joao, "Senha@123").then().statusCode(422).body("code", equalTo("ACCOUNT_SUSPENDED"));
+        login(joao, "errada").then().statusCode(422).body("code", equalTo("INVALID_CREDENTIALS"));
+        // a sessão que já estava aberta não se renova
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + refreshAberto + "\"}")
+                .when().post("/api/v1/auth/refresh")
+                .then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        // e não recebe código de recuperação (resposta igual à de qualquer e-mail)
+        CaixaDeEntrada.EMAILS.clear();
+        assertThat(pedirCodigo(joao), equalTo(pedirCodigo("ninguem@onda.test")));
+        Thread.sleep(700);
+        assertThat(CaixaDeEntrada.EMAILS, empty());
+
+        given().header("Authorization", "Bearer " + tokenAdmin)
+                .when().post("/api/v1/admin/users/{id}/reactivate", prestadorId).then().statusCode(200);
+        login(joao, "Senha@123").then().statusCode(200);
+    }
+
+    @Test @Order(25)
+    @DisplayName("25 · 30 palpites SIMULTÂNEOS contam exatamente 5 tentativas e fecham o código")
+    void recuperacaoDeSenha_palpitesSimultaneosNaoFuramOLimite() throws Exception {
+        // Teste de fumaça do comportamento visto de fora. ATENÇÃO: sozinho ele NÃO prova a trava de
+        // escrita — as requisições chegam espaçadas demais para se sobreporem de verdade (removi a
+        // trava de propósito e este passo seguiu verde). Quem prova a trava é o passo 26.
+        String joao = "joao.e2e@onda.test";
+        CaixaDeEntrada.EMAILS.clear();
+        pedirCodigo(joao);
+        aguardarEmails(1);
+        String codigoCerto = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+
+        int palpites = 30;
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(palpites);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> respostas = new java.util.ArrayList<>();
+        for (int i = 0; i < palpites; i++) {
+            String palpite = "ZZZZ-%04d".formatted(i);
+            respostas.add(pool.submit(() -> {
+                largada.await();
+                return redefinir(joao, palpite, "NovaSenha@1").extract().statusCode();
+            }));
+        }
+        largada.countDown();
+        for (var r : respostas) {
+            assertThat(r.get(60, java.util.concurrent.TimeUnit.SECONDS), equalTo(422));
+        }
+        pool.shutdown();
+
+        String joaoId = userRepository.findByEmail(joao).orElseThrow().getId().toString();
+        var linha = jdbc.queryForMap("""
+                SELECT attempts, closed_at IS NOT NULL AS fechado FROM password_reset_codes
+                 WHERE user_id = ?::uuid ORDER BY created_at DESC LIMIT 1
+                """, joaoId);
+        assertThat("30 palpites paralelos contam exatamente 5 antes de fechar o código",
+                linha.get("attempts"), equalTo(5));
+        assertThat(linha.get("fechado"), equalTo(true));
+
+        redefinir(joao, codigoCerto, "NovaSenha@1").statusCode(422);   // fechado: nem o certo serve
+        login(joao, "Senha@123").then().statusCode(200);               // e a senha NÃO foi trocada
+    }
+
+    @Test @Order(26)
+    @DisplayName("26 · A consulta do código TRAVA a linha: uma 2ª transação espera a 1ª terminar")
+    void recuperacaoDeSenha_aConsultaDoCodigoTravaALinha() throws Exception {
+        // Prova determinística da trava de escrita (@Lock PESSIMISTIC_WRITE). Sem ela, palpites
+        // simultâneos leem o MESMO contador de tentativas e o limite de 5 deixa de valer. Uma
+        // transação segura a linha; a segunda, na mesma consulta, TEM que ficar esperando.
+        String joao = "joao.e2e@onda.test";
+        pedirCodigo(joao);                                           // garante um código aberto
+        UUID joaoId = userRepository.findByEmail(joao).orElseThrow().getId();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var segundaTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        var primeira = pool.submit(() -> transacao.executeWithoutResult(s -> {
+            passwordResetCodeRepository.ativosDoUsuarioComTrava(joaoId, Instant.now());   // pega a trava
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a 1ª transação deveria ter a trava");
+
+        var segunda = pool.submit(() -> {
+            transacao.executeWithoutResult(s ->
+                    passwordResetCodeRepository.ativosDoUsuarioComTrava(joaoId, Instant.now()));
+            segundaTerminou.set(true);
+        });
+        Thread.sleep(800);
+        assertThat("a 2ª transação deveria estar ESPERANDO a trava, não ter terminado",
+                segundaTerminou.get(), is(false));
+
+        liberar.countDown();                                         // a 1ª termina e solta a linha
+        primeira.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        segunda.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(segundaTerminou.get(), is(true));
+        pool.shutdown();
     }
 }

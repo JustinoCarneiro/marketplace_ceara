@@ -31,6 +31,17 @@ Como **Usuário**, quero permanecer logado com segurança, para não reautentica
 - **Dado que** meu JWT expira, **quando** envio um refresh token válido, **então** recebo um novo par de tokens.
 - **Dado que** o refresh token é revogado/expirado, **então** recebo 401 e sou redirecionado ao login.
 
+### US35 — Recuperação de senha
+Como **Usuário** (Cliente ou Prestador) que esqueceu a senha, quero redefini-la com um código enviado ao meu e-mail, para voltar a acessar a conta sem depender do suporte.
+- **Dado** a tela de login, **quando** toco em "Esqueci a senha" e informo meu e-mail, **então** recebo **sempre** a mesma confirmação ("se o e-mail estiver cadastrado, enviamos um código") — a resposta nunca revela se o e-mail existe, nem no texto nem no tempo de resposta.
+- **Dado** um e-mail de conta ativa, **quando** solicito a recuperação, **então** um código de uso único (8 caracteres, validade de 30 minutos) é enviado a esse e-mail; o código nunca é guardado nem registrado em claro, e um novo pedido invalida o anterior.
+- **Dado** que já pedi 3 códigos na última hora, **quando** peço outro, **então** a resposta é a mesma, mas nenhum e-mail é enviado (proteção contra inundar a caixa de entrada de terceiros).
+- **Dado** o código correto e uma nova senha válida (mesma regra do cadastro: mínimo 8 caracteres), **quando** confirmo, **então** a senha é trocada, o código é invalidado, **todas as sessões abertas são encerradas** (refresh tokens) e recebo um e-mail avisando que a senha foi alterada.
+- **Dado** um código errado, expirado ou já usado, **quando** confirmo, **então** recebo "Código inválido ou expirado" **sem distinguir o motivo**; após 5 tentativas erradas o código é invalidado e é preciso pedir outro.
+- **Dado** uma conta suspensa (US26), **então** ela não recebe código (mesma confirmação genérica).
+- **Dado** que o servidor não tem e-mail configurado, **então** o app avisa que a recuperação está indisponível em vez de prometer um e-mail que não sairá.
+- Fora do escopo: administradores (painel interno) redefinem a senha pelo suporte/operação; o JWT já emitido continua válido até expirar (até 15 min), mas nenhum refresh é possível.
+
 ---
 
 ## Épico 2 — Descoberta e Geobusca
