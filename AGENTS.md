@@ -80,6 +80,11 @@ Nunca versione, exiba em log ou cole em prompt: tokens, chaves, senhas, dados
 pessoais reais ou exports. Use `.env` local (`.env`, `.env.homolog`,
 `.env.prod.example`, `.env.jira` não versionados como segredo).
 
+O repositório é **público**. Negociação com fornecedor (gateway, banco, suporte) entra aqui só
+como decisão técnica e status. Volumetria, o que foi dito ao fornecedor e identificadores de
+conta ou aplicação ficam no registro privado do projeto, nunca em `memoria-tecnica/` ou `docs/`.
+Lacuna de controle de segurança entra como o que falta fazer, sem passo a passo de como explorá-la.
+
 | Nível | Exemplos | Regra |
 | --- | --- | --- |
 | R0 | Leitura, docs, testes locais | Executar e validar normalmente. |
