@@ -122,19 +122,19 @@ O app é para Android **e** iOS (Expo/EAS). Hoje só o Android tem fluxo de buil
 configuração, mas **ainda não foi construído nem testado em aparelho** — não há conta Apple Developer.
 
 ### O que dá para fazer sem conta Apple
+Os comandos do EAS rodam **dentro de `mobile/`**: da raiz do repositório eles falham ("Run this command inside a project directory").
+
 | Objetivo | Caminho | Observação |
 |---|---|---|
 | Ver o app num iPhone | Abrir a versão **web** (a mesma da demo) no Safari | Não testado em iPhone real; câmera, áudio e localização dependem das APIs do navegador. |
-| Build para o **simulador** do iOS | `eas build -p ios --profile development-simulator` | Não exige conta Apple (não há assinatura). Só roda em Mac com Xcode ou em runner macOS do CI — **não roda no Linux**. |
+| Build para o **simulador** do iOS | `cd mobile && eas build -p ios --profile development-simulator` | O build roda na nuvem do EAS e pode ser iniciado do Linux; não exige conta Apple (não há assinatura). O que exige **Mac com Xcode** (ou runner macOS do CI) é *executar* o app no simulador. |
 | Inspecionar o projeto iOS gerado (`Info.plist`, bundle id) | `cd mobile && npx expo prebuild --platform ios --no-install` | Cria `ios/` (ignorado pelo Git); apague depois. |
 
 ### O que exige conta Apple Developer (US$ 99/ano)
 iPhone real (build interno/ad hoc), TestFlight e App Store. Quando houver conta:
-1. Decidir o titular: conta **individual** (CPF) ou **organização** (CNPJ + D-U-N-S). Mudar depois exige transferir o app.
-2. `eas credentials` e `eas device:create` (registrar os aparelhos), depois `eas build -p ios --profile preview`.
-3. `eas submit -p ios` para o TestFlight.
-
-O perfil `preview` já herda `distribution: internal`, que no iOS vira ad hoc e só instala em aparelho registrado.
+1. Decidir o titular: conta **individual** (CPF) ou **organização** (CNPJ + D-U-N-S). A Apple tem processo para converter uma conta individual em organização, sujeito aos requisitos dela — confira os vigentes na hora.
+2. **Aparelhos de teste (ad hoc):** `cd mobile && eas credentials` e `eas device:create` (registrar os aparelhos), depois `eas build -p ios --profile preview`. O `preview` herda `distribution: internal`, que no iOS vira ad hoc e só instala em aparelho registrado.
+3. **TestFlight e App Store:** o `preview` **não serve** — o `eas submit` exige um build com `distribution: store`. Será preciso criar um perfil de loja no `eas.json` (por exemplo `production`, com `"distribution": "store"`) e gerar o build com ele antes de `cd mobile && eas submit -p ios`. Esse perfil ainda não existe: só faz sentido defini-lo quando houver conta e um canal de atualização para produção (hoje o canal é `preview`).
 
 ### Já configurado no `app.json`
 `ios.bundleIdentifier` (`com.onda.marketplace`, igual ao pacote do Android), `ITSAppUsesNonExemptEncryption: false`
