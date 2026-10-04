@@ -196,6 +196,13 @@ jobs:
       #   02 → standalone: verifica fluxo de login isolado
       - name: E2E no emulador Android 29
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          # psql do passo que aprova o prestador entre os fluxos 03 e 05 (run-maestro.sh): mesmo banco
+          # do serviço postgres acima — só prestador VERIFICADO envia proposta.
+          PGHOST: localhost
+          PGUSER: onda_user
+          PGPASSWORD: onda_pass_ci
+          PGDATABASE: onda_db
         with:
           api-level: 29
           arch: x86_64

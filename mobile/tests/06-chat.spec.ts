@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
+import { aprovarPrestador } from './helpers/admin';
 
 // Chat pré-transação entre cliente e prestador (docs/BOAS_PRATICAS_UX.md §1) — telefone e
 // e-mail digitados são mascarados pelo backend antes de persistir (anti-desintermediação).
@@ -23,6 +24,8 @@ test('setup: cadastra cliente e prestador do fluxo de chat', async ({ browser })
 
   const p2 = await browser.newPage();
   await registerPrestador(p2, PRESTADOR);
+  // Só prestador aprovado propõe: o cadastro pela tela deixa EM_VERIFICACAO.
+  await aprovarPrestador(PRESTADOR.email, PRESTADOR.senha);
   await p2.close();
 });
 

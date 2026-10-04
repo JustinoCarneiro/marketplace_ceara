@@ -37,7 +37,9 @@ env:
       - hideKeyboard
       - tapOn:
           id: "input-data-proposta"
-- inputText: "20/12/2026"
+# Data FIXA e longe de propósito: o app e o backend (@Future) recusam horário que já passou, e a
+# anterior (20/12/2026) derrubaria este fluxo — e o job inteiro — assim que o dia chegasse.
+- inputText: "20/12/2099"
 # Mesmo padrão de novo — teclado reabre depois de digitar a data e cobre a
 # hora. Mesmo fix condicional.
 - tapOn:

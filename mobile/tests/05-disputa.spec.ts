@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
+import { aprovarPrestador } from './helpers/admin';
 
 // Até hoje, "Abrir disputa" não tinha NENHUM botão em lugar nenhum do app — o botão sob a
 // mesma condição de visibilidade (showDispute) navegava pro SOS, sem relação com disputa
@@ -26,6 +27,8 @@ test('setup: cadastra cliente e prestador do fluxo de disputa', async ({ browser
 
   const p2 = await browser.newPage();
   await registerPrestador(p2, PRESTADOR);
+  // Só prestador aprovado propõe: o cadastro pela tela deixa EM_VERIFICACAO.
+  await aprovarPrestador(PRESTADOR.email, PRESTADOR.senha);
   await p2.close();
 });
 

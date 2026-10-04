@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
+import { aprovarPrestador } from './helpers/admin';
 
 // Fluxo dedicado a pagamento com Cartão — antes desta suíte, PaymentCardScreen nunca tinha
 // sido exercitada por E2E nenhum (só Pix, em 02-fluxo-pedido-completo.spec.ts). O botão
@@ -25,6 +26,8 @@ test('setup: cadastra cliente e prestador do fluxo de cartão', async ({ browser
 
   const p2 = await browser.newPage();
   await registerPrestador(p2, PRESTADOR);
+  // Só prestador aprovado propõe: o cadastro pela tela deixa EM_VERIFICACAO.
+  await aprovarPrestador(PRESTADOR.email, PRESTADOR.senha);
   await p2.close();
 });
 

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { registerCliente, registerPrestador, login, futureHorarioProposto, fakeCpf } from './helpers/auth';
+import { aprovarPrestador } from './helpers/admin';
 
 // Um cliente e um prestador dedicados a este arquivo — os testes rodam em sequência
 // (ordem de declaração, workers:1) e compartilham o único pedido criado no 2º teste.
@@ -24,6 +25,8 @@ test('setup: cadastra o cliente e o prestador do fluxo', async ({ browser }) => 
 
   const p2 = await browser.newPage();
   await registerPrestador(p2, PRESTADOR);
+  // Só prestador aprovado propõe: o cadastro pela tela deixa EM_VERIFICACAO.
+  await aprovarPrestador(PRESTADOR.email, PRESTADOR.senha);
   await p2.close();
 });
 

@@ -34,9 +34,28 @@ run_test() {
   fi
 }
 
+# Só prestador VERIFICADO envia proposta (ProviderVerificationGuard). O fluxo 03 deixa o prestador
+# EM_VERIFICACAO e este job não sobe o profile seed (não há admin para aprovar pela API), então a
+# aprovação é gravada direto no banco do CI — o mesmo UPDATE do botão "Verificar" do painel.
+# A conexão vem das variáveis PG* do step do workflow (mesmo banco do serviço postgres).
+aprovar_prestador() {
+  local email="$1"
+  command -v psql >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; } >/dev/null
+  local linhas
+  # -q: sem a etiqueta "UPDATE 1", que o psql imprime junto com a linha do RETURNING.
+  linhas=$(psql -q -v ON_ERROR_STOP=1 -tA -c \
+    "UPDATE providers_profile SET status_verificacao = 'VERIFICADO', updated_at = now() WHERE user_id = (SELECT id FROM users WHERE email = '$email') RETURNING 1")
+  if [ "$linhas" != "1" ]; then
+    echo "✗ Prestador $email não encontrado para aprovar (linhas afetadas: '$linhas')"
+    return 1
+  fi
+  echo "✓ Prestador $email aprovado (VERIFICADO)"
+}
+
 # Ordem importa — estado de BD persiste entre os fluxos.
 run_test mobile/e2e/01_cadastro_cliente.yaml
 run_test mobile/e2e/03_cadastro_prestador.yaml
+aprovar_prestador "jose.prestador@onda.dev"
 run_test mobile/e2e/04_criar_pedido.yaml
 run_test mobile/e2e/05_enviar_proposta.yaml
 run_test mobile/e2e/06_aceitar_proposta.yaml
