@@ -7,7 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.onda.marketplace",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.onda.marketplace",
@@ -41,7 +45,10 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "O Onda usa sua localização para buscar prestadores próximos e registrar onde o pedido foi feito."
+          "locationWhenInUsePermission": "O Onda usa sua localização para buscar prestadores próximos e registrar onde o pedido foi feito.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false
         }
       ],
       "expo-asset",
