@@ -4,6 +4,7 @@ import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.provider.ProviderProfile;
 import com.onda.marketplace.provider.ProviderProfileRepository;
+import com.onda.marketplace.provider.ProviderVerificationGuard;
 import com.onda.marketplace.review.ReviewRepository;
 import com.onda.marketplace.review.ReviewType;
 import com.onda.marketplace.servicerequest.ServiceRequest;
@@ -26,17 +27,20 @@ public class ProposalService {
     private final UserRepository            userRepository;
     private final ProviderProfileRepository profileRepository;
     private final ReviewRepository          reviewRepository;
+    private final ProviderVerificationGuard verificationGuard;
 
     public ProposalService(ProposalRepository proposalRepository,
                            ServiceRequestRepository requestRepository,
                            UserRepository userRepository,
                            ProviderProfileRepository profileRepository,
-                           ReviewRepository reviewRepository) {
+                           ReviewRepository reviewRepository,
+                           ProviderVerificationGuard verificationGuard) {
         this.proposalRepository = proposalRepository;
         this.requestRepository  = requestRepository;
         this.userRepository     = userRepository;
         this.profileRepository  = profileRepository;
         this.reviewRepository   = reviewRepository;
+        this.verificationGuard  = verificationGuard;
     }
 
     /**
@@ -70,6 +74,10 @@ public class ProposalService {
             throw new BusinessException("REQUEST_CLOSED", "Pedido não aceita mais propostas.");
         }
 
+        // Só prestador VERIFICADO propõe: antes da recusa nada é gravado (nem a proposta, nem a
+        // transição PENDENTE → PROPOSTO).
+        verificationGuard.exigirVerificado(prestadorId);
+
         var proposal = new Proposal(sr, prestadorId, req.valor(), req.prazoDias(),
                 req.horarioProposto(), ProposalStatus.ATIVA);
         proposalRepository.save(proposal);
@@ -97,6 +105,10 @@ public class ProposalService {
             throw new BusinessException("SELF_HIRE_FORBIDDEN",
                     "Prestador não pode aceitar o próprio pedido.");
         }
+
+        // O status pode ter mudado depois da proposta (o admin reprova ou suspende): recusa antes de
+        // qualquer efeito, para o cliente não pagar um prestador já barrado.
+        verificationGuard.exigirContratavel(proposal.getPrestadorId());
 
         proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA)
                 .stream()

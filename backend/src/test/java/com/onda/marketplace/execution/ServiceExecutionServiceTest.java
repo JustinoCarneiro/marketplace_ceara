@@ -11,6 +11,10 @@ import com.onda.marketplace.payment.PaymentMethod;
 import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.provider.ProviderProfileRepository;
+import com.onda.marketplace.provider.ProviderProfiles;
+import com.onda.marketplace.provider.ProviderStatus;
+import com.onda.marketplace.provider.ProviderVerificationGuard;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -18,6 +22,8 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -40,6 +46,7 @@ class ServiceExecutionServiceTest {
     @Mock TransactionRepository    transactionRepository;
     @Mock OutboxEventRepository    outboxRepository;
     @Mock NotificationService      notificationService;
+    @Mock ProviderProfileRepository profileRepository;
 
     ServiceExecutionService service;
 
@@ -49,9 +56,16 @@ class ServiceExecutionServiceTest {
 
     @BeforeEach
     void setUp() {
+        // Regra de verificação real sobre o repositório mockado (um mock dela aceitaria qualquer um).
         service = new ServiceExecutionService(
                 srRepository, proposalRepository, transactionRepository,
-                outboxRepository, notificationService);
+                outboxRepository, notificationService,
+                new ProviderVerificationGuard(profileRepository));
+    }
+
+    private void prestadorCom(ProviderStatus status) {
+        when(profileRepository.findByUserId(PRESTADOR_ID))
+                .thenReturn(Optional.of(ProviderProfiles.comStatus(status)));
     }
 
     // ----- start -----
@@ -59,6 +73,7 @@ class ServiceExecutionServiceTest {
     @Test
     void start_aceitoPrestadorCorretoEDinheiroRetido_moveParaEmAndamento() {
         var sr = sr(ServiceRequestStatus.ACEITO);
+        prestadorCom(ProviderStatus.VERIFICADO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
@@ -80,6 +95,7 @@ class ServiceExecutionServiceTest {
         // US07: sem dinheiro retido o prestador estaria trabalhando de graça — e o
         // pedido chegaria a CONCLUIDO mandando liberar valor que nunca foi cobrado.
         var sr = sr(ServiceRequestStatus.ACEITO);
+        prestadorCom(ProviderStatus.VERIFICADO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
@@ -92,9 +108,32 @@ class ServiceExecutionServiceTest {
         verify(srRepository, never()).save(any());
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ProviderStatus.class, names = "VERIFICADO", mode = EnumSource.Mode.EXCLUDE)
+    void start_prestadorDeixouDeSerVerificado_recusaESemEfeitos(ProviderStatus status) {
+        // Reprovado ou suspenso depois do aceite não começa o serviço: o cliente cancela e é
+        // reembolsado, em vez de ter o atendimento feito por quem o admin já barrou.
+        // Sem nenhuma transação declarada de propósito: se a regra rodasse DEPOIS da checagem do
+        // pagamento, o erro seria PAYMENT_NOT_RETAINED — o teste fixa a ordem.
+        var sr = sr(ServiceRequestStatus.ACEITO);
+        prestadorCom(status);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
+                .thenReturn(List.of(proposta(PRESTADOR_ID)));
+
+        assertThatThrownBy(() -> service.start(SR_ID, PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PROVIDER_NOT_VERIFIED");
+
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.ACEITO);
+        assertThat(sr.getIniciadoEm()).isNull();
+        verify(srRepository, never()).save(any());
+    }
+
     @Test
     void start_semTransacaoNenhuma_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
+        prestadorCom(ProviderStatus.VERIFICADO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));

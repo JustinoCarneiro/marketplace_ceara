@@ -264,18 +264,43 @@ class E2EFluxoPrincipalTest {
     // ─── Épico 4 — Proposta ───────────────────────────────────────────────
 
     @Test @Order(6)
-    @DisplayName("06 · Prestador envia proposta ao pedido")
+    @DisplayName("06 · Prestador só propõe depois de aprovado pelo admin; aí envia a proposta")
     void enviarProposta() {
+        String proposta = """
+                {
+                  "valor":           250.00,
+                  "prazoDias":       1,
+                  "horarioProposto": "%s"
+                }
+                """.formatted(Instant.now().plus(2, ChronoUnit.DAYS));
+
+        // Recém-cadastrado, o prestador está EM_VERIFICACAO. Antes, a "aprovação manual" do admin só
+        // mudava o status e nada barrava: ele propunha e recebia do mesmo jeito.
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + tokenPrestador)
+                .body(proposta)
+                .when()
+                .post("/api/v1/service-requests/{id}/proposals", requestId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("PROVIDER_NOT_VERIFIED"))
+                .body("message", containsString("em verificação"));
+        // a recusa não grava nada
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .get("/api/v1/service-requests/{id}/proposals", requestId)
+                .then()
+                .statusCode(200)
+                .body("$", hasSize(0));
+
+        moderarPrestador("APROVAR");
+
         proposalId = given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", "Bearer " + tokenPrestador)
-                .body("""
-                        {
-                          "valor":           250.00,
-                          "prazoDias":       1,
-                          "horarioProposto": "%s"
-                        }
-                        """.formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .body(proposta)
                 .when()
                 .post("/api/v1/service-requests/{id}/proposals", requestId)
                 .then()
@@ -301,8 +326,28 @@ class E2EFluxoPrincipalTest {
     // ─── Épico 5 — Pagamento e Escrow ─────────────────────────────────────
 
     @Test @Order(8)
-    @DisplayName("08 · Cliente aceita proposta → pedido vira ACEITO")
+    @DisplayName("08 · Cliente aceita proposta → pedido vira ACEITO (e não aceita prestador que o admin barrou)")
     void aceitarProposta() {
+        // O prestador estava VERIFICADO quando propôs, mas o admin pode suspendê-lo antes do aceite:
+        // o cliente não pode pagar quem já foi barrado, e a proposta continua valendo.
+        moderarPrestador("SUSPENDER");
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .put("/api/v1/proposals/{id}/accept", proposalId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("PROVIDER_NOT_VERIFIED"))
+                .body("message", containsString("Escolha outra proposta"));
+        given()
+                .header("Authorization", "Bearer " + tokenCliente)
+                .when()
+                .get("/api/v1/service-requests/{id}/proposals", requestId)
+                .then()
+                .statusCode(200)
+                .body("[0].status", equalTo("ATIVA"));
+        moderarPrestador("APROVAR");
+
         given()
                 .header("Authorization", "Bearer " + tokenCliente)
                 .when()
@@ -439,8 +484,20 @@ class E2EFluxoPrincipalTest {
     // ─── Épico 6 — Execução ───────────────────────────────────────────────
 
     @Test @Order(12)
-    @DisplayName("12 · Prestador inicia o serviço → EM_ANDAMENTO")
+    @DisplayName("12 · Prestador inicia o serviço → EM_ANDAMENTO (suspenso depois do aceite, não inicia)")
     void iniciarServico() {
+        // Suspenso depois do aceite e do pagamento retido, não começa o serviço: o cliente cancela e
+        // é reembolsado, em vez de ter o atendimento feito por quem o admin já barrou.
+        moderarPrestador("SUSPENDER");
+        given()
+                .header("Authorization", "Bearer " + tokenPrestador)
+                .when()
+                .post("/api/v1/service-requests/{id}/start", requestId)
+                .then()
+                .statusCode(422)
+                .body("code", equalTo("PROVIDER_NOT_VERIFIED"));
+        moderarPrestador("APROVAR");
+
         given()
                 .header("Authorization", "Bearer " + tokenPrestador)
                 .when()
@@ -578,17 +635,8 @@ class E2EFluxoPrincipalTest {
     void relatoriosRespeitamPeriodoEBairro() throws Exception {
         // Os testes de serviço mockam o repositório e não executam JPQL: o recorte por período
         // e o join transação→pedido (o bairro é do pedido) só rodam de verdade aqui.
-        // Admin direto no banco — o profile e2e não roda o seed.
-        userRepository.save(User.builder().nome("Admin E2E").email("admin.e2e@onda.test")
-                .senhaHash(passwordEncoder.encode("Admin@123")).role(UserRole.ROLE_ADMIN).build());
-        String tokenAdmin = given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        { "email": "admin.e2e@onda.test", "senha": "Admin@123" }
-                        """)
-                .when().post("/api/v1/auth/login")
-                .then().statusCode(200)
-                .extract().path("accessToken");
+        // Admin direto no banco — o profile e2e não roda o seed (já criado pelos passos de moderação).
+        String tokenAdmin = tokenAdmin();
 
         // 2º pedido, em OUTRO bairro, com a própria transação. Com um pedido só, um join que
         // ligasse a transação ao pedido errado passaria despercebido.
@@ -744,6 +792,25 @@ class E2EFluxoPrincipalTest {
         return given().contentType(ContentType.JSON)
                 .body("{\"email\":\"%s\",\"senha\":\"%s\"}".formatted(email, senha))
                 .when().post("/api/v1/auth/login");
+    }
+
+    /** Admin direto no banco (o profile e2e não roda o seed), criado na 1ª chamada e reaproveitado. */
+    private String tokenAdmin() {
+        if (userRepository.findByEmail("admin.e2e@onda.test").isEmpty()) {
+            userRepository.save(User.builder().nome("Admin E2E").email("admin.e2e@onda.test")
+                    .senhaHash(passwordEncoder.encode("Admin@123")).role(UserRole.ROLE_ADMIN).build());
+        }
+        return login("admin.e2e@onda.test", "Admin@123").then().statusCode(200).extract().path("accessToken");
+    }
+
+    /** Moderação real do prestador do fluxo pela API do admin: APROVAR, REPROVAR ou SUSPENDER. */
+    private void moderarPrestador(String acao) {
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + tokenAdmin())
+                .body("{\"action\":\"%s\"}".formatted(acao))
+                .when().post("/api/v1/admin/providers/{id}/moderate", prestadorId)
+                .then().statusCode(200);
     }
 
     @Test @Order(20)

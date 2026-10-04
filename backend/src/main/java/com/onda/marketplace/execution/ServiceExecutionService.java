@@ -8,6 +8,7 @@ import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.provider.ProviderVerificationGuard;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
@@ -31,17 +32,20 @@ public class ServiceExecutionService {
     private final TransactionRepository    transactionRepository;
     private final OutboxEventRepository    outboxRepository;
     private final NotificationService      notificationService;
+    private final ProviderVerificationGuard verificationGuard;
 
     public ServiceExecutionService(ServiceRequestRepository srRepository,
                                    ProposalRepository proposalRepository,
                                    TransactionRepository transactionRepository,
                                    OutboxEventRepository outboxRepository,
-                                   NotificationService notificationService) {
+                                   NotificationService notificationService,
+                                   ProviderVerificationGuard verificationGuard) {
         this.srRepository          = srRepository;
         this.proposalRepository    = proposalRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
         this.notificationService   = notificationService;
+        this.verificationGuard     = verificationGuard;
     }
 
     /** ACEITO → EM_ANDAMENTO. Verifica que o prestador autenticado é o dono da proposta aceita. */
@@ -60,6 +64,10 @@ public class ServiceExecutionService {
                 .filter(p -> p.getPrestadorId().equals(prestadorId))
                 .orElseThrow(() -> new BusinessException("UNAUTHORIZED_PROVIDER",
                         "Prestador não é o responsável por este pedido."));
+
+        // Reprovado ou suspenso depois do aceite não começa o serviço: o cliente cancela e é
+        // reembolsado. Vem antes da checagem do pagamento — é sobre quem executa, não sobre o dinheiro.
+        verificationGuard.exigirVerificado(prestadorId);
 
         // US07: o prestador só começa porque o dinheiro já está retido — é essa a
         // promessa anti-calote do escrow. Sem esta guarda dava pra executar (e concluir)
