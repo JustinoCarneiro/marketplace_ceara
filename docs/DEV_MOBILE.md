@@ -116,6 +116,40 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ---
 
+## iOS
+
+O app é para Android **e** iOS (Expo/EAS). Hoje só o Android tem fluxo de build e teste; o iOS está preparado na
+configuração, mas **ainda não foi construído nem testado em aparelho** — não há conta Apple Developer.
+
+### O que dá para fazer sem conta Apple
+| Objetivo | Caminho | Observação |
+|---|---|---|
+| Ver o app num iPhone | Abrir a versão **web** (a mesma da demo) no Safari | Não testado em iPhone real; câmera, áudio e localização dependem das APIs do navegador. |
+| Build para o **simulador** do iOS | `eas build -p ios --profile development-simulator` | Não exige conta Apple (não há assinatura). Só roda em Mac com Xcode ou em runner macOS do CI — **não roda no Linux**. |
+| Inspecionar o projeto iOS gerado (`Info.plist`, bundle id) | `cd mobile && npx expo prebuild --platform ios --no-install` | Cria `ios/` (ignorado pelo Git); apague depois. |
+
+### O que exige conta Apple Developer (US$ 99/ano)
+iPhone real (build interno/ad hoc), TestFlight e App Store. Quando houver conta:
+1. Decidir o titular: conta **individual** (CPF) ou **organização** (CNPJ + D-U-N-S). Mudar depois exige transferir o app.
+2. `eas credentials` e `eas device:create` (registrar os aparelhos), depois `eas build -p ios --profile preview`.
+3. `eas submit -p ios` para o TestFlight.
+
+O perfil `preview` já herda `distribution: internal`, que no iOS vira ad hoc e só instala em aparelho registrado.
+
+### Já configurado no `app.json`
+`ios.bundleIdentifier` (`com.onda.marketplace`, igual ao pacote do Android), `ITSAppUsesNonExemptEncryption: false`
+(o app só usa HTTPS padrão) e os textos de permissão em português: câmera, microfone, fotos e localização **só em
+primeiro plano**. O plugin do `expo-location` escreve por padrão textos em inglês e as chaves "Always" e de movimento;
+o app não usa segundo plano nem sensores, então elas são removidas passando `false` (`locationAlwaysPermission`,
+`locationAlwaysAndWhenInUsePermission`, `motionUsagePermission`). O manifesto do Android não muda.
+
+### Antes de publicar na App Store (pendências conhecidas)
+- **Exclusão de conta pelo app** (Guideline 5.1.1(v); a Play Store também exige) — ainda não existe.
+- Preencher os "rótulos de privacidade" no App Store Connect (CPF, localização, fotos, áudio, mensagens).
+- Testar em iPhone de verdade: teclado (`KeyboardAvoidingView`), SOS, upload de mídia e permissões.
+
+---
+
 ## Variáveis de ambiente
 
 | Variável | Valor atual | Onde muda |

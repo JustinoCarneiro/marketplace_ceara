@@ -12,6 +12,7 @@ Plataforma hiperlocal que conecta clientes a prestadores de serviços residencia
 
 ## Perfil de projeto
 App mobile marketplace · Cliente + Prestador + (Admin/Mediação) · Serviços residenciais, lançamento hiperlocal por bairro.
+Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construído nem testado em aparelho — sem conta Apple Developer; ver `docs/DEV_MOBILE.md` (seção iOS).
 
 ## Princípios (não-funcionais críticos)
 - **Escrow nunca em `@Transactional` sobre o gateway.** Cobrança/repasse externos via **Saga + Outbox + idempotência** e reconciliação por webhook. O estado financeiro é dirigido por eventos confirmados, não por transação de banco.
