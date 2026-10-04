@@ -1,5 +1,6 @@
 # ── Ambiente de homologação local ────────────────────────────────────────────
-# Uso: make homolog-up   (ou: docker compose -f docker-compose.homolog.yml --env-file .env.homolog up -d)
+# Uso: make homolog-up   (gera o .env.homolog na 1ª vez, a partir do .env.homolog.example)
+#      ou: docker compose -f docker-compose.homolog.yml --env-file .env.homolog up -d
 #
 # Portas expostas:
 #   8082 → backend  (API REST; 8082 pq 8080/8090 colidem com backends locais de outros projetos)

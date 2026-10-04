@@ -77,8 +77,9 @@ docker compose config
 
 CPF e dados sensíveis criptografados em repouso; mínimo necessário trafegado.
 Nunca versione, exiba em log ou cole em prompt: tokens, chaves, senhas, dados
-pessoais reais ou exports. Use `.env` local (`.env`, `.env.homolog`,
-`.env.prod.example`, `.env.jira` não versionados como segredo).
+pessoais reais ou exports. Os arquivos `.env`, `.env.homolog`, `.env.prod` e `.env.jira` ficam fora
+do Git; só os modelos `*.example` são versionados (o `.env.homolog` nasce de `.env.homolog.example`
+com `make homolog-up`, com segredos aleatórios).
 
 O repositório é **público**. Negociação com fornecedor (gateway, banco, suporte) entra aqui só
 como decisão técnica e status. Volumetria, o que foi dito ao fornecedor e identificadores de
