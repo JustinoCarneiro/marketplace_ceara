@@ -489,7 +489,20 @@ atendimento (`developers/pt/support/center/tickets`). Sem resposta, o repasse se
   suporte **não confirma nem nega**.
 - Documentos exigidos e prazo de análise: definidos pela equipe de Money Out, indisponíveis nesse canal.
 - Caso categorizado como **escalada para a equipe comercial de Money Out**. **Aguardando o retorno
-  deles** (elegibilidade PF, documentação, prazo). Nada a enviar enquanto isso.
+  deles** (elegibilidade PF, documentação, prazo). Naquele momento, nada a enviar.
+
+### Atualização do chamado WCS-52692 (2026-10-02) — respondido; aguardando a equipe comercial
+
+O suporte reiterou que o `403 PA_UNAUTHORIZED_RESULT_FROM_POLICIES` é bloqueio de habilitação comercial do
+Money Out, sem falha no access token, e pediu dados operacionais do piloto. **Respondido em 2026-10-02**; o
+chamado está em "Waiting for support". Ainda **não há decisão** sobre elegibilidade de conta PF, documentos
+exigidos ou prazo. O que foi pedido e respondido (volumetria, controles) fica no registro privado do projeto,
+não neste repositório público.
+
+**Risco técnico local (migração PF → PJ):** hoje o gateway usa um único access token e o verificador de
+webhooks, um único secret; a transação guarda `payment.id`, mas não identifica a conta de origem. A troca
+direta das credenciais poderia afetar reembolsos e notificações de pagamentos antigos. Resolver esse ponto
+antes de qualquer migração de conta, depois que o MP esclarecer o procedimento comercial.
 
 ### Plano de implementação do repasse automático (proposto — a aprovar; R2)
 
