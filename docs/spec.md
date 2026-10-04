@@ -24,6 +24,7 @@ Como **Prestador**, quero criar perfil visual e enviar CPF para validação, par
 - **Dado que** envio meu CPF, **quando** finalizo o cadastro, **então** o background check é disparado de forma **assíncrona** e meu status fica `EM_VERIFICACAO`.
 - **Dado que** o background check retorna aprovado, **então** meu status vira `VERIFICADO` e passo a aparecer nas buscas.
 - **Dado que** retorna reprovado/inconclusivo, **então** status `REPROVADO` e não apareço nas buscas.
+- **Dado que** meu status não é `VERIFICADO` (em verificação, reprovado ou suspenso), **quando** tento enviar uma proposta, **então** a API recusa (`PROVIDER_NOT_VERIFIED`, 422) dizendo o motivo — "ainda em verificação", "não aprovado" ou "suspenso" — e não grava nada. Os pedidos disponíveis continuam visíveis; só propor é bloqueado. (2026-10-04: até aí o status só filtrava a busca e o prestador recém-cadastrado propunha normalmente.)
 - **Dado** o CPF armazenado, **então** ele é criptografado em repouso (LGPD).
 
 ### US12 — Sessão persistente (refresh token)
@@ -245,6 +246,7 @@ Como **Admin (mediador)**, quero analisar e resolver disputas, para destravar o 
 Como **Admin**, quero revisar prestadores, para garantir a qualidade e a segurança da base.
 - **Dado** um background check `INCONCLUSIVO`, **quando** reviso manualmente, **então** posso definir `VERIFICADO` ou `REPROVADO` com justificativa.
 - **Dado** um prestador problemático, **quando** o suspendo, **então** ele deixa de aparecer nas buscas e não recebe novos pedidos.
+  - (2026-10-04) "Não recebe novos pedidos" passou a valer de verdade: prestador reprovado ou suspenso não envia proposta, não tem proposta aceita e não inicia serviço (`PROVIDER_NOT_VERIFIED`). Se o status muda depois da proposta, o aceite do cliente é recusado ("Escolha outra proposta") e a proposta continua ativa; se muda depois do aceite, ele não inicia o serviço e o cliente cancela e é reembolsado. Até 2026-10-04 só a busca por proximidade respeitava o status. Ver `memoria-tecnica/decisoes/prestador-verificado-para-operar.md`.
 
 ### US26 — Gestão de usuários
 Como **Admin**, quero buscar e gerenciar usuários, para dar suporte e conter abusos.
