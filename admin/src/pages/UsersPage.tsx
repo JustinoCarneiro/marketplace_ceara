@@ -2,7 +2,16 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { useLista } from '../hooks/useLista';
 
-interface User { id: string; nome: string; email: string; role: string; status: string; }
+// `role` é o papel principal (o do cadastro); `papeis`, todos os que a conta tem — conta única: a mesma pessoa pode ser
+// cliente e prestador (todo prestador também contrata).
+interface User { id: string; nome: string; email: string; role: string; papeis?: string[]; status: string; }
+
+const ROTULO_PAPEL: Record<string, string> = { ROLE_CLIENT: 'Cliente', ROLE_PROVIDER: 'Prestador', ROLE_ADMIN: 'Admin' };
+
+function rotuloDosPapeis(u: User): string {
+  const papeis = u.papeis && u.papeis.length > 0 ? u.papeis : [u.role];
+  return papeis.map(p => ROTULO_PAPEL[p] ?? p).join(' + ');
+}
 
 const AVATAR_COLORS = ['#15596E', '#DA6A32', '#C0392B', '#1B8C84', '#3C7A4E', '#244C86'];
 function avatarBg(n: string) { return AVATAR_COLORS[n.charCodeAt(0) % AVATAR_COLORS.length]; }
@@ -69,7 +78,7 @@ export default function UsersPage() {
                     <div style={{ width: 38, height: 38, borderRadius: 11, background: avatarBg(u.nome), color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.nome)}</div>
                     <div><div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{u.nome}</div><div style={{ fontSize: 12, color: '#606E71' }}>{u.email}</div></div>
                   </div>
-                  <span style={{ fontSize: 13, color: '#4C636A' }}>{u.role === 'ROLE_PROVIDER' ? 'Prestador' : 'Cliente'}</span>
+                  <span data-testid={`papeis-${u.id}`} style={{ fontSize: 13, color: '#4C636A' }}>{rotuloDosPapeis(u)}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: badge.cor, background: badge.fundo, border: badge.borda, padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{badge.rotulo}</span>
                   {isDeleted ? (
                     // conta excluída não se suspende nem se reativa: não há mais dado a reativar (o backend recusa)

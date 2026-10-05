@@ -60,6 +60,7 @@ export default function RegisterClientScreen() {
         accessToken: loginData.accessToken,
         refreshToken: loginData.refreshToken,
         role: loginData.role,
+        papeis: loginData.papeis,
         userId: loginData.userId,
         nome: loginData.nome,
         email: loginData.email,

@@ -23,9 +23,10 @@ import { excluirConta } from '../../api/deleteAccount';
 export default function DeleteAccountScreen() {
   const nav = useNavigation<NativeStackNavigationProp<ParamListBase>>();
   const token = useAuthStore(s => s.accessToken);
-  const role = useAuthStore(s => s.role);
+  const papeis = useAuthStore(s => s.papeis);
   const logout = useAuthStore(s => s.logout);
-  const isProvider = role === 'ROLE_PROVIDER';
+  // a exclusão é da CONTA, que pode ter os dois papéis: o texto vale para a conta, não para o modo em uso
+  const isProvider = papeis.includes('ROLE_PROVIDER');
 
   const [senha, setSenha] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -96,16 +97,14 @@ export default function DeleteAccountScreen() {
 
           <View style={styles.card}>
             <Text style={styles.item}>
-              {isProvider
-                ? 'Seus dados pessoais (nome, e-mail, CPF e localização) são apagados.'
-                : 'Seus dados pessoais (nome, e-mail, CPF, localização, fotos e áudios dos pedidos) são apagados.'}
+              Seus dados pessoais (nome, e-mail, CPF, localização, fotos e áudios dos pedidos) são apagados.
             </Text>
             {isProvider && (
               <Text style={styles.item}>Seu perfil de prestador e sua chave Pix também são apagados.</Text>
             )}
             <Text style={styles.item}>
               {isProvider
-                ? 'Suas propostas abertas são encerradas.'
+                ? 'Suas propostas abertas são encerradas e os pedidos seus que ainda não têm serviço contratado são cancelados.'
                 : 'Pedidos que ainda não têm serviço contratado são cancelados.'}
             </Text>
             <Text style={styles.item}>
@@ -123,7 +122,7 @@ export default function DeleteAccountScreen() {
             <Feather name="info" size={16} color={color.institutional2} accessibilityElementsHidden />
             <Text style={styles.noticeText}>
               {isProvider
-                ? 'Serviços em andamento ou repasse ainda por receber precisam ser concluídos antes — senão o dinheiro ficaria sem destino.'
+                ? 'Serviços em andamento (como prestador ou como cliente), repasse ainda por receber ou reembolso a caminho precisam ser concluídos antes — senão o dinheiro ficaria sem destino.'
                 : 'Pedidos em andamento ou reembolso ainda a caminho precisam ser concluídos antes.'}
             </Text>
           </View>

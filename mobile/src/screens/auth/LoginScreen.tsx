@@ -35,6 +35,7 @@ export default function LoginScreen() {
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
         role: data.role,
+        papeis: data.papeis,
         userId: data.userId,
         nome: data.nome,
         email: data.email,

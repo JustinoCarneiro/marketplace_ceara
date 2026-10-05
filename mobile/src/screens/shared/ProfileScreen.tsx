@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import Button from '../../components/Button';
+import { alternarPapel } from '../../api/papeis';
 
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
@@ -18,11 +19,44 @@ export default function ProfileScreen() {
   const nome   = useAuthStore(s => s.nome);
   const email  = useAuthStore(s => s.email);
   const role   = useAuthStore(s => s.role);
+  const papeis = useAuthStore(s => s.papeis);
+  const token  = useAuthStore(s => s.accessToken);
+  const refresh = useAuthStore(s => s.refreshToken);
+  const login  = useAuthStore(s => s.login);
   const logout = useAuthStore(s => s.logout);
 
   const isProvider = role === 'ROLE_PROVIDER';
 
-  const MENU_ITEMS: { icon: FeatherName; label: string; onPress: () => void }[] = [
+  // Conta única com papéis: a MESMA conta é cliente e prestador. Alternar troca o papel da sessão (e a navegação junto);
+  // quem só é cliente pode se cadastrar como prestador sem criar outra conta.
+  const outroPapel = isProvider ? 'ROLE_CLIENT' : 'ROLE_PROVIDER';
+  const podeAlternar = papeis.includes(outroPapel);
+  const podeVirarPrestador = !isProvider && !papeis.includes('ROLE_PROVIDER');
+  const [trocando, setTrocando] = useState(false);
+  const [erroTroca, setErroTroca] = useState('');
+
+  async function alternar() {
+    setErroTroca('');
+    setTrocando(true);
+    const r = await alternarPapel(token ?? '', refresh, outroPapel);
+    setTrocando(false);
+    if (!r.ok) { setErroTroca(r.mensagem); return; }
+    login(r.sessao);   // o RootNavigator troca a pilha pelo papel novo
+  }
+
+  const MENU_ITEMS: { icon: FeatherName; label: string; onPress: () => void; testID?: string }[] = [
+    ...(podeAlternar ? [{
+      icon: 'repeat' as FeatherName,
+      label: isProvider ? 'Alternar para modo cliente' : 'Alternar para modo prestador',
+      onPress: alternar,
+      testID: 'btn-alternar-papel',
+    }] : []),
+    ...(podeVirarPrestador ? [{
+      icon: 'tool' as FeatherName,
+      label: 'Quero ser prestador',
+      onPress: () => nav.navigate('BecomeProvider'),
+      testID: 'btn-quero-ser-prestador',
+    }] : []),
     ...(isProvider ? [{
       icon: 'credit-card' as FeatherName,
       label: 'Chave Pix',
@@ -81,9 +115,11 @@ export default function ProfileScreen() {
           {MENU_ITEMS.map((item, i) => (
             <TouchableOpacity
               key={i}
+              testID={item.testID}
               style={[styles.menuItem, i === MENU_ITEMS.length - 1 && styles.menuItemLast]}
               activeOpacity={0.7}
               onPress={item.onPress}
+              disabled={trocando}
             >
               <View style={styles.menuIconWrap}>
                 <Feather name={item.icon} size={18} color={color.institutional2} />
@@ -93,6 +129,8 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {erroTroca ? <Text testID="erro-troca-papel" style={styles.erroTroca}>{erroTroca}</Text> : null}
 
         <Text style={styles.version}>Onda · v1.0.0</Text>
 
@@ -113,6 +151,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  erroTroca: { fontSize: font.size.caption, color: color.danger, textAlign: 'center' },
   safe: { flex: 1, backgroundColor: color.bg },
   content: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[7], gap: space[5] },
 

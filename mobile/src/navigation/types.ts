@@ -43,6 +43,7 @@ export type ClientStackParams = {
   SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
   DeleteAccount: undefined;
+  BecomeProvider: undefined;
 };
 
 // ─── Provider Stack ───────────────────────────────────────────────────────────
