@@ -28,6 +28,23 @@ test.describe('Login Admin', () => {
     await expect(page.getByText(/credenciais inválidas/i)).toBeVisible({ timeout: 8000 });
   });
 
+  test('conta bloqueada por tentativas (429) mostra o aviso do servidor, não "credenciais inválidas"', async ({ page }) => {
+    // Resposta simulada: bloquear o admin do seed de verdade o deixaria sem acesso por 15 min e quebraria as outras
+    // suítes. O que se prova aqui é só a tela: com o bloqueio, "senha errada" seria uma mentira (a senha pode estar certa).
+    await page.route('**/auth/login', route => route.fulfill({
+      status: 429,
+      headers: { 'Retry-After': '840' },
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 429, code: 'TOO_MANY_ATTEMPTS',
+        message: 'Muitas tentativas de senha. Tente de novo em 14 minutos.' }),
+    }));
+    await page.fill('input[type="email"]', 'admin@onda.com');
+    await page.fill('input[type="password"]', 'qualquer');
+    await page.getByRole('button', { name: /Entrar/i }).click();
+    await expect(page.getByText('Muitas tentativas de senha. Tente de novo em 14 minutos.')).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/credenciais inválidas/i)).toHaveCount(0);
+  });
+
   test('usuário não-admin é rejeitado com mensagem clara', async ({ page }) => {
     // Usar conta de cliente que não tem ROLE_ADMIN
     await page.fill('input[type="email"]', 'maria@teste.com');
