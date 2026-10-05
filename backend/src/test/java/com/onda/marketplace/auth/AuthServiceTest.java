@@ -33,10 +33,13 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        // PasswordAuthenticator REAL sobre os MESMOS mocks (ver PasswordAuthenticatorTest para a lógica isolada;
+        // a transação própria, REQUIRES_NEW, só o E2E prova).
+        var passwordAuthenticator = new PasswordAuthenticator(userRepository, passwordEncoder, new PasswordAttempts(5, 900));
         authService = new AuthService(
                 userRepository, refreshTokenRepository, jwtService,
                 passwordEncoder, cpfHashService, termsAcceptanceRepository,
-                new PasswordAttempts(5, 900), 30L);
+                passwordAuthenticator, 30L);
     }
 
     @Test
@@ -227,11 +230,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_aContaContaComTrava_epersisteOErroMesmoComAExcecao() throws Exception {
-        // o contador só vale se a transação NÃO voltar junto com a exceção (noRollbackFor), e se a linha for travada
-        var metodo = AuthService.class.getMethod("login", LoginRequest.class);
+    void login_delegaAContagemAUmaTransacaoPropriaQueSempreCommita() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): o acerto/erro de senha mora em PasswordAuthenticator, numa
+        // transação PRÓPRIA (REQUIRES_NEW) — não mais dentro de login(). Antes, um acerto seguido de
+        // ACCOUNT_SUSPENDED (que corretamente desfaz tudo o mais) desfazia também o PRÓPRIO acerto, na mesma
+        // transação. Ver PasswordAuthenticatorTest para a verificação completa das anotações.
+        var metodo = PasswordAuthenticator.class.getMethod("autenticarPorEmail", String.class, String.class);
         var tx = metodo.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
 
+        assertThat(tx.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
         assertThat(tx.noRollbackFor()).containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
     }
 
@@ -266,7 +273,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         when(cpfHashService.hash("11122233344")).thenReturn("hash-existente");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
         when(userRepository.existsByCpfHash("hash-existente")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.verifyIdentity("11122233344", userId))
@@ -283,7 +290,7 @@ class AuthServiceTest {
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         user.setCpfHash("hash-ja-verificado");
         when(cpfHashService.hash("11122233344")).thenReturn("hash-ja-verificado");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         assertThatCode(() -> authService.verifyIdentity("11122233344", userId)).doesNotThrowAnyException();
         verify(userRepository, never()).save(any());
@@ -295,7 +302,7 @@ class AuthServiceTest {
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         when(cpfHashService.hash("11122233344")).thenReturn("hash-novo");
         when(userRepository.existsByCpfHash("hash-novo")).thenReturn(false);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         authService.verifyIdentity("11122233344", userId);
 

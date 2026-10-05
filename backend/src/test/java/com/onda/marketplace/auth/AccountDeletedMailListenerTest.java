@@ -53,7 +53,11 @@ class AccountDeletedMailListenerTest {
         assertThat(corpo.getValue())
                 .contains("Olá, Ana!")
                 .contains("foi excluída")
-                .contains("sem nenhuma informação que identifique você")   // o que a pessoa precisa saber que fica
+                // achado da revisão cruzada: a versão antiga prometia "nenhuma informação que identifique você" —
+                // falso (o IP do aceite, o SOS e a denúncia ficam). O texto agora só promete o que é verdade.
+                .contains("pagamentos e avaliações")
+                .contains("IP de quando você aceitou")
+                .doesNotContain("nenhuma informação que identifique")
                 .contains("suporte@onda.app");                              // quem não foi sabe a quem recorrer
     }
 

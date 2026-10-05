@@ -6,6 +6,7 @@ import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.proposal.Proposal;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.shared.Bairro;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -25,6 +26,17 @@ import java.util.UUID;
 public class ServiceRequestService {
 
     private static final GeometryFactory GEO = new GeometryFactory(new PrecisionModel(), 4326);
+
+    /**
+     * Formato de categoria: letras (com acento) e espaço — sem dígito, sem {@code @}, sem símbolo de
+     * contato. {@code service_categories} (US28) é o catálogo do painel admin, mas nasce vazio em todo
+     * ambiente — validar contra ele bloquearia todo pedido até o admin cadastrar algo. Isto é uma defesa
+     * de formato, não um catálogo fechado (achado da revisão cruzada, 2026-10-05): sem ela, qualquer
+     * texto — inclusive nome, telefone ou endereço — passava para um campo que os relatórios do admin
+     * tratam como agregável, e que sobrevive à exclusão de conta.
+     */
+    private static final java.util.regex.Pattern CATEGORIA_FORMATO =
+            java.util.regex.Pattern.compile("^[\\p{L} ]{1,40}$");
 
     private final ServiceRequestRepository requestRepository;
     private final ServiceMediaRepository   mediaRepository;
@@ -53,6 +65,16 @@ public class ServiceRequestService {
 
     @Transactional
     public ServiceRequestDto create(UUID clienteId, CreateServiceRequestRequest req, String idempotencyKey) {
+        // Antes de qualquer leitura: um reenvio com o mesmo texto inválido não pode "colar" pelo cache de
+        // idempotência, e a mensagem de erro precisa ser sempre a mesma pro mesmo pedido malformado.
+        if (!CATEGORIA_FORMATO.matcher(req.categoria()).matches()) {
+            throw new BusinessException("INVALID_CATEGORIA",
+                    "Categoria inválida. Use só letras e espaço.");
+        }
+        if (!Bairro.valido(req.bairro())) {
+            throw new BusinessException("INVALID_BAIRRO", "Bairro inválido. Escolha um da lista.");
+        }
+
         // Escopada ao cliente: a chave vem do app (`req-<timestamp>`) e colide de verdade
         // entre usuários diferentes no mesmo milissegundo. Buscando só pela chave, o segundo
         // cliente recebia de volta o pedido do primeiro — id e descrição do problema (V14).
