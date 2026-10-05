@@ -19,9 +19,11 @@ import java.util.UUID;
 
 /**
  * Prestadores cadastrados antes de o cadastro gravar o hash do CPF só têm o CPF cifrado ({@code providers_profile}). Na
- * subida, lê esse CPF, grava o hash e deixa a unicidade (uma pessoa = um CPF) valer para eles também.
+ * subida, lê esse CPF, grava o hash e deixa a unicidade (uma pessoa = um CPF) valer para eles também. Também regrava, com
+ * a chave atual, o hash de quem o tem numa versão de chave anterior (rotação do HMAC: o prestador é o único que se refaz
+ * sozinho, porque o CPF dele existe cifrado).
  *
- * <p>Idempotente (só toca em quem ainda não tem hash) e sem efeito colateral em quem já está certo. Cada prestador é uma
+ * <p>Idempotente (só toca em quem não tem hash ou o tem numa chave antiga) e sem efeito colateral em quem já está certo. Cada prestador é uma
  * transação: um registro ruim — CPF que não decifra (o seed grava um placeholder), duplicata — não derruba os outros.
  * Duplicata (o mesmo CPF em duas contas) NÃO é resolvida aqui: a conta não ganha o hash e fica listada no log, só pelo id,
  * para decisão humana. O CPF nunca vai para o log. Desliga com {@code marketplace.cpf-backfill.enabled=false}.
@@ -86,15 +88,15 @@ public class ProviderCpfBackfill implements ApplicationRunner {
         int vinculados = 0;
         int ilegiveis = 0;
         List<UUID> duplicados = new ArrayList<>();
-        for (PerfilSemHash perfil : profileRepository.semHashDoCpf()) {
-            String hash;
+        for (PerfilSemHash perfil : profileRepository.semHashDoCpf(cpfHashService.versaoAtual())) {
+            String cpf;
             try {
-                hash = cpfHashService.hash(Cpf.soDigitos(cpfEncryptor.decrypt(perfil.getCpfCifrado())));
+                cpf = Cpf.soDigitos(cpfEncryptor.decrypt(perfil.getCpfCifrado()));
             } catch (RuntimeException e) {
                 ilegiveis++;   // não decifra (chave trocada, placeholder do seed): nada a fazer por aqui
                 continue;
             }
-            switch (vincular(perfil.getUserId(), hash)) {
+            switch (vincular(perfil.getUserId(), cpf)) {
                 case VINCULADO -> vinculados++;
                 case DUPLICADO -> duplicados.add(perfil.getUserId());
                 case JA_TINHA  -> { /* ganhou o hash no meio do caminho: nada a refazer */ }
@@ -103,17 +105,18 @@ public class ProviderCpfBackfill implements ApplicationRunner {
         return new Resultado(vinculados, duplicados, ilegiveis);
     }
 
-    private Desfecho vincular(UUID userId, String hash) {
+    private Desfecho vincular(UUID userId, String cpf) {
         try {
             return transacao.execute(status -> {
                 User user = userRepository.findById(userId).orElse(null);
-                if (user == null || user.getCpfHash() != null) {
+                if (user == null || (user.getCpfHash() != null && user.getCpfHashVersao() == cpfHashService.versaoAtual())) {
                     return Desfecho.JA_TINHA;
                 }
-                if (userRepository.existsByCpfHash(hash)) {
+                // o mesmo CPF em OUTRA conta, sob qualquer chave: a própria conta (hash de chave antiga) não é duplicata
+                if (userRepository.existsByCpfHashInAndIdNot(cpfHashService.hashesPossiveis(cpf), userId)) {
                     return Desfecho.DUPLICADO;
                 }
-                user.setCpfHash(hash);
+                user.vincularCpf(cpfHashService.hash(cpf), cpfHashService.versaoAtual());
                 userRepository.save(user);
                 return Desfecho.VINCULADO;
             });

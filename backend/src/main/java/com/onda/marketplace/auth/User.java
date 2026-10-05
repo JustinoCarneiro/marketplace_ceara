@@ -1,8 +1,13 @@
 package com.onda.marketplace.auth;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
+
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -22,13 +27,27 @@ public class User {
     @Column(name = "senha_hash", nullable = false)
     private String senhaHash;
 
+    // Papel PRINCIPAL (o do cadastro): é o contexto em que o login abre. Os papéis que a conta TEM ficam em `papeis`; o papel
+    // em uso numa sessão vem no token (claim "role") e é trocado por /auth/switch-role.
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
 
+    // Conta única com papéis (V24): a mesma pessoa é cliente e prestador na MESMA conta. Todo prestador também contrata.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_papeis", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "papel", nullable = false, length = 30)
+    @Enumerated(EnumType.STRING)
+    @BatchSize(size = 50)
+    private Set<UserRole> papeis = new HashSet<>();
+
     // HMAC-SHA256 do CPF — indexado para unique constraint (LGPD: CPF em claro nunca armazenado)
     @Column(name = "cpf_hash", unique = true)
     private String cpfHash;
+
+    // Versão da chave do HMAC com que o hash foi calculado (V25): permite trocar a chave sem perder a unicidade.
+    @Column(name = "cpf_hash_versao", nullable = false)
+    private int cpfHashVersao = 1;
 
     @Column(nullable = false)
     private boolean ativo = true;
@@ -59,6 +78,12 @@ public class User {
         this.email     = b.email;
         this.senhaHash = b.senhaHash;
         this.role      = b.role;
+        if (b.role != null) {
+            this.papeis.add(b.role);
+            if (b.role == UserRole.ROLE_PROVIDER) {
+                this.papeis.add(UserRole.ROLE_CLIENT);   // todo prestador também contrata
+            }
+        }
     }
 
     public static Builder builder() { return new Builder(); }
@@ -83,8 +108,23 @@ public class User {
     public UserRole getRole()      { return role; }
     public boolean  isAtivo()      { return ativo; }
     public String   getCpfHash()   { return cpfHash; }
+    public int      getCpfHashVersao() { return cpfHashVersao; }
 
     public void setCpfHash(String hash) { this.cpfHash = hash; }
+
+    /** Vincula o CPF (só o hash) e a versão da chave com que foi calculado. */
+    public void vincularCpf(String hash, int versaoDaChave) {
+        this.cpfHash       = hash;
+        this.cpfHashVersao = versaoDaChave;
+    }
+
+    /** Papéis que a conta TEM (não o que está em uso na sessão). */
+    public Set<UserRole> getPapeis() { return Collections.unmodifiableSet(papeis); }
+
+    public boolean temPapel(UserRole papel) { return papeis.contains(papel); }
+
+    /** O cliente que passa a prestar serviço (ou o contrário): a mesma conta ganha o papel. */
+    public void concederPapel(UserRole papel) { papeis.add(papel); }
 
     /** Troca a senha (US35). Recebe o hash já calculado — a senha em claro nunca entra aqui. */
     public void trocarSenha(String novoSenhaHash) { this.senhaHash = novoSenhaHash; }

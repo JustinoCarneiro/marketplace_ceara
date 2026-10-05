@@ -19,6 +19,12 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, unique = true)
     private String tokenHash;
 
+    // Contexto da sessão (V24): renovar não pode jogar quem trocou para prestador de volta ao papel principal.
+    // Null = sessão anterior à migration.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "papel", length = 30)
+    private UserRole papel;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
@@ -31,9 +37,14 @@ public class RefreshToken {
     protected RefreshToken() {}
 
     public RefreshToken(User user, String tokenHash, Instant expiresAt) {
+        this(user, tokenHash, expiresAt, null);
+    }
+
+    public RefreshToken(User user, String tokenHash, Instant expiresAt, UserRole papel) {
         this.user      = user;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.papel     = papel;
     }
 
     public boolean isValid() {
@@ -43,6 +54,7 @@ public class RefreshToken {
     public void revoke() { this.revogado = true; }
 
     public User    getUser()       { return user; }
+    public UserRole getPapel()     { return papel; }
     public String  getTokenHash()  { return tokenHash; }
     public boolean isRevogado()    { return revogado; }
     public Instant getExpiresAt()  { return expiresAt; }

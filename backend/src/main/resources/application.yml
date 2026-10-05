@@ -52,6 +52,12 @@ jwt:
 
 cpf:
   encryption-key: ${CPF_ENCRYPTION_KEY}          # obrigatório em produção (min 32 chars, AES-256)
+  # HMAC do CPF (unicidade/antifraude): chave PRÓPRIA, diferente da de cifra — uma chave por finalidade.
+  hash-key: ${CPF_HASH_KEY}                      # obrigatório (min 32 chars, diferente de CPF_ENCRYPTION_KEY)
+  hash-key-version: ${CPF_HASH_KEY_VERSION:2}    # versão da chave atual; as contas anteriores à separação estão na 1
+  # Rotação: a chave que acabou de sair (versão = hash-key-version - 1). Em banco que já tinha contas com CPF confirmado,
+  # é o valor antigo de CPF_ENCRYPTION_KEY — a aplicação recusa subir se faltar (ver CpfHashKeyCheck).
+  hash-key-previous: ${CPF_HASH_KEY_PREVIOUS:}
 
 # M12: destinatário dos alertas operacionais
 notification:

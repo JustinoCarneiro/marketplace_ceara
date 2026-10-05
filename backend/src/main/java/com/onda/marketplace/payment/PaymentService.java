@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
@@ -24,6 +25,7 @@ public class PaymentService {
     private final ServiceRequestRepository requestRepository;
     private final ProposalRepository       proposalRepository;
     private final UserRepository           userRepository;
+    private final CpfHashService           cpfHashService;
     private final BigDecimal               percentualComissao;
 
     public PaymentService(
@@ -32,12 +34,14 @@ public class PaymentService {
             ServiceRequestRepository requestRepository,
             ProposalRepository proposalRepository,
             UserRepository userRepository,
+            CpfHashService cpfHashService,
             @Value("${marketplace.comissao:0.10}") BigDecimal percentualComissao) {
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
         this.requestRepository     = requestRepository;
         this.proposalRepository    = proposalRepository;
         this.userRepository        = userRepository;
+        this.cpfHashService        = cpfHashService;
         this.percentualComissao    = percentualComissao;
     }
 
@@ -55,7 +59,9 @@ public class PaymentService {
     public TransactionDto initiate(UUID serviceRequestId, InitiatePaymentRequest req,
                                    String idempotencyKey, UUID clienteId) {
         userRepository.findById(clienteId).ifPresent(user -> {
-            if (user.getCpfHash() == null) {
+            // Sem CPF confirmado, ou com o hash numa versão de chave anterior à atual (rotação do HMAC): o cliente confirma de
+            // novo — é o único jeito de regravar com a chave atual, porque só ele sabe o CPF em claro.
+            if (user.getCpfHash() == null || user.getCpfHashVersao() < cpfHashService.versaoAtual()) {
                 throw new BusinessException("IDENTITY_REQUIRED",
                         "Confirme sua identidade antes de pagar.");
             }

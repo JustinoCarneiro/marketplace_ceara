@@ -212,11 +212,15 @@ public class ServiceRequestService {
         return ServiceRequestDto.from(sr);
     }
 
-    /** Fila aberta do prestador: pedidos ainda sem proposta aceita. */
+    /**
+     * Fila aberta do prestador: pedidos ainda sem proposta aceita — menos os que ele mesmo abriu como cliente (a conta é
+     * uma só e tem os dois papéis; ninguém contrata a si mesmo, e a proposta ao próprio pedido é recusada).
+     */
     @Transactional(readOnly = true)
-    public List<AvailableRequestDto> listarDisponiveis() {
+    public List<AvailableRequestDto> listarDisponiveis(UUID prestadorId) {
         return requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE)
                 .stream()
+                .filter(pedido -> !prestadorId.equals(pedido.getCliente().getId()))
                 .map(AvailableRequestDto::from)
                 .toList();
     }

@@ -1935,6 +1935,251 @@ class E2EFluxoPrincipalTest {
         assertThat(de_novo.duplicados(), hasSize(1));
     }
 
+    // ─── Conta única com papéis (Camada 3) e chave própria do hash do CPF ───
+
+    static final String CPF_DUDA  = "516.298.407-85";
+    static final String CPF_EDU   = "803.571.946-75";
+    static final String CPF_FABI  = "962.037.185-21";
+    static final String CPF_ANA   = "274.915.836-28";
+    static final String CPF_CAIO  = "385.026.719-95";
+    static final String CPF_GABI  = "741.380.265-17";
+    static final String CPF_HUGO  = "627.194.038-22";
+    static final String CPF_IVO   = "190.473.628-96";
+    static final String CPF_ROTAC = "458.216.937-64";
+    static final String CPF_DUPCH = "312.840.957-97";   // o mesmo CPF em duas contas, uma com hash da chave antiga
+
+    /** A chave de ANTES da separação (application-e2e.yml: hash-key-previous), na versão 1. */
+    static final String CHAVE_HASH_ANTIGA = "test-cpf-aes256-key-32-chars-here!";
+
+    @Autowired com.onda.marketplace.auth.CpfHashService cpfHashService;
+    @Autowired com.onda.marketplace.auth.CpfHashKeyCheck cpfHashKeyCheck;
+
+    private io.restassured.response.Response trocarPapel(Conta c, String papel) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + c.token())
+                .body("{\"papel\":\"%s\",\"refreshToken\":\"%s\"}".formatted(papel, c.refresh()))
+                .when().post("/api/v1/auth/switch-role");
+    }
+
+    /** Alterna a MESMA conta para outro papel: novo token e novo refresh, mesmo user_id. */
+    private Conta comoPapel(Conta c, String papel) {
+        var r = trocarPapel(c, papel).then().statusCode(200).body("role", equalTo(papel)).extract();
+        return new Conta(UUID.fromString(r.path("userId")), c.email(), r.path("accessToken"), r.path("refreshToken"));
+    }
+
+    private io.restassured.response.Response tornarPrestador(String token, String cpf) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + token)
+                .body("{\"cpf\":\"%s\",\"categoria\":\"eletrica\",\"bio\":\"Instalação elétrica\",\"aceitouTermos\":true}".formatted(cpf))
+                .when().post("/api/v1/auth/become-provider");
+    }
+
+    private io.restassured.response.Response aceitarProposta(String token, String proposta) {
+        return given().header("Authorization", "Bearer " + token).when().put("/api/v1/proposals/{id}/accept", proposta);
+    }
+
+    private io.restassured.response.Response pagar(String token, UUID pedido) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + token)
+                .header("X-Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"metodo\":\"PIX\"}").when().post("/api/v1/service-requests/{id}/payment", pedido);
+    }
+
+    private List<String> papeisDe(UUID userId) {
+        return jdbc.queryForList("SELECT papel FROM user_papeis WHERE user_id = ?::uuid ORDER BY papel", String.class, userId.toString());
+    }
+
+    @Test @Order(44)
+    @DisplayName("44 · Conta única: o prestador contrata outro prestador pela MESMA conta — alterna para cliente, sem segunda conta nem CPF novo")
+    void contaUnica_prestadorContrataPelaMesmaConta() {
+        var duda = cadastrarPrestador("Duda Prestadora", "duda.unica@onda.test", CPF_DUDA);
+        var edu = cadastrarPrestador("Edu Eletricista", "edu.unica@onda.test", CPF_EDU);
+        moderarPrestador(edu.id().toString(), "APROVAR");
+
+        // o cadastro de prestador já dá os dois papéis (todo prestador também contrata)
+        assertThat(papeisDe(duda.id()), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
+
+        // no contexto de prestador ela não cria pedido (é ação de cliente)...
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + duda.token())
+                .header("X-Idempotency-Key", UUID.randomUUID().toString())
+                .body("{\"categoria\":\"eletrica\",\"descricao\":\"Pedido criado com a sessão errada, Rua F 60\",\"lat\":-3.7319,\"lng\":-38.5267,\"bairro\":\"Meireles\"}")
+                .when().post("/api/v1/service-requests").then().statusCode(403);
+
+        // ...alterna para cliente: a sessão anterior é revogada, a nova renova no MESMO contexto
+        var dudaCliente = comoPapel(duda, "ROLE_CLIENT");
+        assertThat("mesma conta", dudaCliente.id(), equalTo(duda.id()));
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"%s\"}".formatted(duda.refresh()))
+                .when().post("/api/v1/auth/refresh").then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"%s\"}".formatted(dudaCliente.refresh()))
+                .when().post("/api/v1/auth/refresh").then().statusCode(200)
+                .body("role", equalTo("ROLE_CLIENT"));   // renovar não devolve quem trocou ao papel principal (prestador)
+
+        // contrata o Edu: aceita e paga SEM confirmar o CPF de novo — o hash veio do cadastro de prestador
+        UUID pedido = pedidoDe(dudaCliente, "Trocar a fiação da casa da Duda, Rua F 60", "PENDENTE");
+        String propostaDoEdu = proporPelaApi(edu, pedido);
+        aceitarProposta(dudaCliente.token(), propostaDoEdu).then().statusCode(200);
+        pagar(dudaCliente.token(), pedido).then().statusCode(anyOf(is(200), is(201)));
+        assertThat(contar("SELECT count(*) FROM transactions WHERE service_request_id = ?::uuid", pedido.toString()), equalTo(1));
+        assertThat("uma conta só: nenhuma segunda conta foi criada",
+                contar("SELECT count(*) FROM users WHERE nome = 'Duda Prestadora'"), equalTo(1));
+
+        // o painel mostra os papéis da conta
+        var lista = given().header("Authorization", "Bearer " + tokenAdmin())
+                .when().get("/api/v1/admin/users").then().statusCode(200).extract().jsonPath();
+        assertThat(lista.getList("find { it.id == '%s' }.papeis".formatted(duda.id())), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
+    }
+
+    @Test @Order(45)
+    @DisplayName("45 · Ninguém contrata a si mesmo: o pedido da própria conta não aparece na fila dela e a proposta a ele é recusada")
+    void contaUnica_naoContrataASiMesma() {
+        var fabi = cadastrarPrestador("Fabi Prestadora", "fabi.unica@onda.test", CPF_FABI);
+        moderarPrestador(fabi.id().toString(), "APROVAR");
+        var fabiCliente = comoPapel(fabi, "ROLE_CLIENT");
+        UUID pedido = pedidoDe(fabiCliente, "Pedido da Fabi para ela mesma, Rua H 80", "PENDENTE");
+        var fabiPrestadora = comoPapel(fabiCliente, "ROLE_PROVIDER");
+
+        // a fila dela não traz o pedido que ela mesma abriu; a fila de outro prestador traz
+        List<String> filaDela = given().header("Authorization", "Bearer " + fabiPrestadora.token())
+                .when().get("/api/v1/providers/available-requests").then().statusCode(200).extract().jsonPath().getList("id");
+        assertThat(filaDela, not(hasItem(pedido.toString())));
+        assertThat(idsNaFila(), hasItem(pedido.toString()));
+
+        // propor ao próprio pedido (mesmo sabendo o id) é recusado, e nada é gravado
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + fabiPrestadora.token())
+                .body("{\"valor\":150.00,\"prazoDias\":1,\"horarioProposto\":\"%s\"}".formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .when().post("/api/v1/service-requests/{id}/proposals", pedido)
+                .then().statusCode(422).body("code", equalTo("SELF_HIRE_FORBIDDEN"));
+        assertThat(statusDoPedido(pedido), equalTo("PENDENTE"));
+        assertThat(contar("SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid", pedido.toString()), equalTo(0));
+    }
+
+    @Test @Order(46)
+    @DisplayName("46 · Quero ser prestador: o cliente passa a prestar serviço NA MESMA conta (CPF, categoria, termos), em verificação")
+    void contaUnica_clienteViraPrestadorNaMesmaConta() {
+        var ana = cadastrarCliente("Ana Cliente", "ana.vira.prestadora@onda.test");
+
+        // ainda não é prestadora: não alterna, e a rota exige sessão
+        trocarPapel(ana, "ROLE_PROVIDER").then().statusCode(422).body("code", equalTo("ROLE_NOT_AVAILABLE"));
+        given().contentType(ContentType.JSON).body("{\"cpf\":\"%s\",\"categoria\":\"eletrica\",\"aceitouTermos\":true}".formatted(CPF_ANA))
+                .when().post("/api/v1/auth/become-provider").then().statusCode(401);
+
+        var r = tornarPrestador(ana.token(), CPF_ANA).then().statusCode(201)
+                .body("role", equalTo("ROLE_PROVIDER")).body("papeis", contains("ROLE_CLIENT", "ROLE_PROVIDER")).extract();
+        assertThat("a MESMA conta", UUID.fromString(r.path("userId")), equalTo(ana.id()));
+        assertThat(contar("SELECT count(*) FROM users WHERE email = ?", ana.email()), equalTo(1));
+        assertThat(papeisDe(ana.id()), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
+        assertThat(texto("SELECT status_verificacao FROM providers_profile WHERE user_id = ?::uuid", ana.id().toString()), equalTo("EM_VERIFICACAO"));
+        assertThat("só o hash do CPF, na chave e versão atuais",
+                texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", ana.id().toString()), equalTo(cpfHashService.hash(CPF_ANA)));
+        assertThat(contar("SELECT cpf_hash_versao FROM users WHERE id = ?::uuid", ana.id().toString()), equalTo(cpfHashService.versaoAtual()));
+        assertThat("novo aceite dos termos (prova de consentimento do papel novo)",
+                contar("SELECT count(*) FROM terms_acceptance WHERE user_id = ?::uuid", ana.id().toString()), equalTo(2));
+
+        // já é prestadora: não cria segundo perfil (pela sessão de cliente; a de prestador nem passa da autorização)
+        var anaCliente = comoPapel(new Conta(ana.id(), ana.email(), r.path("accessToken"), r.path("refreshToken")), "ROLE_CLIENT");
+        tornarPrestador(anaCliente.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("ALREADY_PROVIDER"));
+        tornarPrestador(r.path("accessToken"), CPF_ANA).then().statusCode(403);
+        assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", ana.id().toString()), equalTo(1));
+    }
+
+    @Test @Order(47)
+    @DisplayName("47 · Quero ser prestador — CPF: dígito errado, CPF de outra conta e CPF diferente do já confirmado são recusados; o mesmo CPF passa")
+    void contaUnica_cpfNoQueroSerPrestador() {
+        var beto = cadastrarCliente("Beto Cliente", "beto.cliente@onda.test");
+        tornarPrestador(beto.token(), "123.456.789-00").then().statusCode(422).body("code", equalTo("INVALID_CPF"));
+        tornarPrestador(beto.token(), CPF_DUDA).then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));   // da Duda (passo 44)
+        assertThat(papeisDe(beto.id()), contains("ROLE_CLIENT"));
+        assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", beto.id().toString()), equalTo(0));
+
+        // quem já confirmou o CPF (1º pagamento) não troca de identidade ao virar prestador...
+        var caio = cadastrarCliente("Caio Cliente", "caio.cliente@onda.test");
+        verificarIdentidade(caio, CPF_CAIO);
+        tornarPrestador(caio.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
+        assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT"));
+        // ...nem pela confirmação de identidade: o CPF confirmado não se troca
+        verificarIdentidade(caio.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
+        assertThat(texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", caio.id().toString()), equalTo(cpfHashService.hash(CPF_CAIO)));
+        // ...com o MESMO, passa
+        tornarPrestador(caio.token(), CPF_CAIO).then().statusCode(201);
+        assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
+    }
+
+    @Test @Order(48)
+    @DisplayName("48 · Excluir a conta de dois papéis: vale para os dois lados (bloqueio por serviço como prestador; limpeza do perfil e dos pedidos como cliente)")
+    void contaUnica_exclusaoValeParaOsDoisPapeis() {
+        // bloqueio: serviço ACEITO como PRESTADOR impede a exclusão mesmo pedida pela sessão de CLIENTE
+        var ivo = cadastrarPrestador("Ivo Dual", "ivo.dual@onda.test", CPF_IVO);
+        moderarPrestador(ivo.id().toString(), "APROVAR");
+        var cliente = cadastrarCliente("Cliente do Ivo", "cliente.do.ivo@onda.test");
+        UUID pedidoDoIvo = pedidoDe(cliente, "Serviço do Ivo, Rua J 10", "PENDENTE");
+        aceitarProposta(cliente.token(), proporPelaApi(ivo, pedidoDoIvo)).then().statusCode(200);
+        var ivoCliente = comoPapel(ivo, "ROLE_CLIENT");
+        excluirConta(ivoCliente.token(), SENHA_PADRAO).then().statusCode(422).body("code", equalTo("ACCOUNT_HAS_ACTIVE_ORDERS"));
+        assertThat(contar("SELECT count(*) FROM users WHERE id = ?::uuid AND excluido_em IS NULL", ivo.id().toString()), equalTo(1));
+
+        // limpeza: sem pendência, excluir pela sessão de cliente anonimiza TAMBÉM o perfil de prestador e cancela o pedido
+        var hugo = cadastrarPrestador("Hugo Dual", "hugo.dual@onda.test", CPF_HUGO);
+        definirChavePix(hugo, "hugo.dual@pix.com");
+        var hugoCliente = comoPapel(hugo, "ROLE_CLIENT");
+        UUID pedido = pedidoDe(hugoCliente, "Pedido do Hugo, Rua I 90", "PENDENTE");
+        excluirConta(hugoCliente.token(), SENHA_PADRAO).then().statusCode(204);
+
+        assertThat(conta(hugo.id()).get("nome"), equalTo("Usuário removido"));
+        var perfil = jdbc.queryForMap("SELECT bio, chave_pix_cifrada, cpf_cifrado, status_verificacao FROM providers_profile WHERE user_id = ?::uuid", hugo.id().toString());
+        assertThat(perfil.get("bio"), nullValue());
+        assertThat(perfil.get("chave_pix_cifrada"), nullValue());
+        assertThat(perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+        assertThat(statusDoPedido(pedido), equalTo("CANCELADO"));
+        // os dois contextos perdem o acesso na hora (o token de prestador, que não foi o usado, também)
+        given().header("Authorization", "Bearer " + hugo.token()).when().get("/api/v1/providers/me/chave-pix").then().statusCode(401);
+    }
+
+    @Test @Order(49)
+    @DisplayName("49 · Rotação do HMAC: hash da chave antiga é reconhecido, o cliente confirma de novo no pagamento e migra; o prestador migra na subida")
+    void cpfHashChave_rotacao() {
+        var antiga = new com.onda.marketplace.auth.CpfHashService(CHAVE_HASH_ANTIGA, 1);
+
+        // cliente de ANTES da separação das chaves: confirmou o CPF, o hash é da chave antiga (versão 1)
+        var gabi = cadastrarCliente("Gabi Antiga", "gabi.antiga@onda.test");
+        jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = 1 WHERE id = ?::uuid", antiga.hash(CPF_GABI), gabi.id().toString());
+
+        // o CPF dela continua com dono, mesmo com o hash numa chave que não é a atual
+        registrarPrestador("Clone da Gabi", "gabi.clone@onda.test", CPF_GABI).then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));
+        // pagar pede confirmar a identidade de novo (só ela sabe o CPF em claro)
+        pagar(gabi.token(), UUID.randomUUID()).then().statusCode(422).body("code", equalTo("IDENTITY_REQUIRED"));
+        // outro CPF não vale; o mesmo regrava o hash com a chave atual
+        verificarIdentidade(gabi.token(), CPF_MARTA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
+        verificarIdentidade(gabi.token(), CPF_GABI).then().statusCode(204);
+        assertThat(texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", gabi.id().toString()), equalTo(cpfHashService.hash(CPF_GABI)));
+        assertThat(contar("SELECT cpf_hash_versao FROM users WHERE id = ?::uuid", gabi.id().toString()), equalTo(cpfHashService.versaoAtual()));
+        // agora pagar não pede mais a identidade (falha adiante: o pedido não existe)
+        pagar(gabi.token(), UUID.randomUUID()).then().statusCode(422).body("code", equalTo("REQUEST_NOT_FOUND"));
+
+        // prestador de antes da separação: o CPF existe cifrado, então a subida regrava o hash sozinha
+        var rotac = legado("rotacao.prestador@onda.test", cpfEncryptor.encrypt(CPF_ROTAC));
+        jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = 1 WHERE id = ?::uuid", antiga.hash(CPF_ROTAC), rotac.toString());
+        cpfBackfill.preencher();
+        assertThat(texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", rotac.toString()), equalTo(cpfHashService.hash(CPF_ROTAC)));
+        assertThat(contar("SELECT cpf_hash_versao FROM users WHERE id = ?::uuid", rotac.toString()), equalTo(cpfHashService.versaoAtual()));
+
+        // duplicata ENTRE chaves: a conta A já tem o hash (da chave antiga) e a B, legada sem hash, é do mesmo CPF. A restrição única
+        // do banco não enxerga isso (são textos diferentes): quem recusa é a consulta com as duas chaves, em qualquer ordem
+        var contaA = legado("dup.chaves.a@onda.test", cpfEncryptor.encrypt(CPF_DUPCH));
+        var contaB = legado("dup.chaves.b@onda.test", cpfEncryptor.encrypt(CPF_DUPCH));
+        jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = 1 WHERE id = ?::uuid", antiga.hash(CPF_DUPCH), contaA.toString());
+        var resultado = cpfBackfill.preencher();
+        assertThat("a conta que já era dona do CPF segue dona, agora na chave atual",
+                texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", contaA.toString()), equalTo(cpfHashService.hash(CPF_DUPCH)));
+        assertThat("a outra não ganha hash: é duplicata, listada para decisão humana",
+                conta(contaB).get("cpf_hash"), nullValue());
+        assertThat(resultado.duplicados(), hasItem(contaB));
+        assertThat(resultado.duplicados(), not(hasItem(contaA)));
+
+        // a subida recusa conta com hash de uma versão que a configuração não sabe mais calcular (aqui, a 0: abaixo da anterior)
+        jdbc.update("UPDATE users SET cpf_hash_versao = 0 WHERE id = ?::uuid", rotac.toString());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.run(null));
+        jdbc.update("UPDATE users SET cpf_hash_versao = ? WHERE id = ?::uuid", cpfHashService.versaoAtual(), rotac.toString());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> cpfHashKeyCheck.run(null));
+    }
+
     /** Prestador "legado": criado direto no banco, como era antes — só com o CPF cifrado, sem hash. */
     private UUID legado(String email, String cpfCifrado) {
         User u = userRepository.save(User.builder().nome("Prestador Legado").email(email)

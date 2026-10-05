@@ -282,11 +282,35 @@ class ServiceRequestServiceTest {
         when(requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE))
                 .thenReturn(List.of(sr));
 
-        List<AvailableRequestDto> result = service.listarDisponiveis();
+        List<AvailableRequestDto> result = service.listarDisponiveis(UUID.randomUUID());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).categoria()).isEqualTo("ELETRICISTA");
         assertThat(result.get(0).status()).isEqualTo("PENDENTE");
+    }
+
+    @Test
+    void listarDisponiveis_naoMostraOsPedidosQueOPrestadorAbriuComoCliente() {
+        // conta única com papéis: o prestador também é cliente. Os pedidos dele não entram na fila dele (ninguém contrata a si
+        // mesmo — e a proposta ao próprio pedido é recusada).
+        var eu = User.builder().nome("Eu").email("eu@x.com").senhaHash("$2a$x").role(com.onda.marketplace.auth.UserRole.ROLE_PROVIDER).build();
+        var outro = User.builder().nome("Outro").email("outro@x.com").senhaHash("$2a$x").role(com.onda.marketplace.auth.UserRole.ROLE_CLIENT).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(eu, "id", UUID.randomUUID());
+        org.springframework.test.util.ReflectionTestUtils.setField(outro, "id", UUID.randomUUID());
+        var meu = new ServiceRequest();
+        meu.setCliente(eu);
+        meu.setCategoria("ELETRICISTA");
+        meu.setStatus(ServiceRequestStatus.PENDENTE);
+        var deOutro = new ServiceRequest();
+        deOutro.setCliente(outro);
+        deOutro.setCategoria("HIDRAULICA");
+        deOutro.setStatus(ServiceRequestStatus.PENDENTE);
+        when(requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE))
+                .thenReturn(List.of(meu, deOutro));
+
+        List<AvailableRequestDto> result = service.listarDisponiveis(eu.getId());
+
+        assertThat(result).extracting(AvailableRequestDto::categoria).containsExactly("HIDRAULICA");
     }
 
     @Test

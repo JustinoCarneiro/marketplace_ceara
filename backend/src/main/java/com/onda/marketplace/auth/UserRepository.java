@@ -11,7 +11,15 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
-    boolean existsByCpfHash(String cpfHash);
+
+    /** Algum dos hashes (chave atual e, numa rotação, a anterior) já tem dono? Ver {@link CpfHashService#hashesPossiveis}. */
+    boolean existsByCpfHashIn(java.util.Collection<String> hashes);
+
+    /** Idem, ignorando a própria conta (regravar o hash de quem já o tem numa chave antiga não é duplicata). */
+    boolean existsByCpfHashInAndIdNot(java.util.Collection<String> hashes, UUID id);
+
+    /** Contas cujo hash é de uma versão de chave anterior a esta (a conferência de configuração na subida). */
+    long countByCpfHashIsNotNullAndCpfHashVersaoLessThan(int versao);
 
     /** Filtro de autenticação: o token só vale enquanto a conta está ativa (não suspensa, não excluída). */
     boolean existsByIdAndAtivoTrue(UUID id);

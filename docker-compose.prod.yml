@@ -5,7 +5,7 @@
 # (dados semeados) e gateway de pagamento simulado (não há integração real com nenhum
 # gateway ainda). Não é lançamento com dinheiro real. Ver ROADMAP.md Fase 5.
 #
-# Segredos (JWT_SECRET, CPF_ENCRYPTION_KEY, MARKETPLACE_WEBHOOK_SECRET, POSTGRES_PASSWORD,
+# Segredos (JWT_SECRET, CPF_ENCRYPTION_KEY, CPF_HASH_KEY, MARKETPLACE_WEBHOOK_SECRET, POSTGRES_PASSWORD,
 # ADMIN_PASS) NUNCA vão num arquivo commitado — ver .env.prod.example pro que precisa
 # existir, e configure os valores reais direto nas env vars do Coolify.
 #
@@ -47,6 +47,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       CPF_ENCRYPTION_KEY: ${CPF_ENCRYPTION_KEY}
+      # HMAC do CPF: chave PRÓPRIA, diferente da de cifra. CPF_HASH_KEY_PREVIOUS só durante a migração da separação
+      # (o valor antigo de CPF_ENCRYPTION_KEY) — a aplicação recusa subir se houver conta nela e a variável faltar.
+      CPF_HASH_KEY: ${CPF_HASH_KEY}
+      CPF_HASH_KEY_PREVIOUS: ${CPF_HASH_KEY_PREVIOUS:-}
       MARKETPLACE_WEBHOOK_SECRET: ${MARKETPLACE_WEBHOOK_SECRET}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS}

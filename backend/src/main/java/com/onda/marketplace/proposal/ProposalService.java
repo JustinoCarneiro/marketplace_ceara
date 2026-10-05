@@ -66,6 +66,12 @@ public class ProposalService {
         ServiceRequest sr = requestRepository.findById(serviceRequestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
+        // Conta única com papéis: o prestador pode ser também o cliente deste pedido. Ninguém contrata a si mesmo (fabricaria
+        // reputação); o aceite recusa o mesmo caso, mas aqui a proposta nem chega a existir.
+        if (sr.getCliente().getId().equals(prestadorId)) {
+            throw new BusinessException("SELF_HIRE_FORBIDDEN", "Você não pode enviar proposta ao seu próprio pedido.");
+        }
+
         // Só PENDENTE/PROPOSTO aceitam proposta nova — ACEITO/EM_ANDAMENTO/EM_DISPUTA já têm
         // prestador definido; sem este check dava pra empilhar proposta ATIVA num serviço em
         // execução (US15).

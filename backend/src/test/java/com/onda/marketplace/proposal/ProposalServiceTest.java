@@ -98,6 +98,25 @@ class ProposalServiceTest {
     }
 
     @Test
+    void create_propostaAoProprioPedido_recusa_aContaEUmaEPodeSerClienteEPrestador() {
+        // conta única com papéis: o prestador que também abriu o pedido como cliente não propõe a si mesmo (fabricaria
+        // reputação). Nada é gravado e o pedido não vira PROPOSTO.
+        var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
+        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() ->
+                service.create(sr.getId(),
+                        new CreateProposalRequest(BigDecimal.valueOf(200), 2, Instant.now().plusSeconds(3600)),
+                        CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "SELF_HIRE_FORBIDDEN");
+
+        verify(proposalRepository, never()).save(any());
+        verify(requestRepository, never()).save(any());
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PENDENTE);
+    }
+
+    @Test
     void create_prestadorSemPerfil_recusaComoNaoVerificado() {
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
         when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));

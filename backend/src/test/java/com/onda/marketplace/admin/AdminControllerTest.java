@@ -259,7 +259,7 @@ class AdminControllerTest {
     @Test
     void users_retorna200_comLista() throws Exception {
         when(userAdminService.listar(any())).thenReturn(List.of(
-                new UserAdminDto(UUID.randomUUID(), "Maria", "maria@x.com", "ROLE_CLIENT", "ATIVO")));
+                new UserAdminDto(UUID.randomUUID(), "Maria", "maria@x.com", "ROLE_CLIENT", List.of("ROLE_CLIENT"), "ATIVO")));
 
         mvc.perform(get("/api/v1/admin/users"))
                 .andExpect(status().isOk())

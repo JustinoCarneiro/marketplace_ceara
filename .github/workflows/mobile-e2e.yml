@@ -131,6 +131,8 @@ jobs:
           # Segredos obrigatórios — configure em Settings → Secrets → Actions
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           CPF_ENCRYPTION_KEY: ${{ secrets.CPF_ENCRYPTION_KEY }}
+          # banco efêmero do CI: chave de teste fixa (como no ci.yml), sem precisar de mais um secret do repositório
+          CPF_HASH_KEY: test-cpf-hmac-key-for-ci-only-32chars
           MARKETPLACE_WEBHOOK_SECRET: ${{ secrets.MARKETPLACE_WEBHOOK_SECRET }}
           # Sem isso o boot falha (alertChannelValidator exige e-mail/push configurado em
           # produção) — CI não tem canal de alerta real, mesma flag usada no ambiente de

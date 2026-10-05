@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
@@ -37,6 +38,9 @@ class PaymentServiceTest {
     @Mock ProposalRepository       proposalRepository;
     @Mock UserRepository           userRepository;
 
+    /** Real: o que se prova é a versão da chave, e um mock não a teria. */
+    final CpfHashService cpfHashService = new CpfHashService("test-cpf-hmac-key-0123456789-0123456789", 2);
+
     PaymentService service;
 
     private static final UUID CLIENTE_ID = UUID.randomUUID();
@@ -46,14 +50,14 @@ class PaymentServiceTest {
         service = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, BigDecimal.valueOf(0.15));
+                userRepository, cpfHashService, BigDecimal.valueOf(0.15));
     }
 
     /** Retorna um usuário com CPF hash registrado (identidade verificada). */
     private User clienteVerificado() {
         User u = User.builder().nome("Cliente").email("c@test.com")
                 .senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
-        u.setCpfHash("abc123hashfake");
+        u.vincularCpf("abc123hashfake", cpfHashService.versaoAtual());
         return u;
     }
 
@@ -81,7 +85,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, new BigDecimal("0.10"));
+                userRepository, cpfHashService, new BigDecimal("0.10"));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
@@ -104,7 +108,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, new BigDecimal(percentual));
+                userRepository, cpfHashService, new BigDecimal(percentual));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
@@ -150,6 +154,30 @@ class PaymentServiceTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_INITIATED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
+    }
+
+    @Test
+    void initiate_hashDeChaveAntiga_pedeConfirmarDeNovo() {
+        // rotação do HMAC: o hash do cliente está na versão anterior. Só ele sabe o CPF em claro, então o 1º pagamento depois
+        // da troca pede a confirmação outra vez (que regrava o hash com a chave atual).
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        u.vincularCpf("hash-da-chave-antiga", cpfHashService.versaoAtual() - 1);
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+
+        assertThatThrownBy(() -> service.initiate(UUID.randomUUID(), new InitiatePaymentRequest("PIX"), "idem-rot", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "IDENTITY_REQUIRED");
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void initiate_semCpfConfirmado_pedeConfirmar() {
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+
+        assertThatThrownBy(() -> service.initiate(UUID.randomUUID(), new InitiatePaymentRequest("PIX"), "idem-sem", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "IDENTITY_REQUIRED");
     }
 
     @Test

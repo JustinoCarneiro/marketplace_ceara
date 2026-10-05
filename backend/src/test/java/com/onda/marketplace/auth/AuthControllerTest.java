@@ -15,8 +15,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -38,7 +41,7 @@ class AuthControllerTest {
 
     static final AuthResponse FAKE_RESPONSE = new AuthResponse(
             "access.token.jwt", "refresh-uuid-token", "ROLE_CLIENT",
-            java.util.UUID.randomUUID(), "Cliente Teste", "cliente@test.com"
+            java.util.UUID.randomUUID(), "Cliente Teste", "cliente@test.com", java.util.List.of("ROLE_CLIENT")
     );
 
     // ── US01: cadastro de cliente ────────────────────────────────────────────
@@ -170,5 +173,49 @@ class AuthControllerTest {
                         ))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+    }
+
+    // ── Conta única com papéis: troca de contexto da sessão
+
+    @Test
+    void switchRole_trocaOPapel_usandoOIdDoTokenENaoODoCorpo() throws Exception {
+        java.util.UUID doToken = java.util.UUID.randomUUID();
+        when(authService.switchRole(eq(doToken), any())).thenReturn(new AuthResponse(
+                "novo.access", "novo-refresh", "ROLE_PROVIDER", doToken, "Duda", "duda@test.com",
+                java.util.List.of("ROLE_CLIENT", "ROLE_PROVIDER")));
+
+        mvc.perform(post("/api/v1/auth/switch-role")
+                        .with(csrf()).with(user(doToken.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"papel\":\"ROLE_PROVIDER\",\"refreshToken\":\"antigo\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ROLE_PROVIDER"))
+                .andExpect(jsonPath("$.papeis[0]").value("ROLE_CLIENT"))
+                .andExpect(jsonPath("$.papeis[1]").value("ROLE_PROVIDER"));
+
+        // quem troca é o dono do token: nada no corpo escolhe a conta
+        verify(authService).switchRole(eq(doToken), any());
+    }
+
+    @Test
+    void switchRole_papelEmBranco_returns422() throws Exception {
+        mvc.perform(post("/api/v1/auth/switch-role")
+                        .with(csrf()).with(user(java.util.UUID.randomUUID().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"papel\":\"\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void switchRole_papelQueAContaNaoTem_returns422ComOCodigo() throws Exception {
+        when(authService.switchRole(any(), any())).thenThrow(new BusinessException("ROLE_NOT_AVAILABLE", "Esta conta ainda não é de prestador."));
+
+        mvc.perform(post("/api/v1/auth/switch-role")
+                        .with(csrf()).with(user(java.util.UUID.randomUUID().toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"papel\":\"ROLE_PROVIDER\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("ROLE_NOT_AVAILABLE"));
     }
 }

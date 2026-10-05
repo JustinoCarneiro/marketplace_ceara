@@ -33,7 +33,7 @@ class DiscoveryServiceTest {
                 .thenReturn(List.of(view));
 
         var query = new NearbyQuery(-3.7319, -38.5267, 5000.0, null, 20);
-        List<NearbyProviderDto> result = discoveryService.findNearby(query);
+        List<NearbyProviderDto> result = discoveryService.findNearby(query, UUID.randomUUID());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).categoria()).isEqualTo("ENCANADOR");
@@ -46,9 +46,24 @@ class DiscoveryServiceTest {
                 .thenReturn(List.of());
 
         var query = new NearbyQuery(-3.7319, -38.5267, 2000.0, "ELETRICISTA", 10);
-        discoveryService.findNearby(query);
+        discoveryService.findNearby(query, UUID.randomUUID());
 
         verify(profileRepository).findNearby(-3.7319, -38.5267, 2000.0, "ELETRICISTA", 10);
+    }
+
+    @Test
+    void findNearby_naoDevolveOProprioUsuario_aContaEUmaEPodeSerClienteEPrestador() {
+        // conta única com papéis: o prestador que busca um eletricista como cliente não pode aparecer na própria busca
+        // (ninguém contrata a si mesmo). Os outros prestadores continuam aparecendo.
+        UUID euMesmo = UUID.randomUUID();
+        UUID outro   = UUID.randomUUID();
+        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), isNull(), anyInt()))
+                .thenReturn(List.of(mockView(euMesmo, "Eu", "ELETRICISTA", 100.0), mockView(outro, "Outro", "ELETRICISTA", 200.0)));
+
+        List<NearbyProviderDto> result = discoveryService.findNearby(
+                new NearbyQuery(-3.7319, -38.5267, 5000.0, null, 20), euMesmo);
+
+        assertThat(result).extracting(NearbyProviderDto::id).containsExactly(outro);
     }
 
     private NearbyProviderView mockView(UUID id, String nome, String categoria, double distancia) {

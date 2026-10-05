@@ -20,6 +20,9 @@ jwt:
 
 cpf:
   encryption-key: test-cpf-aes256-key-32-chars-here!
+  hash-key: test-cpf-hmac-key-for-e2e-tests-32-chars
+  # a chave de ANTES da separação: o e2e cria contas com hash dela (versão 1) para provar a rotação
+  hash-key-previous: test-cpf-aes256-key-32-chars-here!
 
 marketplace:
   webhook:

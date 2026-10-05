@@ -26,7 +26,7 @@ class JwtServiceTest {
         var svc = service(900_000);
         var user = usuario();
 
-        String token = svc.generateAccessToken(user);
+        String token = svc.generateAccessToken(user, UserRole.ROLE_PROVIDER);
 
         assertThat(svc.isValid(token)).isTrue();
         assertThat(svc.extractUserId(token)).isEqualTo(user.getId());
@@ -34,11 +34,22 @@ class JwtServiceTest {
     }
 
     @Test
+    void generateAccessToken_oPapelDoTokenEOContextoDaSessao_naoOPrincipalDaConta() {
+        // conta única com papéis: o prestador (principal) que alterna para cliente recebe um token de CLIENTE — é o claim que
+        // os controllers autorizam. Se o token saísse sempre com o papel principal, trocar de modo não trocaria nada.
+        var svc = service(900_000);
+        var user = usuario();   // principal: PROVIDER (e, por ser prestador, também CLIENT)
+
+        assertThat(svc.extractRole(svc.generateAccessToken(user, UserRole.ROLE_CLIENT))).isEqualTo("ROLE_CLIENT");
+        assertThat(svc.extractRole(svc.generateAccessToken(user, UserRole.ROLE_PROVIDER))).isEqualTo("ROLE_PROVIDER");
+    }
+
+    @Test
     void validateAndExtract_devolveClaimsDeEmailERole() {
         var svc = service(900_000);
         var user = usuario();
 
-        var claims = svc.validateAndExtract(svc.generateAccessToken(user));
+        var claims = svc.validateAndExtract(svc.generateAccessToken(user, UserRole.ROLE_PROVIDER));
 
         assertThat(claims.getSubject()).isEqualTo(user.getId().toString());
         assertThat(claims.get("email", String.class)).isEqualTo("ze@teste.com");
@@ -52,7 +63,7 @@ class JwtServiceTest {
         var svcEmissor    = service(900_000);
         var svcOutraChave = new JwtService("outra-chave-secreta-completamente-diferente-ok", 900_000);
 
-        String token = svcEmissor.generateAccessToken(usuario());
+        String token = svcEmissor.generateAccessToken(usuario(), UserRole.ROLE_PROVIDER);
 
         assertThat(svcOutraChave.isValid(token)).isFalse();
     }
@@ -63,7 +74,7 @@ class JwtServiceTest {
         // evita precisar de sleep pra testar expiração de verdade.
         var svc = service(-10_000);
 
-        String token = svc.generateAccessToken(usuario());
+        String token = svc.generateAccessToken(usuario(), UserRole.ROLE_PROVIDER);
 
         assertThat(svc.isValid(token)).isFalse();
     }
@@ -79,7 +90,7 @@ class JwtServiceTest {
     @Test
     void extractUserId_tokenExpirado_lancaJwtException() {
         var svc = service(-10_000);
-        String token = svc.generateAccessToken(usuario());
+        String token = svc.generateAccessToken(usuario(), UserRole.ROLE_PROVIDER);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> svc.extractUserId(token))
                 .isInstanceOf(io.jsonwebtoken.JwtException.class);
