@@ -10,6 +10,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
 import ScreenState from '../../components/ScreenState';
+import { confirmar } from '../../components/confirmar';
 
 interface Request {
   id: string;
@@ -366,15 +367,17 @@ export default function RequestDetailScreen() {
     }
   }
 
-  // Cancelar move dinheiro (dispara reembolso do escrow) e não tem desfazer — confirma antes.
+  // Cancelar não tem desfazer — confirma antes. Com prestador (ACEITO/EM_ANDAMENTO) move dinheiro (reembolso do
+  // escrow); sem prestador (PENDENTE/PROPOSTO) ainda não há dinheiro: só as propostas recebidas se encerram.
   function confirmarCancelamento() {
-    Alert.alert(
+    const semPrestador = ['PENDENTE', 'PROPOSTO'].includes(request?.status ?? '');
+    confirmar(
       'Cancelar este pedido?',
-      'O serviço será cancelado e o valor retido volta para você. Não dá para desfazer.',
-      [
-        { text: 'Voltar', style: 'cancel' },
-        { text: 'Cancelar pedido', style: 'destructive', onPress: cancelRequest },
-      ],
+      semPrestador
+        ? 'O pedido será cancelado e as propostas recebidas, encerradas. Não dá para desfazer.'
+        : 'O serviço será cancelado e o valor retido volta para você. Não dá para desfazer.',
+      'Cancelar pedido',
+      cancelRequest,
     );
   }
 
@@ -442,7 +445,8 @@ export default function RequestDetailScreen() {
   const showConfirmCompletion = isClient && st === 'EM_ANDAMENTO';
   const showStartService = isProvider && st === 'ACEITO';
   const showRate = st === 'CONCLUIDO';
-  const showCancel = ['ACEITO', 'EM_ANDAMENTO'].includes(st);
+  // PENDENTE/PROPOSTO: só o cliente dono cancela (o prestador com proposta ativa ainda não é parte do pedido).
+  const showCancel = ['ACEITO', 'EM_ANDAMENTO'].includes(st) || (isClient && ['PENDENTE', 'PROPOSTO'].includes(st));
   // Mesma janela do backend (MessageService.CHAT_ATIVO): só existe par cliente-prestador
   // fixo a partir do aceite; PENDENTE/PROPOSTO podem ter zero ou várias propostas
   // concorrendo, sem conversa definida ainda.
@@ -593,6 +597,7 @@ export default function RequestDetailScreen() {
         <View style={styles.footerRow}>
           {showCancel && (
             <TouchableOpacity
+              testID="btn-cancelar-pedido"
               style={[styles.btnGhost, actionLoading && { opacity: 0.6 }]}
               onPress={confirmarCancelamento}
               disabled={actionLoading}
