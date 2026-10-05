@@ -22,6 +22,8 @@ Como **Cliente**, quero me cadastrar com e-mail e senha, para acessar prestadore
 ### US02 — Perfil e verificação do Prestador
 Como **Prestador**, quero criar perfil visual e enviar CPF para validação, para transmitir credibilidade.
 - **Dado que** envio meu CPF, **quando** finalizo o cadastro, **então** o background check é disparado de forma **assíncrona** e meu status fica `EM_VERIFICACAO`.
+- **Dado** um CPF com dígito verificador errado, repetido ou com tamanho errado, **então** o cadastro é recusado (`INVALID_CPF`, 422) e nada é criado. **Dado** um CPF já vinculado a outra conta — de prestador **ou de cliente**, com ou sem máscara —, **então** o cadastro é recusado (`CPF_ALREADY_REGISTERED`, 422): uma pessoa = um CPF. Só o hash do CPF vai para a conta; o CPF cifrado fica no perfil. Excluir a conta e se recadastrar não burla um banimento (US36: o hash do prestador reprovado/suspenso fica).
+- **Dado** prestadores cadastrados antes dessa regra (só com o CPF cifrado), **então** a subida da aplicação grava o hash deles (`ProviderCpfBackfill`, idempotente); o mesmo CPF em duas contas legadas não é resolvido sozinho: a segunda fica sem hash e listada no log, só pelo id, para decisão humana.
 - **Dado que** o background check retorna aprovado, **então** meu status vira `VERIFICADO` e passo a aparecer nas buscas.
 - **Dado que** retorna reprovado/inconclusivo, **então** status `REPROVADO` e não apareço nas buscas.
 - **Dado que** meu status não é `VERIFICADO` (em verificação, reprovado ou suspenso), **quando** tento enviar uma proposta, **então** a API recusa (`PROVIDER_NOT_VERIFIED`, 422) dizendo o motivo — "ainda em verificação", "não aprovado" ou "suspenso" — e não grava nada. Os pedidos disponíveis continuam visíveis; só propor é bloqueado. (2026-10-04: até aí o status só filtrava a busca e o prestador recém-cadastrado propunha normalmente.)
@@ -343,7 +345,7 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
 
 - `admin_audit_log` (id, admin_id, acao, recurso, recurso_id, detalhe, criado_em) — trilha imutável de ações administrativas (US22/TS09). Migration `V8__admin_audit_log.sql`; registrada em `AuditService` e consultada em `GET /api/v1/admin/audit`.
-- `users.cpf_hash` — hash determinístico HMAC-SHA256 (antifraude Camada 2, unicidade de CPF de cliente sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado em `POST /api/v1/auth/verify-identity`.
+- `users.cpf_hash` — hash determinístico HMAC-SHA256 do CPF só com dígitos (antifraude Camada 2: uma pessoa = um CPF, sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado no cadastro do **prestador** (`POST /api/v1/auth/register/provider`) e, para o cliente, em `POST /api/v1/auth/verify-identity` (1º pagamento). Os dígitos verificadores são validados nos dois (`INVALID_CPF`); CPF já vinculado é recusado nos dois (`CPF_ALREADY_REGISTERED`), inclusive entre papéis.
 - `service_requests.motivo_disputa` / `detalhes_disputa` — motivo informado ao abrir a disputa (US18), migration `V10__dispute_reason.sql`.
 - `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
 - `denuncias` (id, tipo, alvo_id, denunciante_id, motivo, detalhes, status, resolvido_por_id, resolvido_em, criado_em) — canal de denúncia de prestador/avaliação fraudulenta (US32), migration `V12__denuncia.sql`.

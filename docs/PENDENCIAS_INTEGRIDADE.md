@@ -38,7 +38,10 @@ distintas da mesma pessoa — só a Camada 2 resolve isso.
 - `users.cpf_hash` é `UNIQUE` (migration `V9__user_cpf_hash.sql`) — hash determinístico,
   não o CPF em claro (nota LGPD abaixo, já respeitada).
 - Uma pessoa = um CPF = uma identidade. A segunda conta com o mesmo CPF é rejeitada
-  (`AuthService.verifyIdentity`, 422).
+  (`AuthService.verifyIdentity` para o cliente, `ProviderService.register` para o prestador, 422) — **inclusive entre
+  papéis**: o CPF de um prestador não vira conta de cliente. Os dígitos verificadores são validados (`shared/Cpf`); sem isso
+  um número inventado burlaria a unicidade. (2026-10-04: até aqui só o cliente tinha o hash; o cadastro de prestador não o
+  gravava, e um prestador reprovado podia se recadastrar com o mesmo CPF. `ProviderCpfBackfill` alcança os legados.)
 - **Mitigação de atrito confirmada em produção do fluxo**: o cliente não informa CPF no
   cadastro — só no **primeiro pagamento**, via `PaymentChoiceScreen` (modal "Confirme sua
   identidade" acionado pelo erro `IDENTITY_REQUIRED` de `PaymentService`). Onboarding

@@ -87,9 +87,9 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
 - Fotos que um **prestador** anexou a pedidos de **outros** clientes (a avaliação reaproveita o endpoint de mídia)
   ficam: `service_media` não guarda o autor. Idem o texto de disputa que um prestador escreveu. Se isso importar,
   precisa de coluna de autor.
-- O cadastro de prestador **não grava nem consulta o hash do CPF** (só o fluxo de verificação de identidade grava).
-  Logo "prestador reprovado que exclui e volta com o mesmo CPF" não é barrado — nem seria sem a exclusão. Gap
-  anterior do antifraude, anotado aqui; a retenção do hash na exclusão já está pronta para quando o cadastro o gravar.
+- **CPF do prestador — resolvido** em [[cpf-unico-para-o-prestador]]: o cadastro agora grava e consulta o hash (antes só o
+  cliente, no 1º pagamento), então a retenção do hash do prestador reprovado, na exclusão, passa a ter efeito: ele não volta com o
+  mesmo CPF.
 - `users.cpf_cifrado` (coluna legada do V1) nenhuma entidade mapeia e nenhum código escreve: é sempre NULL.
 - **Pedido preso em `PROPOSTO` — resolvido** em [[pedido-sem-prestador-volta-a-fila-cancela-e-expira]]: excluir a conta
   do prestador que tinha a ÚNICA proposta ativa devolve o pedido do cliente a `PENDENTE` (antes ficava preso e invisível).

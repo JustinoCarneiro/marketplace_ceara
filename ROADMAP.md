@@ -32,7 +32,7 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | email | varchar UNIQUE | |
 | senha_hash | varchar | BCrypt/Argon2 — **nunca texto puro** (US01) |
 | cpf_cifrado | bytea NULL | criptografado em repouso, LGPD (TS04) |
-| cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: unicidade de pessoa sem guardar CPF em claro do cliente (preenchido no 1º pagamento) |
+| cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: uma pessoa = um CPF, sem guardar CPF em claro. Prestador: gravado no cadastro (e por backfill nos legados); cliente: no 1º pagamento. Dígitos validados e CPF repetido recusado nos dois |
 | role | enum | `ROLE_CLIENT` · `ROLE_PROVIDER` · `ROLE_ADMIN` |
 | ativo | boolean | `false` = suspensa (US26) **ou** excluída (US36); o filtro JWT confere a cada requisição |
 | senha_falhas | int | V23 — erros de senha seguidos desde o último acerto (limite de tentativas, US37) |
@@ -229,6 +229,8 @@ Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications
 **Corrigido em 2026-08-09** (docs/PENDENCIAS_JURIDICAS.md item 3): `register/client` e `register/provider` agora exigem `aceitouTermos:true` no corpo (422 sem isso) e gravam prova de aceite em `terms_acceptance` (ver tabela na seção 1).
 
 **Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
+
+**Adicionado em 2026-10-04 (4):** uma pessoa = um CPF também para o prestador — `POST /auth/register/provider` valida os dígitos verificadores (`422 INVALID_CPF`), grava o `cpf_hash` e recusa CPF já vinculado a qualquer conta (`422 CPF_ALREADY_REGISTERED`, inclusive o de um cliente); `verify-identity` passa a validar os dígitos também. `ProviderCpfBackfill` (na subida, idempotente) grava o hash dos prestadores cadastrados antes, listando por id os CPFs repetidos em mais de uma conta. Antes só o cliente, no 1º pagamento, tinha o CPF único: o prestador recusado podia se recadastrar com o mesmo CPF.
 
 **Adicionado em 2026-10-04 (3):** pedido sem prestador deixa de ficar preso — recusar a última proposta ativa (ou o prestador dela excluir a conta) devolve o pedido a `PENDENTE`; `POST /service-requests/{id}/cancel` passa a valer também em `PENDENTE`/`PROPOSTO` para o cliente dono (sem reembolso, propostas encerradas); `PedidoExpiracaoJob` (de hora em hora) cancela `PENDENTE`/`PROPOSTO` sem andamento há `marketplace.request.expiration-days` (15) dias. Botão "Cancelar pedido" no app para esses estados.
 
