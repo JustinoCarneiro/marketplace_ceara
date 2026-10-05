@@ -22,7 +22,7 @@ Como **Cliente**, quero me cadastrar com e-mail e senha, para acessar prestadore
 ### US02 — Perfil e verificação do Prestador
 Como **Prestador**, quero criar perfil visual e enviar CPF para validação, para transmitir credibilidade.
 - **Dado que** envio meu CPF, **quando** finalizo o cadastro, **então** o background check é disparado de forma **assíncrona** e meu status fica `EM_VERIFICACAO`.
-- **Dado** um CPF com dígito verificador errado, repetido ou com tamanho errado, **então** o cadastro é recusado (`INVALID_CPF`, 422) e nada é criado. **Dado** um CPF já vinculado a outra conta — de prestador **ou de cliente**, com ou sem máscara —, **então** o cadastro é recusado (`CPF_ALREADY_REGISTERED`, 422): uma pessoa = um CPF. Só o hash do CPF vai para a conta; o CPF cifrado fica no perfil. Excluir a conta e se recadastrar não burla um banimento (US36: o hash do prestador reprovado/suspenso fica).
+- **Dado** um CPF com dígito verificador errado, repetido ou com tamanho errado, **então** o cadastro é recusado (`INVALID_CPF`, 422) e nada é criado. **Dado** um CPF já vinculado a outra conta, com ou sem máscara, **então** o cadastro é recusado (`CPF_ALREADY_REGISTERED`, 422): uma pessoa = um CPF, em todo o sistema — e uma conta só, que pode ser cliente e prestador (US38). Só o hash do CPF vai para a conta; o CPF cifrado fica no perfil. Excluir a conta e se recadastrar não burla um banimento (US36: o hash do prestador reprovado/suspenso fica).
 - **Dado** prestadores cadastrados antes dessa regra (só com o CPF cifrado), **então** a subida da aplicação grava o hash deles (`ProviderCpfBackfill`, idempotente); o mesmo CPF em duas contas legadas não é resolvido sozinho: a segunda fica sem hash e listada no log, só pelo id, para decisão humana.
 - **Dado que** o background check retorna aprovado, **então** meu status vira `VERIFICADO` e passo a aparecer nas buscas.
 - **Dado que** retorna reprovado/inconclusivo, **então** status `REPROVADO` e não apareço nas buscas.
@@ -70,6 +70,17 @@ Como **Usuário**, quero que a minha senha não possa ser adivinhada por tentati
 - **Dado** um e-mail que não existe, **então** a resposta é a mesma de senha errada (`INVALID_CREDENTIALS`) e nada é contado.
 - Limite e duração são configuráveis: `marketplace.password-attempts.max-failures` (5) e `marketplace.password-attempts.lock-seconds` (900).
 - Trade-off assumido: como o bloqueio é por conta, quem sabe o e-mail de alguém pode bloqueá-lo por 15 minutos. O bloqueio é curto e a recuperação por e-mail o encerra. Ver `memoria-tecnica/decisoes/limite-de-tentativas-de-senha.md`.
+
+### US38 — Conta única com papéis (cliente e prestador na mesma conta)
+Como **Pessoa**, quero ter uma conta só e poder ser cliente e prestador nela, para contratar um serviço sem criar outra conta e sem perder a identidade já confirmada.
+- **Dado** que me cadastro como **prestador**, **então** a conta já nasce com os dois papéis (todo prestador também contrata) e abre no modo prestador. **Dado** que me cadastro como **cliente**, **então** a conta tem só o papel de cliente.
+- **Dado** que a conta tem os dois papéis, **quando** toco em "Alternar para modo cliente/prestador" no Perfil, **então** a mesma conta passa a operar no outro papel (`POST /api/v1/auth/switch-role`): novo token e novo refresh no papel escolhido, e o anterior é revogado. **Dado** um papel que a conta **não** tem (ou `ROLE_ADMIN`), **então** `ROLE_NOT_AVAILABLE` (422) e nada é emitido.
+- **Dado** que renovo a sessão (refresh), **então** continuo no papel em que estava — renovar não devolve ao papel principal.
+- **Dado** que sou **cliente** e quero prestar serviço, **quando** toco em "Quero ser prestador" e informo CPF, categoria, bio e aceito os termos (`POST /api/v1/auth/become-provider`), **então** a **mesma conta** ganha o papel de prestador, em verificação (US02), a sessão passa ao modo prestador e o aceite dos termos é registrado de novo. **Dado** que já sou prestador, **então** `ALREADY_PROVIDER`; **dado** um CPF diferente do que já confirmei num pagamento, **então** `CPF_MISMATCH`; **dado** um CPF de outra conta, `CPF_ALREADY_REGISTERED`.
+- **Dado** que meu perfil de prestador é reprovado ou suspenso (US25), **então** continuo podendo contratar como cliente; a suspensão da **conta** (US26) corta os dois papéis.
+- **Dado** que excluo a conta (US36), **então** a exclusão vale para os dois papéis e as recusas cobrem os dois lados (serviço em andamento, repasse a receber, reembolso a caminho).
+- **Dado** o painel admin, **então** cada conta mostra todos os seus papéis ("Cliente + Prestador").
+- Ver `memoria-tecnica/decisoes/conta-unica-com-papeis.md`.
 
 ---
 
@@ -122,6 +133,7 @@ Como **Prestador**, quero enviar uma proposta de preço para um pedido, para con
 - **Dado** que envio a proposta, **então** informo também data/hora em que atenderei
   (`horarioProposto`) — obrigatório e precisa ser no futuro. É a partir desse horário, comparado
   contra o início real do atendimento, que a pontualidade do prestador (US03) é calculada.
+- **Dado** que o pedido é meu (a conta é uma só e também é de cliente, US38), **quando** tento propor a ele, **então** a API recusa (`SELF_HIRE_FORBIDDEN`, 422) e não grava nada; o meu pedido também **não aparece** na minha fila de pedidos disponíveis.
 
 ### US16 — Cliente compara e aceita proposta
 Como **Cliente**, quero comparar propostas e aceitar uma, para contratar com preço justo.
@@ -129,6 +141,7 @@ Como **Cliente**, quero comparar propostas e aceitar uma, para contratar com pre
 - **Dado** um pedido `PROPOSTO`, **quando** recuso uma proposta, **então**: se ainda há outra proposta ativa, o pedido continua `PROPOSTO` (as outras seguem disputando); se era a **última**, o pedido volta a `PENDENTE` e reaparece na fila dos prestadores. (Antes ficava preso em `PROPOSTO`: a fila só lista `PENDENTE` e o cliente não tinha como cancelá-lo.) O mesmo vale quando o prestador da única proposta ativa exclui a conta (US36).
 - **Dado** um pedido `PENDENTE` ou `PROPOSTO` (sem prestador e sem dinheiro), **quando** o **cliente dono** o cancela, **então** vai para `CANCELADO`, as propostas ativas são encerradas e **não há reembolso** (nada foi cobrado). O prestador, que ainda não é parte do pedido, não cancela.
 - **Dado** um pedido `PENDENTE` ou `PROPOSTO` sem andamento — nenhuma mudança de estado e nenhuma proposta nova — há **15 dias** (`marketplace.request.expiration-days`), **então** ele expira: `CANCELADO` e propostas ativas encerradas. Uma proposta nova conta como andamento. `ACEITO` e os estados seguintes nunca expiram sozinhos.
+- **Dado** que sou prestador e também contrato (a mesma conta, em modo cliente), **quando** aceito a proposta de **outro** prestador, **então** o fluxo segue normal para pagamento — sem segunda conta e sem confirmar o CPF de novo (ele veio do cadastro de prestador). **Dado** que tento aceitar a proposta da minha própria conta, **então** `SELF_HIRE_FORBIDDEN`. A conta também não aparece na própria busca de prestadores.
 - **Dado** que estou comparando propostas, **então** vejo também o horário que cada prestador propôs pra atender — preço não é o único critério de decisão.
 > Nota: sem lances em tempo real no MVP (decisão de escopo). Evolução para leilão dinâmico → v2.
 
@@ -329,8 +342,9 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 ---
 
 ## Dicionário de dados (reconciliado com as migrations Flyway V1–V7 em 2026-06-28)
-- `users` (id, nome, email, cpf_cifrado, senha_hash, role)
-- `refresh_tokens` (id, user_id, token_hash, expires_at, revogado, created_at) — sessão persistente (US12)
+- `users` (id, nome, email, cpf_cifrado, senha_hash, role) — `role` é o papel **principal** (o do cadastro; o login abre nele)
+- `user_papeis` (user_id, papel) — os papéis que a conta TEM (conta única, US38, migration `V24`)
+- `refresh_tokens` (id, user_id, token_hash, expires_at, revogado, created_at, papel) — sessão persistente (US12); `papel` é o contexto da sessão
 - `providers_profile` (id, user_id, categoria, status_verificacao, saldo_retido, nota_media)
 - `background_checks` (id, provider_id, status, resultado, requested_at, completed_at) — verificação assíncrona (US02)
 - `service_categories` (id, nome, slug, ativa) — catálogo do admin (US28)
@@ -345,7 +359,7 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
 
 - `admin_audit_log` (id, admin_id, acao, recurso, recurso_id, detalhe, criado_em) — trilha imutável de ações administrativas (US22/TS09). Migration `V8__admin_audit_log.sql`; registrada em `AuditService` e consultada em `GET /api/v1/admin/audit`.
-- `users.cpf_hash` — hash determinístico HMAC-SHA256 do CPF só com dígitos (antifraude Camada 2: uma pessoa = um CPF, sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado no cadastro do **prestador** (`POST /api/v1/auth/register/provider`) e, para o cliente, em `POST /api/v1/auth/verify-identity` (1º pagamento). Os dígitos verificadores são validados nos dois (`INVALID_CPF`); CPF já vinculado é recusado nos dois (`CPF_ALREADY_REGISTERED`), inclusive entre papéis.
+- `users.cpf_hash` — hash determinístico HMAC-SHA256 do CPF só com dígitos (antifraude Camada 2: uma pessoa = um CPF, sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado no cadastro do **prestador** (`POST /api/v1/auth/register/provider`), em `POST /api/v1/auth/become-provider` e, para o cliente, em `POST /api/v1/auth/verify-identity` (1º pagamento). Os dígitos verificadores são validados (`INVALID_CPF`); CPF já vinculado a outra conta é recusado (`CPF_ALREADY_REGISTERED`) e CPF diferente do já confirmado também (`CPF_MISMATCH`). A chave do HMAC é **própria** (`CPF_HASH_KEY`, distinta da de cifra) e `users.cpf_hash_versao` (`V25`) guarda a versão dela — ver `memoria-tecnica/decisoes/chave-do-hash-do-cpf.md`.
 - `service_requests.motivo_disputa` / `detalhes_disputa` — motivo informado ao abrir a disputa (US18), migration `V10__dispute_reason.sql`.
 - `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
 - `denuncias` (id, tipo, alvo_id, denunciante_id, motivo, detalhes, status, resolvido_por_id, resolvido_em, criado_em) — canal de denúncia de prestador/avaliação fraudulenta (US32), migration `V12__denuncia.sql`.

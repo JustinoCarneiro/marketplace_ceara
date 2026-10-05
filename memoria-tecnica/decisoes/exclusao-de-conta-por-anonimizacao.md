@@ -79,6 +79,9 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
 - **Painel admin:** `UserAdminDto.status` ganhou `EXCLUIDO`; suspender, reativar e moderar conta excluída dão
   `ACCOUNT_DELETED` (422) — sem isso o `User.reativar()` lançaria `IllegalStateException` (500) e a tela mostraria
   uma conta apagada como "ATIVO" com botão "Suspender" (a tela tratava qualquer status ≠ `SUSPENSO` como ativo).
+- **Conta de dois papéis (US38):** a exclusão é da conta e vale para os dois. As recusas já eram por id (pedido em curso como cliente
+  **ou** como prestador, repasse a receber, reembolso a caminho), então cobrem os dois lados mesmo quando pedidas pelo outro modo; a
+  limpeza anonimiza o perfil de prestador junto — provado no E2E (passo 48). [[conta-unica-com-papeis]]
 - **Conta suspensa não exclui pelo app** (o token não vale mais): o pedido dela passa pelo suporte. É coerente com a
   retenção antifraude, mas é uma regra que o suporte precisa conhecer.
 - Armazenamento de mídia é **stub** (`StorageServiceImpl.upload` devolve URL falsa): hoje não há arquivo a apagar.

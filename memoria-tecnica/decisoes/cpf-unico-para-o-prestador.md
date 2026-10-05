@@ -12,7 +12,8 @@ O antifraude Camada 2 (`docs/PENDENCIAS_INTEGRIDADE.md`) diz "uma pessoa = um CP
 hash e não consultava duplicata. Consequências achadas ao implementar a exclusão de conta (US36):
 - um prestador **reprovado** podia se recadastrar com o mesmo CPF (com ou sem excluir a conta antes);
 - a retenção do hash na exclusão ("excluir não burla o banimento") não tinha efeito para prestadores, porque não havia hash;
-- o CPF de um prestador podia virar uma conta de cliente (a auto-contratação por duas contas da mesma pessoa).
+- o CPF de um prestador podia virar uma conta de cliente (a auto-contratação por duas contas da mesma pessoa) — fechado pela
+  conta única, que torna a auto-contratação impossível por construção.
 Além disso **nada validava os dígitos verificadores**: com unicidade por hash, um número inventado a burla.
 
 ## Decisão
@@ -28,8 +29,10 @@ Além disso **nada validava os dígitos verificadores**: com unicidade por hash,
    listada no log **só pelo id** (o CPF nunca vai para o log), para decisão humana (qual conta é a verdadeira? é fraude ou
    duplicidade honesta?).
 
-**Regra de produto assumida** (confirmar se não for essa): **uma pessoa = um CPF entre os dois papéis** — quem é prestador não
-pode ter também uma conta de cliente. É o que o doc de antifraude descreve; a "conta única com múltiplos papéis" (Camada 3) é v2.
+**Regra de produto: uma pessoa = um CPF, em todo o sistema** — e, desde 2026-10-05, **uma conta só** (cliente e prestador no
+mesmo `user_id`: [[conta-unica-com-papeis]]). A primeira versão desta decisão assumia que o prestador não podia ter conta de cliente;
+isso o impedia de contratar, e a alternativa intermediária (CPF único por papel) foi descartada em favor da conta única. O hash
+passou a ter chave própria e versionada: [[chave-do-hash-do-cpf]].
 
 ## Consequências
 - Quem hoje tem as duas contas com o mesmo CPF (se existir) não será barrado retroativamente: o backfill só preenche o hash do

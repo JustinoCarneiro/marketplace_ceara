@@ -18,7 +18,7 @@ Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construí
 - **Escrow nunca em `@Transactional` sobre o gateway.** Cobrança/repasse externos via **Saga + Outbox + idempotência** e reconciliação por webhook. O estado financeiro é dirigido por eventos confirmados, não por transação de banco.
 - **Geobusca por PostGIS** (índice espacial GiST), não haversine em SQL puro. SLA de busca `nearby` < 300ms (p95).
 - **LGPD:** CPF e dados sensíveis criptografados em repouso; mínimo necessário trafegado; DTOs (Records) nunca expõem entidades.
-- **Auth:** JWT de validade curta + **refresh token**; roles `ROLE_CLIENT`, `ROLE_PROVIDER`, `ROLE_ADMIN`.
+- **Auth:** JWT de validade curta + **refresh token**; roles `ROLE_CLIENT`, `ROLE_PROVIDER`, `ROLE_ADMIN`. **Conta única com papéis (US38):** uma pessoa tem uma conta que pode ser cliente e prestador; o papel EM USO vai no token (`/auth/switch-role` troca). CPF único em todo o sistema; chave do HMAC do CPF própria e versionada.
 - **IA com fallback manual obrigatório:** se a IA falhar/indisponível, o usuário conclui o pedido manualmente. IA nunca é caminho crítico bloqueante.
 - **Idempotência** em todo endpoint que move dinheiro ou cria pedido (chave de idempotência por requisição).
 - Latência alvo por endpoint (não global); telas dependentes de integração externa têm SLA próprio.
