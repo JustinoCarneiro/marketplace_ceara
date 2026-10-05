@@ -42,6 +42,7 @@ export type ClientStackParams = {
   Sos: { requestId: string };
   SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
+  DeleteAccount: undefined;
 };
 
 // ─── Provider Stack ───────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export type ProviderStackParams = {
   SosActive: { alertId: string; criadoEm: string };
   Legal: { doc: 'terms' | 'privacy' };
   ChavePix: undefined;
+  DeleteAccount: undefined;
 };
 
 // ─── Root Stack ───────────────────────────────────────────────────────────────

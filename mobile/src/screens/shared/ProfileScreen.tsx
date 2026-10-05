@@ -97,6 +97,16 @@ export default function ProfileScreen() {
         <Text style={styles.version}>Onda · v1.0.0</Text>
 
         <Button label="Sair da conta" variant="outline" onPress={logout} />
+
+        <TouchableOpacity
+          testID="link-excluir-conta"
+          style={styles.dangerLink}
+          onPress={() => nav.navigate('DeleteAccount')}
+          hitSlop={8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.dangerLinkText}>Excluir minha conta</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -164,4 +174,7 @@ const styles = StyleSheet.create({
   menuLabel: { flex: 1, fontSize: font.size.body, color: color.text },
 
   version: { fontSize: font.size.caption, color: color.textFaint, textAlign: 'center' },
+
+  dangerLink: { alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  dangerLinkText: { fontSize: font.size.bodySm, fontWeight: font.weight.semibold, color: color.dangerInk },
 });
