@@ -26,6 +26,9 @@ public class ServiceExecutionService {
 
     private static final Set<ServiceRequestStatus> CANCELAVEIS =
             Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO);
+    /** Sem prestador definido nem dinheiro: o cliente cancela sozinho, sem reembolso. */
+    private static final Set<ServiceRequestStatus> CANCELAVEIS_SEM_PRESTADOR =
+            Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO);
 
     private final ServiceRequestRepository srRepository;
     private final ProposalRepository       proposalRepository;
@@ -133,7 +136,11 @@ public class ServiceExecutionService {
         notificationService.criarAlerta("DISPUTA", srId);
     }
 
-    /** ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED). */
+    /**
+     * PENDENTE | PROPOSTO | ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED).
+     * Em PENDENTE/PROPOSTO só o cliente dono participa (o prestador com proposta ativa ainda não é parte do pedido) e as
+     * propostas ativas são encerradas: sem isso o cliente não tinha saída de um pedido que ninguém atendia.
+     */
     @Transactional
     public void cancel(UUID srId, UUID userId) {
         ServiceRequest sr = srRepository.findById(srId)
@@ -145,13 +152,21 @@ public class ServiceExecutionService {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 
-        if (!CANCELAVEIS.contains(sr.getStatus())) {
+        boolean semPrestador = CANCELAVEIS_SEM_PRESTADOR.contains(sr.getStatus());
+        if (!semPrestador && !CANCELAVEIS.contains(sr.getStatus())) {
             throw new BusinessException("INVALID_STATE_TRANSITION",
-                    "cancel() exige ACEITO ou EM_ANDAMENTO, atual: " + sr.getStatus());
+                    "cancel() exige PENDENTE, PROPOSTO, ACEITO ou EM_ANDAMENTO, atual: " + sr.getStatus());
         }
 
         sr.setStatus(ServiceRequestStatus.CANCELADO);
         srRepository.save(sr);
+
+        if (semPrestador) {
+            proposalRepository.findByServiceRequestIdAndStatus(srId, ProposalStatus.ATIVA).forEach(p -> {
+                p.encerrar();
+                proposalRepository.save(p);
+            });
+        }
 
         transactionRepository.findByServiceRequestId(srId)
                 .filter(tx -> tx.getStatusPagamento() == TransactionStatus.RETIDO)

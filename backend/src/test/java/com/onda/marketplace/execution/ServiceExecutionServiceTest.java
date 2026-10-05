@@ -305,6 +305,54 @@ class ServiceExecutionServiceTest {
         verify(outboxRepository, never()).save(any());
     }
 
+    // ── O cliente tem saída de um pedido sem prestador: PENDENTE/PROPOSTO eram impossíveis de cancelar.
+
+    @Test
+    void cancel_pendente_peloDono_cancelaSemReembolsoNemOutbox() {
+        var sr = sr(ServiceRequestStatus.PENDENTE);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of());
+
+        service.cancel(SR_ID, CLIENTE_ID);
+
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        verifyNoInteractions(outboxRepository);   // ainda não há dinheiro: ele só entra no aceite
+    }
+
+    @Test
+    void cancel_proposto_encerraAsPropostasAtivas_paraNaoFicaremAbertasEmPedidoCancelado() {
+        var sr = sr(ServiceRequestStatus.PROPOSTO);
+        var p1 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(100), 1, null, ProposalStatus.ATIVA);
+        var p2 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(120), 1, null, ProposalStatus.ATIVA);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of(p1, p2));
+
+        service.cancel(SR_ID, CLIENTE_ID);
+
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        assertThat(p1.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
+        assertThat(p2.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
+        verify(proposalRepository).save(p1);
+        verify(proposalRepository).save(p2);
+    }
+
+    @Test
+    void cancel_proposto_prestadorQueAindaNaoFoiAceitoNaoCancela() {
+        // quem só tem proposta ATIVA não participa do pedido: cancelar é do cliente dono
+        var sr = sr(ServiceRequestStatus.PROPOSTO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, PRESTADOR_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancel(SR_ID, PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PROPOSTO);
+    }
+
     @Test
     void cancel_statusInvalido_lancaException() {
         var sr = sr(ServiceRequestStatus.CONCLUIDO);

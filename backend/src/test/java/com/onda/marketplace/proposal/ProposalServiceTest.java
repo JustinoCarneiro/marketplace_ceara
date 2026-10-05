@@ -216,6 +216,38 @@ class ProposalServiceTest {
         assertThat(dto.status()).isEqualTo("RECUSADA");
     }
 
+    // ── Sem proposta ativa o pedido não pode ficar preso em PROPOSTO: a fila dos prestadores só lista PENDENTE.
+
+    @Test
+    void reject_ultimaPropostaAtiva_devolveOPedidoParaPendente_ePodeReceberNovas() {
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var prop = proposal(sr, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of());
+
+        service.reject(prop.getId(), CLIENTE_ID);
+
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PENDENTE);
+        verify(requestRepository).save(sr);
+    }
+
+    @Test
+    void reject_aindaHaOutraPropostaAtiva_oPedidoContinuaProposto() {
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var recusada = proposal(sr, ProposalStatus.ATIVA);
+        var outra = proposal(sr, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(recusada.getId())).thenReturn(Optional.of(recusada));
+        when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of(outra));
+
+        service.reject(recusada.getId(), CLIENTE_ID);
+
+        // recusar UMA proposta não pode derrubar a disputa das outras
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PROPOSTO);
+        verify(requestRepository, never()).save(any());
+    }
+
     @Test
     void reject_naoEhOClienteDoPedido_lancaForbidden() {
         // Antes, o parâmetro clienteId chegava até aqui e nunca era usado — qualquer conta

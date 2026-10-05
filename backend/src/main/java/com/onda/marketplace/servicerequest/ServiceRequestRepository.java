@@ -1,9 +1,13 @@
 package com.onda.marketplace.servicerequest;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -84,6 +88,29 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // precisar manter uma tabela separada de bairros válidos.
     @Query("SELECT DISTINCT s.bairro FROM ServiceRequest s WHERE s.bairro IS NOT NULL ORDER BY s.bairro")
     java.util.List<String> bairrosDistintos();
+
+    /**
+     * Pedidos sem andamento desde {@code limite}: nenhuma mudança de estado e nenhuma proposta nova depois dele
+     * (a proposta nova também é andamento: o cliente ainda está recebendo ofertas). Expiração de pedido sem prestador.
+     */
+    @Query("""
+           SELECT s.id FROM ServiceRequest s
+            WHERE s.status IN :statuses AND s.updatedAt < :limite
+              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+           """)
+    List<UUID> idsSemAndamentoDesde(@Param("statuses") Collection<ServiceRequestStatus> statuses,
+                                    @Param("limite") Instant limite);
+
+    /** O estado é conferido de novo na escrita: um aceite que chegou entre a consulta e aqui não é desfeito. */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s
+              SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO, s.updatedAt = :agora
+            WHERE s.id IN :ids
+              AND s.status IN (com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE,
+                               com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO)
+           """)
+    int cancelarSemAndamento(@Param("ids") Collection<UUID> ids, @Param("agora") Instant agora);
 
     // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
     @Query("""

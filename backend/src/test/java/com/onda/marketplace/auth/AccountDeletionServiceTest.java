@@ -103,6 +103,7 @@ class AccountDeletionServiceTest {
 
     /** Uma recusa não pode deixar rastro: nenhuma limpeza, nenhum aviso, nenhuma sessão derrubada. */
     private void nadaFoiApagado() {
+        verify(exclusao, never()).reabrirPedidosSoComPropostaDoPrestador(any(), any());
         verify(exclusao, never()).encerrarPropostasAtivasDoPrestador(any());
         verify(exclusao, never()).encerrarPropostasAtivasDosPedidosDoCliente(any());
         verify(exclusao, never()).cancelarPedidosSemCompromissoDoCliente(any(), any());
@@ -437,7 +438,10 @@ class AccountDeletionServiceTest {
 
         service.excluir(USER_ID, SENHA);
 
-        verify(exclusao).encerrarPropostasAtivasDoPrestador(USER_ID);
+        // o pedido do cliente que só tinha a proposta dele volta à fila (e isso vem ANTES de encerrar a proposta)
+        var ordem = org.mockito.Mockito.inOrder(exclusao);
+        ordem.verify(exclusao).reabrirPedidosSoComPropostaDoPrestador(eq(USER_ID), any(Instant.class));
+        ordem.verify(exclusao).encerrarPropostasAtivasDoPrestador(USER_ID);
         assertThat(perfil.getBio()).isNull();
         assertThat(perfil.getChavePixCifrada()).isNull();
         assertThat(perfil.getStatusVerificacao()).isEqualTo(ProviderStatus.SUSPENSO);

@@ -139,7 +139,21 @@ public class ProposalService {
 
         proposal.recusar();
         proposalRepository.save(proposal);
+        reabrirSeNaoHaPropostaAtiva(proposal.getServiceRequest());
         return toDto(proposal);
+    }
+
+    /**
+     * A fila dos prestadores só lista PENDENTE, então um pedido PROPOSTO sem proposta ativa ficava preso e invisível
+     * (e o cliente não tinha como cancelá-lo). Recusada a última proposta ativa, ele volta à fila. Recusar UMA de várias
+     * não mexe em nada: as outras continuam disputando.
+     */
+    private void reabrirSeNaoHaPropostaAtiva(ServiceRequest sr) {
+        if (sr.getStatus() == ServiceRequestStatus.PROPOSTO
+                && proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA).isEmpty()) {
+            sr.setStatus(ServiceRequestStatus.PENDENTE);
+            requestRepository.save(sr);
+        }
     }
 
     @Transactional(readOnly = true)

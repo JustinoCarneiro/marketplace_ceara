@@ -76,6 +76,22 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
 
     // ---------- o que sai ----------
 
+    /**
+     * Pedidos PROPOSTO em que a ÚNICA proposta ativa é deste prestador voltam à fila (PENDENTE): sem isso ficariam presos
+     * em PROPOSTO, invisíveis aos outros prestadores. Roda ANTES de encerrar as propostas dele (é por elas que acha os pedidos).
+     */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s
+              SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE, s.updatedAt = :agora
+            WHERE s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO
+              AND EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.prestadorId = :userId
+                             AND p.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA)
+              AND NOT EXISTS (SELECT 1 FROM Proposal q WHERE q.serviceRequest.id = s.id AND q.prestadorId <> :userId
+                                 AND q.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA)
+           """)
+    int reabrirPedidosSoComPropostaDoPrestador(@Param("userId") UUID userId, @Param("agora") Instant agora);
+
     /** Propostas ainda abertas do prestador (em pedidos de outros clientes): ninguém mais pode aceitá-las. */
     @Modifying
     @Query("""

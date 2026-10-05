@@ -1430,6 +1430,14 @@ class E2EFluxoPrincipalTest {
                         .formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
                 .when().post("/api/v1/service-requests/{id}/proposals", aberto)
                 .then().statusCode(201).body("status", equalTo("ATIVA"));
+        // um pedido em que OUTRO prestador também tem proposta ativa (o João do fluxo principal), e um pedido PROPOSTO que
+        // não tem nada a ver com ela: nenhum dos dois pode voltar à fila quando a Paula sai
+        UUID disputado = pedidoDe(cliente, "Pedido disputado, Rua C 30", "PENDENTE");
+        proporPelaApi(paula, disputado);
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + tokenPrestador)
+                .body("{\"valor\":170.00,\"prazoDias\":1,\"horarioProposto\":\"%s\"}".formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .when().post("/api/v1/service-requests/{id}/proposals", disputado).then().statusCode(201);
+        UUID alheio = pedidoDe(cliente, "Pedido sem proposta ativa, Rua C 30", "PROPOSTO");
         proposta(feito, paula.id(), ProposalStatus.ACEITA);
         pagamento(feito, TransactionStatus.LIBERADO);
         mensagem(feito, paula.id(), "Chego às 14h, meu telefone é 85 98888-0000");
@@ -1474,10 +1482,13 @@ class E2EFluxoPrincipalTest {
         assertThat(texto("SELECT comentario FROM reviews WHERE avaliador_id = ?::uuid", paula.id().toString()), nullValue());
         assertThat(texto("SELECT comentario FROM reviews WHERE avaliador_id = ?::uuid", cliente.id().toString()), equalTo("Excelente"));
 
-        // os dados do CLIENTE não vão junto com os do prestador. O pedido segue PROPOSTO (a proposta dela
-        // virou ENCERRADA): é o mesmo estado de quando o cliente recusa a única proposta — lacuna anterior,
-        // ver o ADR da exclusão de conta. Nem cancelado nem apagado.
-        assertThat(texto("SELECT status FROM service_requests WHERE id = ?::uuid", aberto.toString()), equalTo("PROPOSTO"));
+        // os dados do CLIENTE não vão junto com os do prestador. O pedido em que a proposta dela era a única volta à
+        // fila (PENDENTE): preso em PROPOSTO ele ficaria invisível aos outros prestadores. Nem cancelado nem apagado.
+        assertThat(texto("SELECT status FROM service_requests WHERE id = ?::uuid", aberto.toString()), equalTo("PENDENTE"));
+        assertThat("e reaparece na fila dos prestadores", idsNaFila(), hasItem(aberto.toString()));
+        assertThat("onde outro prestador também propôs, o pedido segue disputado (PROPOSTO)",
+                statusDoPedido(disputado), equalTo("PROPOSTO"));
+        assertThat("pedido que não era dela não é mexido", statusDoPedido(alheio), equalTo("PROPOSTO"));
         assertThat(texto("SELECT descricao FROM service_requests WHERE id = ?::uuid", feito.toString()), equalTo("Pedido feito, Rua C 30"));
         assertThat(conta(cliente.id()).get("nome"), equalTo("Cliente da Paula"));
 
@@ -1717,5 +1728,139 @@ class E2EFluxoPrincipalTest {
         passarOBloqueio(dora.id());
         excluirConta(dora.token(), SENHA_PADRAO).then().statusCode(204);
         assertThat(conta(dora.id()).get("excluido_em"), notNullValue());
+    }
+
+    // ─── Pedido sem prestador: sem proposta ativa volta à fila; o cliente cancela; sem andamento por 15 dias expira ───
+
+    static final String CPF_PAT = "453.178.287-91";
+    static final String CPF_LEO = "218.733.462-71";
+    static final String CPF_MEL = "836.591.724-64";
+
+    @Autowired com.onda.marketplace.servicerequest.ServiceRequestExpirationService expiracao;
+
+    /** A fila "Pedidos disponíveis" do prestador (só PENDENTE aparece), vista pelo João do fluxo principal. */
+    private List<String> idsNaFila() {
+        return given().header("Authorization", "Bearer " + tokenPrestador)
+                .when().get("/api/v1/providers/available-requests")
+                .then().statusCode(200).extract().jsonPath().getList("id");
+    }
+
+    private String proporPelaApi(Conta prestador, UUID pedido) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + prestador.token())
+                .body("{\"valor\":150.00,\"prazoDias\":1,\"horarioProposto\":\"%s\"}"
+                        .formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .when().post("/api/v1/service-requests/{id}/proposals", pedido)
+                .then().statusCode(201).extract().path("id");
+    }
+
+    private io.restassured.response.Response cancelar(String token, UUID pedido) {
+        return given().header("Authorization", "Bearer " + token)
+                .when().post("/api/v1/service-requests/{id}/cancel", pedido);
+    }
+
+    private String statusDoPedido(UUID pedido) {
+        return texto("SELECT status FROM service_requests WHERE id = ?::uuid", pedido.toString());
+    }
+
+    @Test @Order(39)
+    @DisplayName("39 · O cliente cancela pedido PENDENTE ou PROPOSTO (sem reembolso, propostas encerradas); o prestador não; some da fila")
+    void pedidoSemPrestador_clienteCancela() {
+        var cris = cadastrarCliente("Cris Cancela", "cris.cancela@onda.test");
+        var pat = cadastrarPrestador("Pat Prestador", "pat.cancela@onda.test", CPF_PAT);
+        moderarPrestador(pat.id().toString(), "APROVAR");
+        UUID pendente = pedidoDe(cris, "Pedido pendente, Rua D 40", "PENDENTE");
+        UUID proposto = pedidoDe(cris, "Pedido proposto, Rua D 40", "PENDENTE");
+        proporPelaApi(pat, proposto);
+        assertThat(statusDoPedido(proposto), equalTo("PROPOSTO"));
+        assertThat(idsNaFila(), hasItem(pendente.toString()));
+
+        // quem só tem proposta ATIVA não participa do pedido: cancelar é do cliente dono
+        cancelar(pat.token(), proposto).then().statusCode(422).body("code", equalTo("FORBIDDEN"));
+        assertThat(statusDoPedido(proposto), equalTo("PROPOSTO"));
+
+        cancelar(cris.token(), pendente).then().statusCode(200);
+        cancelar(cris.token(), proposto).then().statusCode(200);
+
+        assertThat(statusDoPedido(pendente), equalTo("CANCELADO"));
+        assertThat(statusDoPedido(proposto), equalTo("CANCELADO"));
+        assertThat("a proposta aberta se encerra junto",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", proposto.toString()), equalTo("ENCERRADA"));
+        assertThat("não há dinheiro nesses estados: nada de transação nem de reembolso",
+                contar("SELECT count(*) FROM transactions WHERE service_request_id IN (?::uuid, ?::uuid)",
+                        pendente.toString(), proposto.toString()), equalTo(0));
+        assertThat(idsNaFila(), not(hasItems(pendente.toString(), proposto.toString())));
+
+        // cancelar de novo não vale: o pedido já está encerrado
+        cancelar(cris.token(), proposto).then().statusCode(422).body("code", equalTo("INVALID_STATE_TRANSITION"));
+    }
+
+    @Test @Order(40)
+    @DisplayName("40 · Recusar a ÚLTIMA proposta ativa devolve o pedido à fila (PENDENTE); recusar uma de várias não mexe no pedido")
+    void pedidoSemPrestador_recusaDaUltimaPropostaDevolveAFila() {
+        var leo = cadastrarCliente("Leo Recusa", "leo.recusa@onda.test");
+        var p1 = cadastrarPrestador("Prestador Um", "um.recusa@onda.test", CPF_LEO);
+        var p2 = cadastrarPrestador("Prestador Dois", "dois.recusa@onda.test", CPF_MEL);
+        moderarPrestador(p1.id().toString(), "APROVAR");
+        moderarPrestador(p2.id().toString(), "APROVAR");
+        UUID pedido = pedidoDe(leo, "Pedido com duas propostas, Rua E 50", "PENDENTE");
+        String prop1 = proporPelaApi(p1, pedido);
+        String prop2 = proporPelaApi(p2, pedido);
+        assertThat(idsNaFila(), not(hasItem(pedido.toString())));   // PROPOSTO não está na fila
+
+        // recusa UMA: as outras seguem disputando
+        given().header("Authorization", "Bearer " + leo.token()).when().put("/api/v1/proposals/{id}/reject", prop1).then().statusCode(200);
+        assertThat(statusDoPedido(pedido), equalTo("PROPOSTO"));
+        assertThat(idsNaFila(), not(hasItem(pedido.toString())));
+
+        // recusa a ÚLTIMA: o pedido volta à fila, onde outro prestador pode propor
+        given().header("Authorization", "Bearer " + leo.token()).when().put("/api/v1/proposals/{id}/reject", prop2).then().statusCode(200);
+        assertThat(statusDoPedido(pedido), equalTo("PENDENTE"));
+        assertThat(idsNaFila(), hasItem(pedido.toString()));
+        proporPelaApi(p1, pedido);   // e aceita proposta nova
+        assertThat(statusDoPedido(pedido), equalTo("PROPOSTO"));
+    }
+
+    @Test @Order(41)
+    @DisplayName("41 · Expiração: pedido sem prestador e sem andamento há 15 dias é cancelado; proposta recente, aceito ou recente não expiram")
+    void pedidoSemPrestador_expiraAposQuinzeDiasSemAndamento() {
+        var eva = cadastrarCliente("Eva Esquecida", "eva.esquecida@onda.test");
+        var prestador = cadastrarPrestador("Prestador Expira", "expira.prestador@onda.test", "359.702.148-41");
+        UUID pendenteVelho = pedidoDe(eva, "Pendente esquecido", "PENDENTE");
+        UUID propostoVelho = pedidoDe(eva, "Proposto esquecido", "PROPOSTO");
+        UUID propostoComOfertaNova = pedidoDe(eva, "Proposto com oferta recente", "PROPOSTO");
+        UUID aceitoVelho = pedidoDe(eva, "Aceito antigo", "ACEITO");
+        UUID pendenteRecente = pedidoDe(eva, "Pendente de hoje", "PENDENTE");
+        proposta(propostoVelho, prestador.id(), ProposalStatus.ATIVA);
+        proposta(propostoComOfertaNova, prestador.id(), ProposalStatus.ATIVA);
+        proposta(aceitoVelho, prestador.id(), ProposalStatus.ACEITA);
+
+        // 20 dias atrás: o estado e as propostas, EXCETO a oferta nova do 3º pedido (que é andamento)
+        for (UUID id : List.of(pendenteVelho, propostoVelho, propostoComOfertaNova, aceitoVelho)) {
+            jdbc.update("UPDATE service_requests SET updated_at = now() - interval '20 days' WHERE id = ?::uuid", id.toString());
+        }
+        for (UUID id : List.of(propostoVelho, aceitoVelho)) {
+            jdbc.update("UPDATE proposals SET created_at = now() - interval '20 days' WHERE service_request_id = ?::uuid", id.toString());
+        }
+
+        int cancelados = expiracao.expirar(Instant.now());
+
+        assertThat(cancelados, greaterThanOrEqualTo(2));
+        assertThat(statusDoPedido(pendenteVelho), equalTo("CANCELADO"));
+        assertThat(statusDoPedido(propostoVelho), equalTo("CANCELADO"));
+        assertThat("a proposta aberta se encerra junto",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", propostoVelho.toString()), equalTo("ENCERRADA"));
+        assertThat("oferta de 1 dia atrás é andamento: o cliente ainda está recebendo propostas",
+                statusDoPedido(propostoComOfertaNova), equalTo("PROPOSTO"));
+        assertThat("ACEITO tem prestador e dinheiro: nunca expira sozinho", statusDoPedido(aceitoVelho), equalTo("ACEITO"));
+        assertThat("proposta aceita continua aceita",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", aceitoVelho.toString()), equalTo("ACEITA"));
+        assertThat(statusDoPedido(pendenteRecente), equalTo("PENDENTE"));
+        // a guarda do UPDATE: um pedido que deixou de estar sem prestador entre a consulta e a escrita (aqui, o ACEITO) não é cancelado
+        int mexidos = transacao.execute(st -> serviceRequestRepository.cancelarSemAndamento(List.of(aceitoVelho), Instant.now()));
+        assertThat(mexidos, equalTo(0));
+        assertThat(statusDoPedido(aceitoVelho), equalTo("ACEITO"));
+        // o instante do cancelamento é gravado (o UPDATE em lote não roda o @PreUpdate)
+        assertThat(contar("SELECT count(*) FROM service_requests WHERE id = ?::uuid AND updated_at > now() - interval '1 minute'",
+                pendenteVelho.toString()), equalTo(1));
     }
 }

@@ -126,6 +126,7 @@ public class AccountDeletionService {
     }
 
     private void apagarDadosVinculados(UUID userId) {
+        exclusao.reabrirPedidosSoComPropostaDoPrestador(userId, Instant.now());   // antes: acha os pedidos pelas propostas dele
         exclusao.encerrarPropostasAtivasDoPrestador(userId);
         exclusao.encerrarPropostasAtivasDosPedidosDoCliente(userId);
         exclusao.cancelarPedidosSemCompromissoDoCliente(userId, Instant.now());
