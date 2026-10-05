@@ -5,13 +5,30 @@ import com.lowagie.text.pdf.parser.PdfTextExtractor;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
+import com.onda.marketplace.denuncia.Denuncia;
+import com.onda.marketplace.denuncia.DenunciaRepository;
+import com.onda.marketplace.denuncia.TipoDenuncia;
+import com.onda.marketplace.message.Message;
+import com.onda.marketplace.message.MessageRepository;
 import com.onda.marketplace.notification.UserMailSender;
 import com.onda.marketplace.payment.PaymentMethod;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
+import com.onda.marketplace.payment.TransactionStatus;
+import com.onda.marketplace.proposal.Proposal;
+import com.onda.marketplace.proposal.ProposalRepository;
+import com.onda.marketplace.proposal.ProposalStatus;
+import com.onda.marketplace.review.Review;
+import com.onda.marketplace.review.ReviewRepository;
+import com.onda.marketplace.review.ReviewType;
+import com.onda.marketplace.servicerequest.MediaType;
+import com.onda.marketplace.servicerequest.ServiceMedia;
+import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
+import com.onda.marketplace.sos.SosAlert;
+import com.onda.marketplace.sos.SosAlertRepository;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
@@ -57,6 +74,9 @@ import static org.hamcrest.Matchers.*;
  *   Registro cliente → Registro prestador → Criação do pedido
  *   → Proposta → Aceite → Pagamento (webhook simula gateway)
  *   → Início do serviço → Conclusão → Avaliação bidirecional
+ *
+ * Depois do fluxo: relatórios (US29), recuperação de senha (US35), suspensão com corte imediato do token
+ * (US26) e exclusão de conta (US36) — cada tabela conferida no Postgres real.
  */
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -111,6 +131,13 @@ class E2EFluxoPrincipalTest {
     @Autowired PasswordEncoder          passwordEncoder;
     @Autowired com.onda.marketplace.auth.PasswordResetCodeRepository passwordResetCodeRepository;
     @Autowired org.springframework.transaction.support.TransactionTemplate transacao;
+    // Exclusão de conta (US36): monta o estado de cada cenário direto no banco.
+    @Autowired ProposalRepository       proposalRepository;
+    @Autowired MessageRepository        messageRepository;
+    @Autowired ReviewRepository         reviewRepository;
+    @Autowired ServiceMediaRepository   mediaRepository;
+    @Autowired SosAlertRepository       sosAlertRepository;
+    @Autowired DenunciaRepository       denunciaRepository;
 
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
@@ -805,11 +832,15 @@ class E2EFluxoPrincipalTest {
 
     /** Moderação real do prestador do fluxo pela API do admin: APROVAR, REPROVAR ou SUSPENDER. */
     private void moderarPrestador(String acao) {
+        moderarPrestador(prestadorId, acao);
+    }
+
+    private void moderarPrestador(String userId, String acao) {
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", "Bearer " + tokenAdmin())
                 .body("{\"action\":\"%s\"}".formatted(acao))
-                .when().post("/api/v1/admin/providers/{id}/moderate", prestadorId)
+                .when().post("/api/v1/admin/providers/{id}/moderate", userId)
                 .then().statusCode(200);
     }
 
@@ -918,8 +949,17 @@ class E2EFluxoPrincipalTest {
         String joao = "joao.e2e@onda.test";
         String refreshAberto = login(joao, "Senha@123").then().statusCode(200).extract().path("refreshToken");
 
+        // o access token emitido no cadastro (ainda dentro dos 15 min) funciona...
+        given().header("Authorization", "Bearer " + tokenPrestador)
+                .when().get("/api/v1/providers/me/chave-pix").then().statusCode(200);
+
         given().header("Authorization", "Bearer " + tokenAdmin)
                 .when().post("/api/v1/admin/users/{id}/suspend", prestadorId).then().statusCode(200);
+
+        // ...e para NA HORA com a suspensão: o filtro confere a conta a cada requisição. Antes, o token
+        // já emitido seguia valendo até expirar — conta suspensa continuava usando o app por até 15 min.
+        given().header("Authorization", "Bearer " + tokenPrestador)
+                .when().get("/api/v1/providers/me/chave-pix").then().statusCode(401);
 
         // com a senha CERTA a conta suspensa não entra; com a errada nem fica sabendo que está suspensa
         login(joao, "Senha@123").then().statusCode(422).body("code", equalTo("ACCOUNT_SUSPENDED"));
@@ -937,6 +977,9 @@ class E2EFluxoPrincipalTest {
         given().header("Authorization", "Bearer " + tokenAdmin)
                 .when().post("/api/v1/admin/users/{id}/reactivate", prestadorId).then().statusCode(200);
         login(joao, "Senha@123").then().statusCode(200);
+        // reativada, o MESMO token volta a valer sem novo login: o corte é pelo estado da conta, não por revogação
+        given().header("Authorization", "Bearer " + tokenPrestador)
+                .when().get("/api/v1/providers/me/chave-pix").then().statusCode(200);
     }
 
     @Test @Order(25)
@@ -1017,5 +1060,556 @@ class E2EFluxoPrincipalTest {
         segunda.get(10, java.util.concurrent.TimeUnit.SECONDS);
         assertThat(segundaTerminou.get(), is(true));
         pool.shutdown();
+    }
+
+    // ─── US36 — Exclusão de conta ──────────────────────────────────────────
+    //
+    // Estes passos rodam contra o Postgres e o SecurityConfig reais. É aqui que se prova o que o teste de
+    // serviço, com repositório mockado, não alcança: que cada UPDATE/DELETE em lote atinge a tabela certa
+    // e só ela, que a anonimização passa pelas restrições (FK, NOT NULL, UNIQUE) e que o histórico fica de
+    // pé. Cada cenário usa contas NOVAS e monta o estado por API/repositório/SQL — não depende dos passos 1–26.
+
+    static final String SENHA_PADRAO = "Senha@123";
+    static final String CPF_PAULO = "111.444.777-35";
+    static final String CPF_RUI   = "390.533.447-05";
+    static final String CPF_PAULA = "168.995.350-09";
+    static final String CPF_QUIM  = "935.411.347-80";
+    static final String CPF_MARTA = "529.982.247-25";
+    static final String PIX_PAULO = "paulo.exclusao@pix.com";
+    static final String PIX_PAULA = "paula.exclusao@pix.com";
+
+    static UUID martaId;
+    static UUID paulaId;
+
+    record Conta(UUID id, String email, String token, String refresh) {}
+
+    private Conta cadastrarCliente(String nome, String email) {
+        var r = given().contentType(ContentType.JSON)
+                .body("{\"nome\":\"%s\",\"email\":\"%s\",\"senha\":\"%s\",\"aceitouTermos\":true}"
+                        .formatted(nome, email, SENHA_PADRAO))
+                .when().post("/api/v1/auth/register/client").then().statusCode(201).extract();
+        return new Conta(UUID.fromString(r.path("userId")), email, r.path("accessToken"), r.path("refreshToken"));
+    }
+
+    private Conta cadastrarPrestador(String nome, String email, String cpf) {
+        var r = given().contentType(ContentType.JSON)
+                .body("""
+                        {"nome":"%s","email":"%s","senha":"%s","cpf":"%s","categoria":"eletrica",
+                         "bio":"Eletricista, moro na Rua das Palmeiras 45","aceitouTermos":true}
+                        """.formatted(nome, email, SENHA_PADRAO, cpf))
+                .when().post("/api/v1/auth/register/provider").then().statusCode(201).extract();
+        return new Conta(UUID.fromString(r.path("userId")), email, r.path("accessToken"), r.path("refreshToken"));
+    }
+
+    private void definirChavePix(Conta prestador, String chave) {
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + prestador.token())
+                .body("{\"chavePix\":\"%s\"}".formatted(chave))
+                .when().put("/api/v1/providers/me/chave-pix").then().statusCode(200);
+    }
+
+    /** Pedido criado pela API como o app o envia (descrição, localização, bairro); o status é ajustado no banco. */
+    private UUID pedidoDe(Conta cliente, String descricao, String status) {
+        UUID id = UUID.fromString(given().contentType(ContentType.JSON)
+                .header("Authorization", "Bearer " + cliente.token())
+                .header("X-Idempotency-Key", UUID.randomUUID().toString())
+                .body("""
+                        {"categoria":"eletrica","descricao":"%s","lat":-3.7319,"lng":-38.5267,"bairro":"Meireles"}
+                        """.formatted(descricao))
+                .when().post("/api/v1/service-requests").then().statusCode(201).extract().path("id"));
+        definirStatus(id, status);
+        return id;
+    }
+
+    private void definirStatus(UUID pedido, String status) {
+        jdbc.update("UPDATE service_requests SET status = ? WHERE id = ?::uuid", status, pedido.toString());
+    }
+
+    private void proposta(UUID pedido, UUID prestador, ProposalStatus status) {
+        proposalRepository.save(new Proposal(serviceRequestRepository.findById(pedido).orElseThrow(),
+                prestador, new BigDecimal("200.00"), 1, null, status));
+    }
+
+    private void pagamento(UUID pedido, TransactionStatus status) {
+        var tx = new Transaction(pedido, new BigDecimal("200.00"), new BigDecimal("30.00"),
+                new BigDecimal("15.00"), PaymentMethod.PIX, UUID.randomUUID().toString());
+        if (status != TransactionStatus.PENDENTE) tx.reter();
+        if (status == TransactionStatus.LIBERADO) tx.liberar();
+        if (status == TransactionStatus.REEMBOLSADO) tx.reembolsar();
+        transactionRepository.save(tx);
+    }
+
+    private void definirPagamento(UUID pedido, TransactionStatus status) {
+        jdbc.update("UPDATE transactions SET status_pagamento = ? WHERE service_request_id = ?::uuid",
+                status.name(), pedido.toString());
+    }
+
+    private void midia(UUID pedido) {
+        mediaRepository.save(new ServiceMedia(serviceRequestRepository.findById(pedido).orElseThrow(),
+                MediaType.FOTO, "https://storage.invalid/foto-" + pedido + ".jpg"));
+    }
+
+    private void mensagem(UUID pedido, UUID remetente, String texto) {
+        messageRepository.save(new Message(serviceRequestRepository.findById(pedido).orElseThrow(),
+                remetente, texto, false));
+    }
+
+    private void avaliacao(UUID pedido, UUID avaliador, UUID avaliado, ReviewType tipo, int nota, String comentario) {
+        var r = new Review(pedido, avaliador, avaliado, tipo, nota, comentario);
+        r.revelar();
+        reviewRepository.save(r);
+    }
+
+    private io.restassured.response.Response excluirConta(String token, String senha) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + token)
+                .body("{\"senha\":\"%s\"}".formatted(senha))
+                .when().post("/api/v1/users/me/delete");
+    }
+
+    private void verificarIdentidade(Conta conta, String cpf) {
+        verificarIdentidade(conta.token(), cpf).then().statusCode(204);
+    }
+
+    private io.restassured.response.Response verificarIdentidade(String token, String cpf) {
+        return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + token)
+                .body("{\"cpf\":\"%s\"}".formatted(cpf))
+                .when().post("/api/v1/auth/verify-identity");
+    }
+
+    private java.util.Map<String, Object> conta(UUID id) {
+        return jdbc.queryForMap(
+                "SELECT nome, email, cpf_hash, senha_hash, ativo, excluido_em FROM users WHERE id = ?::uuid", id.toString());
+    }
+
+    private int contar(String sql, Object... args) {
+        return jdbc.queryForObject(sql, Integer.class, args);
+    }
+
+    private String texto(String sql, Object... args) {
+        return jdbc.queryForObject(sql, String.class, args);
+    }
+
+    /** A coluna está NULL na linha com este id? (só nomes fixos do próprio teste entram no SQL) */
+    private boolean vazio(String coluna, String tabela, UUID id) {
+        return jdbc.queryForObject("SELECT %s IS NULL FROM %s WHERE id = ?::uuid".formatted(coluna, tabela),
+                Boolean.class, id.toString());
+    }
+
+    @Test @Order(27)
+    @DisplayName("27 · Exclusão de conta: senha errada, administrador, corpo vazio e sem token são recusados e nada muda")
+    void exclusaoDeConta_recusasSimples() {
+        var ana = cadastrarCliente("Ana Cuidadosa", "ana.exclusao@onda.test");
+        int sessoes = contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", ana.id().toString());
+
+        excluirConta(ana.token(), "senha-errada")
+                .then().statusCode(422).body("code", equalTo("INVALID_PASSWORD"));
+
+        // nada mudou: a conta segue inteira, a sessão aberta também e nenhuma sessão foi derrubada
+        var linha = conta(ana.id());
+        assertThat(linha.get("nome"), equalTo("Ana Cuidadosa"));
+        assertThat(linha.get("excluido_em"), nullValue());
+        assertThat(contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", ana.id().toString()),
+                equalTo(sessoes));
+        login(ana.email(), SENHA_PADRAO).then().statusCode(200);
+        given().header("Authorization", "Bearer " + ana.token())
+                .when().get("/api/v1/service-requests/my").then().statusCode(200);
+
+        excluirConta(tokenAdmin(), "Admin@123")
+                .then().statusCode(422).body("code", equalTo("ADMIN_CANNOT_DELETE"));
+        login("admin.e2e@onda.test", "Admin@123").then().statusCode(200);
+
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + ana.token()).body("{}")
+                .when().post("/api/v1/users/me/delete").then().statusCode(422);
+        given().contentType(ContentType.JSON).body("{\"senha\":\"x\"}")
+                .when().post("/api/v1/users/me/delete").then().statusCode(401);
+        assertThat(conta(ana.id()).get("excluido_em"), nullValue());
+    }
+
+    @Test @Order(28)
+    @DisplayName("28 · Pendências impedem: pedido em curso, reembolso pendente (cliente), serviço em curso, repasse a receber (prestador)")
+    void exclusaoDeConta_pendenciasImpedem() {
+        // --- A) pedido ACEITO / EM_ANDAMENTO / EM_DISPUTA: cliente e prestador ficam, e nada é apagado
+        var caio  = cadastrarCliente("Caio Com Pedido", "caio.exclusao@onda.test");
+        var paulo = cadastrarPrestador("Paulo Prestador", "paulo.exclusao@onda.test", CPF_PAULO);
+        definirChavePix(paulo, PIX_PAULO);
+        UUID emCurso = pedidoDe(caio, "Pedido em curso, Rua A 10", "ACEITO");
+        proposta(emCurso, paulo.id(), ProposalStatus.ACEITA);
+        int sessoesCaio = contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", caio.id().toString());
+
+        for (String status : List.of("ACEITO", "EM_ANDAMENTO", "EM_DISPUTA")) {
+            definirStatus(emCurso, status);
+            for (Conta quem : List.of(caio, paulo)) {
+                excluirConta(quem.token(), SENHA_PADRAO).then().statusCode(422)
+                        .body("code", equalTo("ACCOUNT_HAS_ACTIVE_ORDERS"))
+                        .body("message", containsString("aceitos, em andamento ou em disputa"));
+            }
+        }
+        assertThat(conta(caio.id()).get("excluido_em"), nullValue());
+        assertThat(conta(paulo.id()).get("excluido_em"), nullValue());
+        assertThat(texto("SELECT descricao FROM service_requests WHERE id = ?::uuid", emCurso.toString()),
+                equalTo("Pedido em curso, Rua A 10"));
+        assertThat(contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", caio.id().toString()),
+                equalTo(sessoesCaio));
+
+        // --- B) serviço CONCLUÍDO com o dinheiro ainda retido (repasse manual pendente): o PRESTADOR espera
+        //        receber e fica; o CLIENTE já cumpriu a parte dele e pode sair
+        definirStatus(emCurso, "CONCLUIDO");
+        pagamento(emCurso, TransactionStatus.RETIDO);
+        excluirConta(paulo.token(), SENHA_PADRAO).then().statusCode(422)
+                .body("code", equalTo("ACCOUNT_HAS_ACTIVE_ORDERS"))
+                .body("message", containsString("repasse"));
+        assertThat("a chave Pix de quem tem repasse a receber NÃO pode ser apagada",
+                texto("SELECT chave_pix_cifrada FROM providers_profile WHERE user_id = ?::uuid", paulo.id().toString()),
+                notNullValue());
+
+        excluirConta(caio.token(), SENHA_PADRAO).then().statusCode(204);
+        assertThat("a transação do pedido concluído fica intacta",
+                texto("SELECT status_pagamento FROM transactions WHERE service_request_id = ?::uuid", emCurso.toString()),
+                equalTo("RETIDO"));
+
+        definirPagamento(emCurso, TransactionStatus.LIBERADO);          // o admin fez o repasse
+        excluirConta(paulo.token(), SENHA_PADRAO).then().statusCode(204);
+
+        // --- C) pedido CANCELADO com o dinheiro ainda retido (reembolso a caminho): o CLIENTE espera;
+        //        o prestador não tem nada a receber nem trabalho em curso, então sai
+        var rita = cadastrarCliente("Rita Reembolso", "rita.exclusao@onda.test");
+        var rui  = cadastrarPrestador("Rui Prestador", "rui.exclusao@onda.test", CPF_RUI);
+        UUID cancelado = pedidoDe(rita, "Pedido cancelado, Rua B 20", "CANCELADO");
+        proposta(cancelado, rui.id(), ProposalStatus.ACEITA);
+        pagamento(cancelado, TransactionStatus.RETIDO);
+
+        excluirConta(rita.token(), SENHA_PADRAO).then().statusCode(422)
+                .body("code", equalTo("ACCOUNT_HAS_ACTIVE_ORDERS"))
+                .body("message", containsString("reembolso"));
+        assertThat(conta(rita.id()).get("excluido_em"), nullValue());
+
+        excluirConta(rui.token(), SENHA_PADRAO).then().statusCode(204);
+        definirPagamento(cancelado, TransactionStatus.REEMBOLSADO);     // o reembolso saiu
+        excluirConta(rita.token(), SENHA_PADRAO).then().statusCode(204);
+    }
+
+    @Test @Order(29)
+    @DisplayName("29 · Cliente exclui: cada tabela no estado certo — dado pessoal fora, histórico de pé, acesso cortado na hora")
+    void exclusaoDeConta_clienteTabelaPorTabela() throws Exception {
+        var marta = cadastrarCliente("Marta Removível", "marta.exclusao@onda.test");
+        var pedro = cadastrarPrestador("Pedro Parceiro", "pedro.exclusao@onda.test", "745.649.490-00");
+        martaId = marta.id();
+        verificarIdentidade(marta, CPF_MARTA);   // vínculo do CPF (só o hash) — a "conta limpa" o perde
+
+        UUID aberto    = pedidoDe(marta, "Vazamento na cozinha, Rua das Flores 123", "PENDENTE");
+        UUID concluido = pedidoDe(marta, "Troca de chuveiro, Rua das Flores 123", "CONCLUIDO");
+        jdbc.update("""
+                UPDATE service_requests SET ai_descricao_sugerida = 'texto da IA', detalhes_disputa = 'detalhe da disputa'
+                 WHERE id IN (?::uuid, ?::uuid)
+                """, aberto.toString(), concluido.toString());
+        proposta(aberto, pedro.id(), ProposalStatus.ATIVA);
+        proposta(concluido, pedro.id(), ProposalStatus.ACEITA);
+        pagamento(concluido, TransactionStatus.LIBERADO);
+        midia(aberto);
+        midia(concluido);
+        mensagem(aberto, marta.id(), "me liga no 85 99999-0000");
+        mensagem(aberto, pedro.id(), "Posso ir amanhã");
+        avaliacao(concluido, marta.id(), pedro.id(), ReviewType.CLIENTE_AVALIA_PRESTADOR, 5, "Ótimo, mora na Rua das Flores");
+        avaliacao(concluido, pedro.id(), marta.id(), ReviewType.PRESTADOR_AVALIA_CLIENTE, 4, "Cliente educada");
+        sosAlertRepository.save(new SosAlert(marta.id(), concluido, new BigDecimal("-3.7319000"), new BigDecimal("-38.5267000")));
+        denunciaRepository.save(new Denuncia(TipoDenuncia.PRESTADOR, pedro.id(), marta.id(), "FRAUDE", "Cobrou fora do combinado"));
+        login(marta.email(), SENHA_PADRAO).then().statusCode(200);             // 2ª sessão aberta
+        CaixaDeEntrada.EMAILS.clear();
+        pedirCodigo(marta.email());                                            // um código de recuperação em aberto
+        aguardarEmails(1);
+        CaixaDeEntrada.EMAILS.clear();
+
+        String senhaAntes = (String) conta(marta.id()).get("senha_hash");
+        assertThat(contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", marta.id().toString()), greaterThanOrEqualTo(2));
+        assertThat(contar("SELECT count(*) FROM password_reset_codes WHERE user_id = ?::uuid", marta.id().toString()), equalTo(1));
+
+        excluirConta(marta.token(), SENHA_PADRAO).then().statusCode(204).body(emptyString());
+
+        // users: nada que identifique, conta bloqueada e fora do login
+        var u = conta(marta.id());
+        assertThat(u.get("nome"), equalTo("Usuário removido"));
+        assertThat((String) u.get("email"), matchesPattern("removido-[0-9a-f-]{36}@excluido\\.invalid"));
+        assertThat("aleatório, não derivado do id (público): ninguém cadastra o endereço antes e trava a exclusão",
+                (String) u.get("email"), not(containsString(marta.id().toString())));
+        assertThat("conta limpa: o hash do CPF também sai", u.get("cpf_hash"), nullValue());
+        assertThat(u.get("ativo"), equalTo(false));
+        assertThat(u.get("excluido_em"), notNullValue());
+        assertThat("a senha antiga deixou de existir", u.get("senha_hash"), not(equalTo(senhaAntes)));
+
+        // service_requests: o sem compromisso foi cancelado; texto livre e localização saíram dos DOIS;
+        // categoria, bairro e status do histórico ficaram
+        assertThat(texto("SELECT status FROM service_requests WHERE id = ?::uuid", aberto.toString()), equalTo("CANCELADO"));
+        assertThat(texto("SELECT status FROM service_requests WHERE id = ?::uuid", concluido.toString()), equalTo("CONCLUIDO"));
+        for (UUID pedido : List.of(aberto, concluido)) {
+            assertThat(vazio("descricao", "service_requests", pedido), is(true));
+            assertThat(vazio("ai_descricao_sugerida", "service_requests", pedido), is(true));
+            assertThat(vazio("detalhes_disputa", "service_requests", pedido), is(true));
+            assertThat(vazio("localizacao", "service_requests", pedido), is(true));
+            assertThat(texto("SELECT bairro FROM service_requests WHERE id = ?::uuid", pedido.toString()), equalTo("Meireles"));
+            assertThat(texto("SELECT categoria FROM service_requests WHERE id = ?::uuid", pedido.toString()), equalTo("eletrica"));
+        }
+
+        // proposals: a aberta foi encerrada; a aceita do pedido concluído é histórico e fica
+        assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", aberto.toString()), equalTo("ENCERRADA"));
+        assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", concluido.toString()), equalTo("ACEITA"));
+
+        // mídia dos pedidos: toda removida
+        assertThat(contar("SELECT count(*) FROM service_media WHERE service_request_id IN (?::uuid, ?::uuid)",
+                aberto.toString(), concluido.toString()), equalTo(0));
+
+        // mensagens: o texto dela saiu e a linha ficou; a do prestador não foi tocada
+        assertThat(texto("SELECT conteudo FROM messages WHERE service_request_id = ?::uuid AND remetente_id = ?::uuid",
+                aberto.toString(), marta.id().toString()), equalTo("[mensagem removida]"));
+        assertThat(texto("SELECT conteudo FROM messages WHERE service_request_id = ?::uuid AND remetente_id = ?::uuid",
+                aberto.toString(), pedro.id().toString()), equalTo("Posso ir amanhã"));
+
+        // reviews: o comentário DELA saiu e a nota ficou (é reputação do avaliado); a avaliação feita sobre ela não foi tocada
+        assertThat(texto("SELECT comentario FROM reviews WHERE service_request_id = ?::uuid AND avaliador_id = ?::uuid",
+                concluido.toString(), marta.id().toString()), nullValue());
+        assertThat(contar("SELECT nota FROM reviews WHERE service_request_id = ?::uuid AND avaliador_id = ?::uuid",
+                concluido.toString(), marta.id().toString()), equalTo(5));
+        assertThat(texto("SELECT comentario FROM reviews WHERE service_request_id = ?::uuid AND avaliador_id = ?::uuid",
+                concluido.toString(), pedro.id().toString()), equalTo("Cliente educada"));
+
+        // transactions: histórico financeiro intacto
+        var tx = jdbc.queryForMap("SELECT status_pagamento, valor_total FROM transactions WHERE service_request_id = ?::uuid",
+                concluido.toString());
+        assertThat(tx.get("status_pagamento"), equalTo("LIBERADO"));
+        assertThat((BigDecimal) tx.get("valor_total"), comparesEqualTo(new BigDecimal("200.00")));
+
+        // sessões e códigos: todos apagados
+        assertThat(contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", marta.id().toString()), equalTo(0));
+        assertThat(contar("SELECT count(*) FROM password_reset_codes WHERE user_id = ?::uuid", marta.id().toString()), equalTo(0));
+
+        // o que se mantém por premissa jurídica (a confirmar — docs/PENDENCIAS_JURIDICAS.md): aceite de termos,
+        // SOS e denúncia
+        assertThat(contar("SELECT count(*) FROM terms_acceptance WHERE user_id = ?::uuid", marta.id().toString()), greaterThanOrEqualTo(1));
+        assertThat(contar("SELECT count(*) FROM sos_alerts WHERE user_id = ?::uuid", marta.id().toString()), equalTo(1));
+        assertThat(contar("SELECT count(*) FROM denuncias WHERE denunciante_id = ?::uuid", marta.id().toString()), equalTo(1));
+
+        // acesso cortado: o access token que ela tinha na mão (ainda dentro dos 15 min) já não vale...
+        given().header("Authorization", "Bearer " + marta.token())
+                .when().get("/api/v1/service-requests/my").then().statusCode(401);
+        // ...nem o refresh, nem o login, e repetir a exclusão com o token velho também dá 401
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + marta.refresh() + "\"}")
+                .when().post("/api/v1/auth/refresh")
+                .then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        login(marta.email(), SENHA_PADRAO).then().statusCode(422).body("code", equalTo("INVALID_CREDENTIALS"));
+        excluirConta(marta.token(), SENHA_PADRAO).then().statusCode(401);
+
+        // aviso por e-mail, para o endereço de ANTES — e só esse
+        aguardarEmails(1);
+        Thread.sleep(500);
+        assertThat(CaixaDeEntrada.EMAILS, hasSize(1));
+        assertThat(CaixaDeEntrada.EMAILS.get(0).para(), equalTo(marta.email()));
+        assertThat(CaixaDeEntrada.EMAILS.get(0).assunto(), containsString("excluída"));
+
+        // conta "limpa" volta: o e-mail e o CPF estão livres de novo
+        var volta = cadastrarCliente("Marta Voltou", marta.email());
+        verificarIdentidade(volta, CPF_MARTA);
+    }
+
+    @Test @Order(30)
+    @DisplayName("30 · Prestador exclui: perfil, chave Pix, localização e propostas abertas; sai da busca; não leva dado do cliente junto")
+    void exclusaoDeConta_prestadorTabelaPorTabela() {
+        var paula = cadastrarPrestador("Paula Prestadora", "paula.exclusao@onda.test", CPF_PAULA);
+        paulaId = paula.id();
+        moderarPrestador(paula.id().toString(), "APROVAR");
+        definirChavePix(paula, PIX_PAULA);
+        jdbc.update("""
+                UPDATE providers_profile
+                   SET localizacao = ST_SetSRID(ST_MakePoint(-38.5267, -3.7319), 4326)::geography, nota_media = 4.5
+                 WHERE user_id = ?::uuid
+                """, paula.id().toString());
+
+        var cliente = cadastrarCliente("Cliente da Paula", "cliente.paula@onda.test");
+        UUID aberto = pedidoDe(cliente, "Pedido aberto, Rua C 30", "PENDENTE");
+        UUID feito  = pedidoDe(cliente, "Pedido feito, Rua C 30", "CONCLUIDO");
+        // proposta ATIVA pela API real (ela está VERIFICADA); a do pedido concluído é histórico
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + paula.token())
+                .body("{\"valor\":180.00,\"prazoDias\":1,\"horarioProposto\":\"%s\"}"
+                        .formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .when().post("/api/v1/service-requests/{id}/proposals", aberto)
+                .then().statusCode(201).body("status", equalTo("ATIVA"));
+        proposta(feito, paula.id(), ProposalStatus.ACEITA);
+        pagamento(feito, TransactionStatus.LIBERADO);
+        mensagem(feito, paula.id(), "Chego às 14h, meu telefone é 85 98888-0000");
+        avaliacao(feito, paula.id(), cliente.id(), ReviewType.PRESTADOR_AVALIA_CLIENTE, 5, "Cliente pontual");
+        avaliacao(feito, cliente.id(), paula.id(), ReviewType.CLIENTE_AVALIA_PRESTADOR, 5, "Excelente");
+
+        // antes: aparece na busca por proximidade
+        var antes = given().header("Authorization", "Bearer " + cliente.token())
+                .queryParam("lat", -3.7319).queryParam("lng", -38.5267)
+                .queryParam("raioKm", 50).queryParam("categoria", "eletrica")
+                .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
+        assertThat(antes, hasItem(paula.id().toString()));
+
+        excluirConta(paula.token(), SENHA_PADRAO).then().statusCode(204);
+
+        // users + perfil: nada pessoal; sem status de operação; categoria e nota são do histórico
+        var u = conta(paula.id());
+        assertThat(u.get("nome"), equalTo("Usuário removido"));
+        assertThat((String) u.get("email"), matchesPattern("removido-[0-9a-f-]{36}@excluido\\.invalid"));
+        var perfil = jdbc.queryForMap("""
+                SELECT bio, chave_pix_cifrada, cpf_cifrado, localizacao IS NULL AS sem_local, status_verificacao,
+                       categoria, nota_media
+                  FROM providers_profile WHERE user_id = ?::uuid
+                """, paula.id().toString());
+        assertThat(perfil.get("bio"), nullValue());
+        assertThat(perfil.get("chave_pix_cifrada"), nullValue());
+        assertThat(perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("sem_local"), equalTo(true));
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+        assertThat(perfil.get("categoria"), equalTo("eletrica"));
+        assertThat((BigDecimal) perfil.get("nota_media"), comparesEqualTo(new BigDecimal("4.5")));
+
+        // propostas: a aberta foi encerrada; a do serviço concluído fica
+        assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid",
+                aberto.toString(), paula.id().toString()), equalTo("ENCERRADA"));
+        assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid",
+                feito.toString(), paula.id().toString()), equalTo("ACEITA"));
+
+        // mensagens e avaliações: o texto DELA saiu; o que o cliente escreveu sobre ela fica
+        assertThat(texto("SELECT conteudo FROM messages WHERE remetente_id = ?::uuid", paula.id().toString()),
+                equalTo("[mensagem removida]"));
+        assertThat(texto("SELECT comentario FROM reviews WHERE avaliador_id = ?::uuid", paula.id().toString()), nullValue());
+        assertThat(texto("SELECT comentario FROM reviews WHERE avaliador_id = ?::uuid", cliente.id().toString()), equalTo("Excelente"));
+
+        // os dados do CLIENTE não vão junto com os do prestador. O pedido segue PROPOSTO (a proposta dela
+        // virou ENCERRADA): é o mesmo estado de quando o cliente recusa a única proposta — lacuna anterior,
+        // ver o ADR da exclusão de conta. Nem cancelado nem apagado.
+        assertThat(texto("SELECT status FROM service_requests WHERE id = ?::uuid", aberto.toString()), equalTo("PROPOSTO"));
+        assertThat(texto("SELECT descricao FROM service_requests WHERE id = ?::uuid", feito.toString()), equalTo("Pedido feito, Rua C 30"));
+        assertThat(conta(cliente.id()).get("nome"), equalTo("Cliente da Paula"));
+
+        // depois: sumiu da busca por proximidade
+        var depois = given().header("Authorization", "Bearer " + cliente.token())
+                .queryParam("lat", -3.7319).queryParam("lng", -38.5267)
+                .queryParam("raioKm", 50).queryParam("categoria", "eletrica")
+                .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
+        assertThat(depois, not(hasItem(paula.id().toString())));
+
+        // o e-mail e o CPF dela ficam livres
+        cadastrarPrestador("Paula Voltou", paula.email(), CPF_PAULA);
+    }
+
+    @Test @Order(31)
+    @DisplayName("31 · Antifraude: prestador reprovado que exclui a conta mantém o hash do CPF — o vínculo não se desfaz")
+    void exclusaoDeConta_prestadorReprovadoMantemOHashDoCpf() {
+        // Hoje o hash do CPF só é gravado pelo fluxo de verificação de identidade (o cadastro de prestador
+        // não o grava nem o consulta — ver ADR). Por isso o prestador passa por ele aqui: é o único caminho
+        // em que a retenção do hash tem o que reter.
+        var quim = cadastrarPrestador("Quim Reprovado", "quim.exclusao@onda.test", CPF_QUIM);
+        moderarPrestador(quim.id().toString(), "REPROVAR");
+        verificarIdentidade(quim, CPF_QUIM);
+        String hash = (String) conta(quim.id()).get("cpf_hash");
+        assertThat(hash, notNullValue());
+
+        excluirConta(quim.token(), SENHA_PADRAO).then().statusCode(204);
+
+        var u = conta(quim.id());
+        assertThat(u.get("nome"), equalTo("Usuário removido"));
+        assertThat("reprovado pela moderação: o hash fica", u.get("cpf_hash"), equalTo(hash));
+
+        // outra conta não consegue vincular o mesmo CPF: excluir não burla o banimento
+        var outro = cadastrarCliente("Outra Conta", "outra.conta.exclusao@onda.test");
+        verificarIdentidade(outro.token(), CPF_QUIM).then().statusCode(422)
+                .body("code", equalTo("CPF_ALREADY_REGISTERED"));
+    }
+
+    @Test @Order(32)
+    @DisplayName("32 · O painel admin mostra a conta excluída como EXCLUIDO e não deixa suspender, reativar nem moderar")
+    void exclusaoDeConta_adminVeExcluidoENaoAltera() {
+        String admin = tokenAdmin();
+        String marta = martaId.toString();
+        String paula = paulaId.toString();
+
+        var lista = given().header("Authorization", "Bearer " + admin)
+                .when().get("/api/v1/admin/users").then().statusCode(200).extract().jsonPath();
+        for (String id : List.of(marta, paula)) {
+            assertThat(lista.getString("find { it.id == '%s' }.status".formatted(id)), equalTo("EXCLUIDO"));
+            assertThat(lista.getString("find { it.id == '%s' }.nome".formatted(id)), equalTo("Usuário removido"));
+        }
+
+        // erro de negócio (422 com código), não 500 — User.reativar() lança IllegalStateException para conta excluída
+        for (String acao : List.of("suspend", "reactivate")) {
+            given().header("Authorization", "Bearer " + admin)
+                    .when().post("/api/v1/admin/users/{id}/" + acao, marta)
+                    .then().statusCode(422).body("code", equalTo("ACCOUNT_DELETED"));
+        }
+        for (String acao : List.of("APROVAR", "REPROVAR", "SUSPENDER")) {
+            given().contentType(ContentType.JSON).header("Authorization", "Bearer " + admin)
+                    .body("{\"action\":\"%s\"}".formatted(acao))
+                    .when().post("/api/v1/admin/providers/{id}/moderate", paula)
+                    .then().statusCode(422).body("code", equalTo("ACCOUNT_DELETED"));
+        }
+        // a recusa não deixa trilha de auditoria de uma ação que não aconteceu
+        assertThat(contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id = ?::uuid", marta), equalTo(0));
+        assertThat(texto("SELECT status_verificacao FROM providers_profile WHERE user_id = ?::uuid", paula), equalTo("SUSPENSO"));
+        assertThat(conta(martaId).get("ativo"), equalTo(false));
+    }
+
+    @Test @Order(33)
+    @DisplayName("33 · A leitura do usuário na exclusão TRAVA a linha: uma 2ª transação espera a 1ª terminar")
+    void exclusaoDeConta_aLeituraDoUsuarioTravaALinha() throws Exception {
+        // Prova determinística da trava (@Lock PESSIMISTIC_WRITE), no mesmo molde do passo 26: sem ela, dois
+        // pedidos de exclusão simultâneos leem a conta "viva" e rodam a limpeza (e mandam o e-mail) duas vezes.
+        var bia = cadastrarCliente("Bia Trava", "bia.exclusao@onda.test");
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var segundaTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        var primeira = pool.submit(() -> transacao.executeWithoutResult(s -> {
+            userRepository.findByIdComTrava(bia.id());
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a 1ª transação deveria ter a trava");
+
+        var segunda = pool.submit(() -> {
+            transacao.executeWithoutResult(s -> userRepository.findByIdComTrava(bia.id()));
+            segundaTerminou.set(true);
+        });
+        Thread.sleep(800);
+        assertThat("a 2ª transação deveria estar ESPERANDO a trava, não ter terminado",
+                segundaTerminou.get(), is(false));
+
+        liberar.countDown();
+        primeira.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        segunda.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(segundaTerminou.get(), is(true));
+        pool.shutdown();
+    }
+
+    @Test @Order(34)
+    @DisplayName("34 · Toque duplo: dois pedidos de exclusão simultâneos excluem UMA vez e mandam UM e-mail")
+    void exclusaoDeConta_toqueDuplo() throws Exception {
+        var duda = cadastrarCliente("Duda Dedo Nervoso", "duda.exclusao@onda.test");
+        CaixaDeEntrada.EMAILS.clear();
+
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> respostas = new java.util.ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            respostas.add(pool.submit(() -> {
+                largada.await();
+                return excluirConta(duda.token(), SENHA_PADRAO).statusCode();
+            }));
+        }
+        largada.countDown();
+        List<Integer> codigos = new java.util.ArrayList<>();
+        for (var r : respostas) codigos.add(r.get(60, java.util.concurrent.TimeUnit.SECONDS));
+        pool.shutdown();
+
+        // um dos dois pode chegar depois do commit do outro e dar 401 (conta já inativa); o que não pode é 5xx
+        assertThat(codigos, everyItem(anyOf(equalTo(204), equalTo(401))));
+        assertThat(codigos, hasItem(204));
+        assertThat(conta(duda.id()).get("excluido_em"), notNullValue());
+
+        aguardarEmails(1);
+        Thread.sleep(700);
+        long avisos = CaixaDeEntrada.EMAILS.stream().filter(e -> e.para().equals(duda.email())).count();
+        assertThat("um só aviso de exclusão", avisos, equalTo(1L));
     }
 }
