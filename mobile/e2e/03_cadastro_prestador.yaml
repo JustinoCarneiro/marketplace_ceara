@@ -1,7 +1,7 @@
 appId: com.onda.marketplace
 env:
   NOME: "Jose Prestador"
-  CPF: "123.456.789-00"
+  CPF: "123.456.789-09"
   EMAIL: "jose.prestador@onda.dev"
   SENHA: "senha1234"
 ---
@@ -36,7 +36,7 @@ env:
     text: "DENY"
     optional: true
 - tapOn:
-    text: "123.456.789-00"
+    text: "123.456.789-09"
 - tapOn:
     text: "DENY"
     optional: true

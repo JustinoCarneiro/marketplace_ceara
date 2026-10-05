@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import { cpfNovo } from './helpers/cpf';
 
 /**
  * Testes de CONTRATO: comparam os campos que o backend realmente devolve com os campos que
@@ -138,7 +139,7 @@ test.describe('Contrato backend ↔ frontends', () => {
         nome: 'Contrato Alertas',
         email: `contrato-alertas-${Date.now()}@onda.dev`,
         senha: 'Senha@123',
-        cpf: '111.444.777-35',
+        cpf: cpfNovo(),
         categoria: 'Elétrica',
         aceitouTermos: true,
       },
@@ -226,7 +227,7 @@ test.describe('Idempotência é por dono (V14)', () => {
     const reg = await ctx.post(`${API}/auth/register/provider`, {
       data: {
         nome: 'Prestador Contrato', email: `contrato-prest-${ts}@teste.com`,
-        senha: 'Senha@123', cpf: '111.444.777-35', categoria: 'Elétrica', aceitouTermos: true,
+        senha: 'Senha@123', cpf: cpfNovo(), categoria: 'Elétrica', aceitouTermos: true,
       },
     });
     expect(reg.ok()).toBeTruthy();

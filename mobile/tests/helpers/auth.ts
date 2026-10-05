@@ -89,12 +89,18 @@ export function futureHorarioProposto(): { data: string; hora: string } {
 }
 
 /**
- * CPF fictício, só no formato (o backend não exige dígito verificador). `users.cpf_hash` é UNIQUE
- * (antifraude Camada 2): um CPF fixo colide entre execuções contra o mesmo banco, porque fica
- * vinculado à conta da rodada anterior. Deriva do timestamp para nunca repetir; some 1 à semente
- * para o cliente e o prestador do mesmo teste nunca coincidirem.
+ * CPF fictício com os dígitos verificadores CERTOS (o backend os valida: uma pessoa = um CPF, e sem validar um número
+ * inventado burlaria a unicidade). `users.cpf_hash` é UNIQUE: um CPF fixo colide entre execuções contra o mesmo banco,
+ * porque fica vinculado à conta da rodada anterior. Deriva do timestamp para nunca repetir; some 1 à semente para o
+ * cliente e o prestador do mesmo teste nunca coincidirem.
  */
 export function fakeCpf(seed: number): string {
-  const d = String(seed).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
+  const base = String(seed).slice(-9).padStart(9, '0');
+  const digitos = base.split('').map(Number);
+  for (const n of [9, 10]) {
+    const soma = digitos.slice(0, n).reduce((acc, d, i) => acc + d * (n + 1 - i), 0);
+    digitos.push(((soma * 10) % 11) % 10);
+  }
+  const t = digitos.join('');
+  return `${t.slice(0, 3)}.${t.slice(3, 6)}.${t.slice(6, 9)}-${t.slice(9)}`;
 }

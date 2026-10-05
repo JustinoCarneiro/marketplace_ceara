@@ -1,4 +1,5 @@
 import { test, expect, request, APIRequestContext } from '@playwright/test';
+import { cpfNovo } from './helpers/cpf';
 
 /**
  * Só prestador VERIFICADO opera (ProviderVerificationGuard). Até aqui a "aprovação manual" do admin
@@ -12,11 +13,6 @@ const API = process.env.API_BASE_URL ?? 'http://localhost:8080/api/v1';
 const ts = Date.now();
 let contador = 0;
 
-/** CPF só no formato (o backend não exige dígito verificador), derivado do tempo para não repetir. */
-function cpfNovo(): string {
-  const d = String(ts + ++contador).slice(-9).padStart(9, '0');
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-00`;
-}
 
 async function login(ctx: APIRequestContext, email: string, senha: string) {
   const r = await ctx.post(`${API}/auth/login`, { data: { email, senha } });
