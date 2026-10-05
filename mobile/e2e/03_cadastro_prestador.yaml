@@ -36,7 +36,7 @@ env:
     text: "DENY"
     optional: true
 - tapOn:
-    text: "123.456.789-09"
+    text: "123.456.789-00"   # o PLACEHOLDER do campo (a tela mostra esse exemplo), não o CPF digitado
 - tapOn:
     text: "DENY"
     optional: true
