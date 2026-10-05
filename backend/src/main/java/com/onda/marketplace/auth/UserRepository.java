@@ -16,6 +16,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** Filtro de autenticação: o token só vale enquanto a conta está ativa (não suspensa, não excluída). */
     boolean existsByIdAndAtivoTrue(UUID id);
 
+    /**
+     * Leitura por e-mail com trava de escrita na linha (limite de tentativas de senha no login): palpites simultâneos
+     * para a mesma conta se enfileiram em vez de lerem o mesmo contador de erros e furarem o limite.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.email = :email")
+    Optional<User> findByEmailComTrava(@Param("email") String email);
+
     /** Métrica de estoque do dashboard (US23): contas ativas por papel, estado atual. */
     long countByRoleAndAtivoTrue(UserRole role);
 

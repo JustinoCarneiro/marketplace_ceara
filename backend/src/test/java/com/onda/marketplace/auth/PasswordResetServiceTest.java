@@ -188,6 +188,24 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void redefinir_codigoCorreto_tiraOBloqueioPorTentativasDeSenha_eEhASaidaDeQuemFoiBloqueado() throws Exception {
+        // Quem foi bloqueado por erros de senha (às vezes por culpa de outra pessoa) tem uma saída que não depende de
+        // esperar: a recuperação pelo e-mail prova a posse da conta e zera o limite.
+        User user = usuario(true);
+        for (int i = 0; i < 5; i++) user.registrarSenhaErrada(Instant.now(), 5, Duration.ofMinutes(15));
+        assertThat(user.senhaBloqueada(Instant.now())).isTrue();
+        PasswordResetCode codigo = codigoAtivo("ABCD2345");
+        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+        when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
+        when(passwordEncoder.encode("NovaSenha@1")).thenReturn("$2a$novo");
+
+        service.redefinir("ana@example.com", "ABCD2345", "NovaSenha@1");
+
+        assertThat(user.senhaBloqueada(Instant.now())).isFalse();
+        assertThat(user.getSenhaFalhas()).isZero();
+    }
+
+    @Test
     void redefinir_aceitaOCodigoComoOUsuarioDigita_minusculoComHifenEOTrocadoPorZero() throws Exception {
         PasswordResetCode codigo = codigoAtivo("0BCD2345");
         when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(true)));

@@ -5,6 +5,8 @@ import com.onda.marketplace.provider.ProviderProfileRepository;
 import com.onda.marketplace.provider.ProviderStatus;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.PasswordMismatchException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -37,21 +39,29 @@ public class AccountDeletionService {
     private final ProviderProfileRepository profileRepository;
     private final AccountDeletionRepository exclusao;
     private final PasswordEncoder           passwordEncoder;
+    private final PasswordAttempts          passwordAttempts;
     private final ApplicationEventPublisher eventos;
 
     public AccountDeletionService(UserRepository userRepository,
                                   ProviderProfileRepository profileRepository,
                                   AccountDeletionRepository exclusao,
                                   PasswordEncoder passwordEncoder,
+                                  PasswordAttempts passwordAttempts,
                                   ApplicationEventPublisher eventos) {
         this.userRepository    = userRepository;
         this.profileRepository = profileRepository;
         this.exclusao          = exclusao;
         this.passwordEncoder   = passwordEncoder;
+        this.passwordAttempts  = passwordAttempts;
         this.eventos           = eventos;
     }
 
-    @Transactional
+    /**
+     * {@code noRollbackFor} SÓ para as duas exceções do limite de tentativas: o contador de erros precisa ser gravado
+     * mesmo com a exceção. Todas as recusas acontecem ANTES de qualquer escrita; as demais exceções de negócio continuam
+     * desfazendo tudo.
+     */
+    @Transactional(noRollbackFor = {PasswordMismatchException.class, TooManyAttemptsException.class})
     public void excluir(UUID userId, String senha) {
         // Com trava: o toque duplo no botão não roda a limpeza (nem manda o e-mail) duas vezes.
         User user = userRepository.findByIdComTrava(userId)
@@ -64,9 +74,12 @@ public class AccountDeletionService {
             throw new BusinessException("ADMIN_CANNOT_DELETE",
                     "Administradores não excluem a conta por aqui.");
         }
+        passwordAttempts.exigirLiberada(user);   // bloqueada: nem a senha certa exclui, e o BCrypt nem roda
         if (!passwordEncoder.matches(senha, user.getSenhaHash())) {
-            throw new BusinessException("INVALID_PASSWORD", "Senha incorreta.");
+            passwordAttempts.registrarErro(user);
+            throw new PasswordMismatchException("INVALID_PASSWORD", "Senha incorreta.");
         }
+        passwordAttempts.registrarAcerto(user);
         exigirSemPendencias(userId);
 
         Optional<ProviderProfile> perfil = profileRepository.findByUserId(userId);

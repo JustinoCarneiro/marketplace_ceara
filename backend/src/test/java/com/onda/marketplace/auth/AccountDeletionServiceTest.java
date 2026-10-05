@@ -6,6 +6,8 @@ import com.onda.marketplace.provider.ProviderProfiles;
 import com.onda.marketplace.provider.ProviderStatus;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.PasswordMismatchException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,7 +61,7 @@ class AccountDeletionServiceTest {
     @BeforeEach
     void setUp() {
         service = new AccountDeletionService(userRepository, profileRepository, exclusao,
-                passwordEncoder, eventos);
+                passwordEncoder, new PasswordAttempts(5, 900), eventos);
     }
 
     // ---------- apoio ----------
@@ -147,6 +151,66 @@ class AccountDeletionServiceTest {
         // a senha errada barra ANTES de qualquer consulta de pendência
         verify(exclusao, never()).clienteTemPedidoEm(any(), anyCollection());
         nadaFoiApagado();
+    }
+
+    // ---------- limite de tentativas de senha ----------
+
+    @Test
+    void senhaIncorreta_contaOErroNaConta() {
+        User u = cadastrado(UserRole.ROLE_CLIENT);
+        when(passwordEncoder.matches(SENHA, HASH)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.excluir(USER_ID, SENHA)).isInstanceOf(PasswordMismatchException.class);
+
+        assertThat(u.getSenhaFalhas()).isEqualTo(1);
+    }
+
+    @Test
+    void cincoSenhasErradas_bloqueiam_eNemASenhaCertaExclui() {
+        User u = cadastrado(UserRole.ROLE_CLIENT);
+        when(passwordEncoder.matches(SENHA, HASH)).thenReturn(false);
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> service.excluir(USER_ID, SENHA)).isInstanceOf(PasswordMismatchException.class);
+        }
+        // lenient: a senha certa existe, mas o bloqueio faz com que ela nunca seja conferida — é o que se prova abaixo
+        lenient().when(passwordEncoder.matches("certa", HASH)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.excluir(USER_ID, "certa"))
+                .isInstanceOf(TooManyAttemptsException.class)
+                .hasFieldOrPropertyWithValue("code", "TOO_MANY_ATTEMPTS");
+
+        // bloqueada, a senha nem é conferida e nada é apagado: quem tem o token roubado não adivinha a senha
+        verify(passwordEncoder, never()).matches(eq("certa"), any());
+        assertThat(u.isExcluido()).isFalse();
+        nadaFoiApagado();
+    }
+
+    @Test
+    void senhaCerta_zeraOContador() {
+        User u = cadastrado(UserRole.ROLE_CLIENT);
+        when(passwordEncoder.matches("errada", HASH)).thenReturn(false);
+        when(passwordEncoder.matches(SENHA, HASH)).thenReturn(true);
+        semNenhumaPendencia();
+        semPerfilDePrestador();
+        when(passwordEncoder.encode(anyString())).thenReturn("$2a$x");
+        for (int i = 0; i < 4; i++) {
+            assertThatThrownBy(() -> service.excluir(USER_ID, "errada")).isInstanceOf(PasswordMismatchException.class);
+        }
+
+        service.excluir(USER_ID, SENHA);
+
+        assertThat(u.getSenhaFalhas()).isZero();
+    }
+
+    @Test
+    void oErroDeSenhaEhGravadoMesmoComAExcecao_masAsOutrasRecusasContinuamDesfazendoTudo() throws Exception {
+        // noRollbackFor SÓ para as duas exceções do limite: com noRollbackFor = BusinessException, qualquer outra recusa
+        // de negócio lançada depois de uma escrita parcial também seria confirmada
+        var metodo = AccountDeletionService.class.getMethod("excluir", UUID.class, String.class);
+        var tx = metodo.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(tx.noRollbackFor())
+                .containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
     }
 
     @Test

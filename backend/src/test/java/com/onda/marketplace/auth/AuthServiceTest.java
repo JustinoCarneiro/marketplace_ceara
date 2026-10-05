@@ -1,6 +1,8 @@
 package com.onda.marketplace.auth;
 
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.PasswordMismatchException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +35,8 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 userRepository, refreshTokenRepository, jwtService,
-                passwordEncoder, cpfHashService, termsAcceptanceRepository, 30L);
+                passwordEncoder, cpfHashService, termsAcceptanceRepository,
+                new PasswordAttempts(5, 900), 30L);
     }
 
     @Test
@@ -94,7 +97,7 @@ class AuthServiceTest {
                 .senhaHash("$2a$hash")
                 .role(UserRole.ROLE_CLIENT)
                 .build();
-        when(userRepository.findByEmail("u@u.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailComTrava("u@u.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
 
         assertThatThrownBy(() ->
@@ -118,7 +121,7 @@ class AuthServiceTest {
 
     @Test
     void login_contaSuspensa_comSenhaCorreta_ehBloqueada() {
-        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
+        when(userRepository.findByEmailComTrava("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
         when(passwordEncoder.matches("Senha@123", "$2a$hash")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("s@s.com", "Senha@123")))
@@ -134,7 +137,7 @@ class AuthServiceTest {
     void login_contaSuspensa_comSenhaErrada_naoRevelaQueEstaSuspensa() {
         // Quem não sabe a senha não descobre o estado da conta: a suspensão só aparece depois
         // das credenciais corretas, senão o login viraria um detector de contas suspensas.
-        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
+        when(userRepository.findByEmailComTrava("s@s.com")).thenReturn(Optional.of(usuarioSuspenso()));
         when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("s@s.com", "errada")))
@@ -146,13 +149,90 @@ class AuthServiceTest {
     void login_contaReativada_voltaAEntrar() {
         User user = usuarioSuspenso();
         user.reativar();
-        when(userRepository.findByEmail("s@s.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailComTrava("s@s.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("Senha@123", "$2a$hash")).thenReturn(true);
         when(jwtService.generateAccessToken(any())).thenReturn("access");
         when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(authService.login(new LoginRequest("s@s.com", "Senha@123")).accessToken())
                 .isEqualTo("access");
+    }
+
+
+    // ── Limite de tentativas de senha: sem ele a senha de uma conta podia ser testada sem fim.
+
+    private User usuarioComum() {
+        return User.builder().email("l@l.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
+    }
+
+    private void errar(int vezes) {
+        for (int i = 0; i < vezes; i++) {
+            assertThatThrownBy(() -> authService.login(new LoginRequest("l@l.com", "errada")))
+                    .isInstanceOf(PasswordMismatchException.class)
+                    .hasFieldOrPropertyWithValue("code", "INVALID_CREDENTIALS");
+        }
+    }
+
+    @Test
+    void login_senhaErrada_contaOErro_naConta() {
+        User user = usuarioComum();
+        when(userRepository.findByEmailComTrava("l@l.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
+
+        errar(2);
+
+        assertThat(user.getSenhaFalhas()).isEqualTo(2);
+    }
+
+    @Test
+    void login_cincoErros_bloqueiam_ENemASenhaCertaEntraDuranteOBloqueio() {
+        User user = usuarioComum();
+        when(userRepository.findByEmailComTrava("l@l.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
+        errar(5);
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("l@l.com", "Senha@123")))
+                .isInstanceOf(TooManyAttemptsException.class)
+                .hasFieldOrPropertyWithValue("code", "TOO_MANY_ATTEMPTS");
+
+        // bloqueada, a senha nem é conferida (e nenhuma sessão nasce): o BCrypt não vira oráculo de palpite
+        verify(passwordEncoder, times(5)).matches(any(), any());
+        verify(jwtService, never()).generateAccessToken(any());
+    }
+
+    @Test
+    void login_acerto_zeraOContador() {
+        User user = usuarioComum();
+        when(userRepository.findByEmailComTrava("l@l.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("errada", "$2a$hash")).thenReturn(false);
+        when(passwordEncoder.matches("Senha@123", "$2a$hash")).thenReturn(true);
+        when(jwtService.generateAccessToken(any())).thenReturn("access");
+        when(refreshTokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        errar(4);
+
+        authService.login(new LoginRequest("l@l.com", "Senha@123"));
+
+        // senão 4 erros espalhados em semanas somariam e bloqueariam quem só errou digitando
+        assertThat(user.getSenhaFalhas()).isZero();
+    }
+
+    @Test
+    void login_emailDesconhecido_naoGastaContadorDeNinguem() {
+        when(userRepository.findByEmailComTrava("x@x.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("x@x.com", "qualquer")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_CREDENTIALS");
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void login_aContaContaComTrava_epersisteOErroMesmoComAExcecao() throws Exception {
+        // o contador só vale se a transação NÃO voltar junto com a exceção (noRollbackFor), e se a linha for travada
+        var metodo = AuthService.class.getMethod("login", LoginRequest.class);
+        var tx = metodo.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(tx.noRollbackFor()).containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
     }
 
     @Test

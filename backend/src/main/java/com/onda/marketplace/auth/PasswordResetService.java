@@ -162,6 +162,7 @@ public class PasswordResetService {
         }
 
         user.trocarSenha(passwordEncoder.encode(novaSenha));
+        user.limparTentativasDeSenha();   // a posse do e-mail foi provada: encerra um bloqueio por erros de senha
         userRepository.save(user);
         codigo.fechar(agora);
         codeRepository.save(codigo);

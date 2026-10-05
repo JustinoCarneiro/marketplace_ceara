@@ -1612,4 +1612,110 @@ class E2EFluxoPrincipalTest {
         long avisos = CaixaDeEntrada.EMAILS.stream().filter(e -> e.para().equals(duda.email())).count();
         assertThat("um só aviso de exclusão", avisos, equalTo(1L));
     }
+
+    // ─── Limite de tentativas de senha (login e exclusão de conta) ─────────
+    //
+    // Sem ele a senha de uma conta podia ser testada sem fim. O que só o Postgres real prova: o contador PERSISTE mesmo
+    // com a exceção (noRollbackFor), e a leitura com trava de linha faz palpites simultâneos contarem certo.
+    // O tempo passa por UPDATE em senha_bloqueada_ate (esperar 15 min não cabe num teste).
+
+    private java.util.Map<String, Object> tentativas(UUID id) {
+        return jdbc.queryForMap("SELECT senha_falhas, senha_bloqueada_ate FROM users WHERE id = ?::uuid", id.toString());
+    }
+
+    private void passarOBloqueio(UUID id) {
+        jdbc.update("UPDATE users SET senha_bloqueada_ate = now() - interval '1 second' WHERE id = ?::uuid", id.toString());
+    }
+
+    @Test @Order(35)
+    @DisplayName("35 · Login: 5 senhas erradas bloqueiam a conta (429 + Retry-After), nem a certa entra, e libera passado o bloqueio")
+    void limiteDeTentativas_loginBloqueiaELibera() {
+        var vera = cadastrarCliente("Vera Tentativas", "vera.tentativas@onda.test");
+        var outra = cadastrarCliente("Outra Tentativas", "outra.tentativas@onda.test");
+
+        for (int i = 1; i <= 5; i++) {
+            login(vera.email(), "errada-" + i).then().statusCode(422).body("code", equalTo("INVALID_CREDENTIALS"));
+        }
+        // o contador PERSISTIU apesar de cada requisição ter terminado em exceção
+        assertThat(tentativas(vera.id()).get("senha_falhas"), equalTo(5));
+        assertThat(tentativas(vera.id()).get("senha_bloqueada_ate"), notNullValue());
+
+        // bloqueada: 429 com Retry-After, MESMO com a senha certa (senão o limite não limitaria nada)
+        login(vera.email(), SENHA_PADRAO).then().statusCode(429)
+                .header("Retry-After", matchesPattern("\\d+"))
+                .body("code", equalTo("TOO_MANY_ATTEMPTS"))
+                .body("message", containsString("Muitas tentativas"));
+        // e o bloqueio é da conta, não do sistema: outra conta entra normalmente
+        login(outra.email(), SENHA_PADRAO).then().statusCode(200);
+
+        passarOBloqueio(vera.id());
+        login(vera.email(), SENHA_PADRAO).then().statusCode(200);
+        assertThat("o acerto zera o contador", tentativas(vera.id()).get("senha_falhas"), equalTo(0));
+        assertThat(tentativas(vera.id()).get("senha_bloqueada_ate"), nullValue());
+    }
+
+    @Test @Order(36)
+    @DisplayName("36 · A recuperação de senha por e-mail encerra o bloqueio (a saída de quem foi bloqueado por palpites alheios)")
+    void limiteDeTentativas_recuperacaoPorEmailEncerraOBloqueio() throws Exception {
+        var rita = cadastrarCliente("Rita Bloqueada", "rita.bloqueada@onda.test");
+        for (int i = 1; i <= 5; i++) login(rita.email(), "errada-" + i).then().statusCode(422);
+        login(rita.email(), SENHA_PADRAO).then().statusCode(429);
+
+        CaixaDeEntrada.EMAILS.clear();
+        pedirCodigo(rita.email());
+        aguardarEmails(1);
+        String codigo = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+        redefinir(rita.email(), codigo, "NovaSenha@2").statusCode(204);
+
+        // sem esperar o bloqueio acabar: a posse do e-mail foi provada
+        login(rita.email(), "NovaSenha@2").then().statusCode(200);
+        assertThat(tentativas(rita.id()).get("senha_falhas"), equalTo(0));
+        assertThat(tentativas(rita.id()).get("senha_bloqueada_ate"), nullValue());
+    }
+
+    @Test @Order(37)
+    @DisplayName("37 · 30 palpites SIMULTÂNEOS de senha: só 5 são avaliados, os outros 25 batem no bloqueio (a trava da linha)")
+    void limiteDeTentativas_palpitesSimultaneosNaoFuramOLimite() throws Exception {
+        var nina = cadastrarCliente("Nina Palpites", "nina.palpites@onda.test");
+        int palpites = 30;
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(palpites);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> respostas = new java.util.ArrayList<>();
+        for (int i = 0; i < palpites; i++) {
+            String palpite = "errada-" + i;
+            respostas.add(pool.submit(() -> {
+                largada.await();
+                return login(nina.email(), palpite).statusCode();
+            }));
+        }
+        largada.countDown();
+        List<Integer> codigos = new java.util.ArrayList<>();
+        for (var r : respostas) codigos.add(r.get(120, java.util.concurrent.TimeUnit.SECONDS));
+        pool.shutdown();
+
+        // Com a linha travada as tentativas se enfileiram: as 5 primeiras são avaliadas (422) e fecham o bloqueio, as
+        // outras 25 já o encontram (429). Sem a trava, leituras do mesmo contador deixariam passar mais de 5.
+        assertThat(codigos.stream().filter(c -> c == 422).count(), equalTo(5L));
+        assertThat(codigos.stream().filter(c -> c == 429).count(), equalTo(25L));
+        assertThat(tentativas(nina.id()).get("senha_falhas"), equalTo(5));
+    }
+
+    @Test @Order(38)
+    @DisplayName("38 · Exclusão de conta: 5 senhas erradas bloqueiam (429), nem a certa exclui; o bloqueio é da conta e vale para o login")
+    void limiteDeTentativas_exclusaoDeConta() {
+        var dora = cadastrarCliente("Dora Token Roubado", "dora.token@onda.test");
+
+        for (int i = 1; i <= 5; i++) {
+            excluirConta(dora.token(), "errada-" + i).then().statusCode(422).body("code", equalTo("INVALID_PASSWORD"));
+        }
+        // quem tem o token roubado não adivinha a senha: a certa também é recusada enquanto durar o bloqueio
+        excluirConta(dora.token(), SENHA_PADRAO).then().statusCode(429).body("code", equalTo("TOO_MANY_ATTEMPTS"));
+        assertThat(conta(dora.id()).get("excluido_em"), nullValue());
+        // o contador é da conta: o login também fica bloqueado (e a dona tem a recuperação por e-mail como saída)
+        login(dora.email(), SENHA_PADRAO).then().statusCode(429);
+
+        passarOBloqueio(dora.id());
+        excluirConta(dora.token(), SENHA_PADRAO).then().statusCode(204);
+        assertThat(conta(dora.id()).get("excluido_em"), notNullValue());
+    }
 }

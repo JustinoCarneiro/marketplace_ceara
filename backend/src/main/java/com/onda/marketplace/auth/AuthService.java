@@ -1,6 +1,8 @@
 package com.onda.marketplace.auth;
 
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.PasswordMismatchException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class AuthService {
     private final PasswordEncoder           passwordEncoder;
     private final CpfHashService            cpfHashService;
     private final TermsAcceptanceRepository termsAcceptanceRepository;
+    private final PasswordAttempts          passwordAttempts;
     private final long                      refreshTokenDays;
 
     public AuthService(
@@ -33,12 +36,14 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             CpfHashService cpfHashService,
             TermsAcceptanceRepository termsAcceptanceRepository,
+            PasswordAttempts passwordAttempts,
             @Value("${jwt.refresh-token-days:30}") long refreshTokenDays) {
         this.userRepository            = userRepository;
         this.refreshTokenRepository    = refreshTokenRepository;
         this.jwtService                = jwtService;
         this.passwordEncoder           = passwordEncoder;
         this.cpfHashService            = cpfHashService;
+        this.passwordAttempts          = passwordAttempts;
         this.termsAcceptanceRepository = termsAcceptanceRepository;
         this.refreshTokenDays          = refreshTokenDays;
     }
@@ -86,13 +91,20 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
-    @Transactional
+    /**
+     * Limite de tentativas de senha: a conta é lida com trava de linha (palpites simultâneos se enfileiram) e o contador
+     * é gravado MESMO com a exceção — daí o {@code noRollbackFor}, só para as duas exceções do limite.
+     */
+    @Transactional(noRollbackFor = {PasswordMismatchException.class, TooManyAttemptsException.class})
     public AuthResponse login(LoginRequest req) {
-        User user = userRepository.findByEmail(req.email())
+        User user = userRepository.findByEmailComTrava(req.email())
                 .orElseThrow(() -> new BusinessException("INVALID_CREDENTIALS", "Credenciais inválidas."));
+        passwordAttempts.exigirLiberada(user);   // bloqueada: nem a senha certa entra, e o BCrypt nem roda
         if (!passwordEncoder.matches(req.senha(), user.getSenhaHash())) {
-            throw new BusinessException("INVALID_CREDENTIALS", "Credenciais inválidas.");
+            passwordAttempts.registrarErro(user);
+            throw new PasswordMismatchException("INVALID_CREDENTIALS", "Credenciais inválidas.");
         }
+        passwordAttempts.registrarAcerto(user);
         // US26: suspender bloqueia o acesso. Só DEPOIS de conferir a senha — quem não sabe as
         // credenciais não descobre que a conta está suspensa.
         if (!user.isAtivo()) {

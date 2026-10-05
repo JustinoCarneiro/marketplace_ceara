@@ -2,7 +2,9 @@ package com.onda.marketplace.shared;
 
 import com.onda.marketplace.shared.error.ApiError;
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -38,6 +40,13 @@ public class ErrorControllerAdvice {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 ApiError.of(400, "BAD_REQUEST", "Corpo da requisição inválido.", req.getRequestURI())
         );
+    }
+
+    @ExceptionHandler(TooManyAttemptsException.class)
+    ResponseEntity<ApiError> handleTooManyAttempts(TooManyAttemptsException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ApiError.of(429, ex.getCode(), ex.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(BusinessException.class)

@@ -1,6 +1,7 @@
 package com.onda.marketplace.auth;
 
 import jakarta.persistence.*;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -36,6 +37,14 @@ public class User {
     // imutável —, mas sem dado pessoal. Preenchido = conta excluída.
     @Column(name = "excluido_em")
     private Instant excluidoEm;
+
+    // Limite de tentativas de senha (V23): erros seguidos desde o último acerto e, ao chegar no limite, até quando
+    // a conta não aceita nova tentativa (login e exclusão de conta).
+    @Column(name = "senha_falhas", nullable = false)
+    private int senhaFalhas;
+
+    @Column(name = "senha_bloqueada_ate")
+    private Instant senhaBloqueadaAte;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -89,6 +98,39 @@ public class User {
             throw new IllegalStateException("Conta excluída não pode ser reativada.");
         }
         this.ativo = true;
+    }
+
+    public int     getSenhaFalhas()        { return senhaFalhas; }
+    public Instant getSenhaBloqueadaAte()  { return senhaBloqueadaAte; }
+
+    /** A conta não aceita tentativa de senha agora (limite de erros seguidos atingido, bloqueio ainda correndo). */
+    public boolean senhaBloqueada(Instant agora) {
+        return senhaBloqueadaAte != null && agora.isBefore(senhaBloqueadaAte);
+    }
+
+    /**
+     * Conta um erro de senha; no {@code limite} bloqueia por {@code bloqueio}. Passado um bloqueio anterior, recomeça
+     * do zero (senão a conta ficaria sempre a um erro de novo bloqueio). Durante o bloqueio não muda nada: quem
+     * insiste não prolonga o bloqueio de quem é dono da conta.
+     */
+    public void registrarSenhaErrada(Instant agora, int limite, Duration bloqueio) {
+        if (senhaBloqueada(agora)) {
+            return;
+        }
+        if (senhaBloqueadaAte != null) {
+            senhaFalhas = 0;
+            senhaBloqueadaAte = null;
+        }
+        senhaFalhas++;
+        if (senhaFalhas >= limite) {
+            senhaBloqueadaAte = agora.plus(bloqueio);
+        }
+    }
+
+    /** Senha certa, ou senha redefinida pelo e-mail: zera o contador e tira o bloqueio. */
+    public void limparTentativasDeSenha() {
+        senhaFalhas = 0;
+        senhaBloqueadaAte = null;
     }
 
     public boolean isExcluido()    { return excluidoEm != null; }

@@ -1,6 +1,7 @@
 package com.onda.marketplace.shared;
 
 import com.onda.marketplace.shared.exception.BusinessException;
+import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -76,6 +77,26 @@ class ErrorControllerAdviceTest {
 
     // ---- 422 negócio (BusinessException) -----------------------------------
 
+    // ---- 429 (limite de tentativas) ------------------------------------------
+
+    @Test
+    void tooManyAttempts_returns429WithRetryAfter_andTheStandardEnvelope() throws Exception {
+        mvc.perform(get("/api/v1/stub/too-many"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "840"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_ATTEMPTS"))
+                .andExpect(jsonPath("$.message").value("Muitas tentativas de senha. Tente de novo em 14 minutos."))
+                .andExpect(jsonPath("$.path").value("/api/v1/stub/too-many"));
+    }
+
+    @Test
+    void tooManyAttempts_messageRoundsUpAndUsesTheSingular() {
+        // 61 s → "2 minutos" (arredonda para cima: dizer "1" faria a pessoa tentar cedo demais); 1 s → "1 minuto"
+        org.assertj.core.api.Assertions.assertThat(new TooManyAttemptsException(61).getMessage()).contains("2 minutos");
+        org.assertj.core.api.Assertions.assertThat(new TooManyAttemptsException(1).getMessage()).contains("1 minuto.");
+    }
+
     @Test
     void businessException_returns422WithCustomCode() throws Exception {
         mvc.perform(get("/api/v1/stub/business-error"))
@@ -99,5 +120,10 @@ class StubController {
     @GetMapping("/business-error")
     void businessError() {
         throw new BusinessException("EMAIL_IN_USE", "E-mail já cadastrado.");
+    }
+
+    @GetMapping("/too-many")
+    void tooMany() {
+        throw new TooManyAttemptsException(840);
     }
 }
