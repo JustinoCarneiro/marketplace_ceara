@@ -144,7 +144,7 @@ o app não usa segundo plano nem sensores, então elas são removidas passando `
 `locationAlwaysAndWhenInUsePermission`, `motionUsagePermission`). O manifesto do Android não muda.
 
 ### Antes de publicar na App Store (pendências conhecidas)
-- **Exclusão de conta pelo app** (Guideline 5.1.1(v); a Play Store também exige) — ainda não existe.
+- ~~Exclusão de conta pelo app~~ (Guideline 5.1.1(v); a Play Store também exige) — **feita em 2026-10-04** (US36): aba Perfil → "Excluir minha conta", confirma com a senha; ver `memoria-tecnica/decisoes/exclusao-de-conta-por-anonimizacao.md`. Falta só testar o fluxo num iPhone real.
 - Preencher os "rótulos de privacidade" no App Store Connect (CPF, localização, fotos, áudio, mensagens).
 - Testar em iPhone de verdade: teclado (`KeyboardAvoidingView`), SOS, upload de mídia e permissões.
 

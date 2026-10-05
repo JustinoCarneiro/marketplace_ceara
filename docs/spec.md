@@ -43,6 +43,21 @@ Como **Usuário** (Cliente ou Prestador) que esqueceu a senha, quero redefini-la
 - **Dado** que o servidor não tem e-mail configurado, **então** o app avisa que a recuperação está indisponível em vez de prometer um e-mail que não sairá.
 - Fora do escopo: administradores (painel interno) redefinem a senha pelo suporte/operação; o JWT já emitido continua válido até expirar (até 15 min), mas nenhum refresh é possível.
 
+### US36 — Exclusão de conta
+Como **Usuário** (Cliente ou Prestador), quero excluir minha conta pelo próprio app, para exercer meu direito de eliminação dos dados (LGPD, art. 18, VI) — exigência também da App Store e da Play Store.
+- **Dado que** estou logado, **quando** peço a exclusão (`POST /api/v1/users/me/delete`) e confirmo com a minha senha, **então** a conta é encerrada (204): o acesso — inclusive o token já emitido — para na hora, as sessões e os códigos de recuperação são apagados e meus dados pessoais são removidos ou anonimizados.
+- **Dado** uma senha incorreta, **então** a exclusão é recusada (`INVALID_PASSWORD`, 422 — não 401, que o app trataria como sessão expirada) e nada muda.
+- **Dado** um pedido meu aceito, em andamento ou em disputa — ou, como **cliente**, um reembolso ainda a caminho (pedido cancelado com o dinheiro retido) ou, como **prestador**, um repasse ainda por receber (serviço concluído com o dinheiro retido) —, **quando** peço a exclusão, **então** ela é recusada (`ACCOUNT_HAS_ACTIVE_ORDERS`) dizendo o que preciso resolver; nada é apagado (apagar a chave Pix com repasse pendente deixaria o dinheiro sem destino). O cliente cujo serviço já foi concluído **não** é barrado pelo repasse do prestador: o que falta não depende dos dados dele.
+- **Dado** pedidos meus ainda sem compromisso (pendente ou proposto), **então** são cancelados e as propostas abertas neles encerradas: nada meu fica visível a prestadores. **Dado** um prestador com propostas abertas, **então** elas são encerradas; o pedido do cliente não é alterado (segue `PROPOSTO`, o mesmo estado de quando o cliente recusa a única proposta — lacuna de produto registrada no ADR da exclusão).
+- **Dado** o histórico financeiro e de reputação, **então** é mantido **sem identificação pessoal**: nome "Usuário removido", sem e-mail, CPF nem localização. Transações e pedidos concluídos ficam por obrigação fiscal e para disputas (LGPD, art. 16, I e II); a **nota** das avaliações e o **bairro** (região ampla, usada nos relatórios) ficam. Saem os **textos livres** que escrevi — descrição e dados de disputa dos meus pedidos, comentários de avaliações, mensagens do chat (a linha da mensagem fica, com "[mensagem removida]") — e as **fotos e áudios dos meus pedidos**.
+- **Dado** o CPF, **então** o CPF cifrado do prestador e o hash do CPF são apagados. O hash só permanece se o prestador foi reprovado ou suspenso pela moderação, ou a conta estava suspensa (antifraude: excluir a conta não desfaz o vínculo que impede o mesmo CPF em outra conta). Uma conta "limpa" pode se cadastrar de novo, com o mesmo CPF e e-mail.
+- **Dado** o aceite de termos (que inclui o IP), os alertas de SOS e as denúncias, **então** são mantidos: prova do consentimento — imutável por desenho —, segurança e moderação.
+- **Dado** um administrador, **então** ele não exclui a própria conta por este fluxo (`ADMIN_CANNOT_DELETE`). **Dado** uma conta suspensa, **então** ela não consegue pedir a exclusão pelo app (o acesso está cortado); o pedido dela passa pelo suporte.
+- **Dado** uma conta excluída, **quando** o admin lista os usuários, **então** ela aparece como "Usuário removido" com status `EXCLUIDO`, sem ação possível: não é reativável nem moderável (`ACCOUNT_DELETED`).
+- **Dado** dois pedidos de exclusão simultâneos (toque duplo no botão), **então** a conta é excluída uma vez e um só aviso é enviado.
+- **Dado** que o servidor tem e-mail configurado, **então** o dono recebe um aviso de que a conta foi excluída (melhor esforço; o envio nunca desfaz a exclusão).
+- Premissas jurídicas assumidas (a confirmar com a assessoria — `docs/PENDENCIAS_JURIDICAS.md`, item 5): histórico anonimizado retido sem prazo de expurgo por ora; alertas de SOS (que guardam latitude/longitude) e denúncias mantidos por segurança e moderação; IP do aceite de termos mantido como prova do consentimento; CPF cifrado do prestador apagado mesmo após repasses concluídos (se a obrigação fiscal exigir retê-lo, a regra muda).
+
 ---
 
 ## Épico 2 — Descoberta e Geobusca
@@ -253,6 +268,7 @@ Como **Admin**, quero buscar e gerenciar usuários, para dar suporte e conter ab
 - **Dado** uma busca por e-mail/nome, **quando** localizo um usuário, **então** vejo seu perfil, histórico e status.
 - **Dado** um usuário em abuso, **quando** o suspendo/reativo, **então** o acesso dele é bloqueado/liberado e a ação fica auditável.
   - (2026-10-01) "Bloqueado" vale de verdade no **login** e no **refresh**: conta suspensa não entra nem renova a sessão. Até 2026-10-01 o flag `ativo` era gravado mas nunca consultado, e o usuário suspenso continuava usando o app. O JWT já emitido segue válido até expirar (até 15 min).
+  - (2026-10-04) **Corte imediato:** o token já emitido de uma conta suspensa (ou excluída, US36) também deixa de valer na hora — o filtro de autenticação confere, a cada requisição, se a conta continua ativa (uma consulta por chave primária). Antes valia até expirar.
 
 ### US27 — Reconciliação financeira (Escrow)
 Como **Admin**, quero acompanhar o estado das transações e dos eventos, para garantir que nenhum valor fique preso ou inconsistente.
