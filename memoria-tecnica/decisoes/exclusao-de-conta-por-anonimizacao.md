@@ -97,8 +97,8 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
   implementado). Excluir a conta de um prestador com a única proposta cai no mesmo estado. **Não decidi sozinho**
   (voltar a `PENDENTE`? cancelar? expirar?): reverter só na exclusão criaria comportamento diferente do `reject`.
 - **Limites aceitos:** janela de milissegundos entre o filtro/checagem e o commit (um pedido criado por quem acabou
-  de ser excluído passa pelo filtro); sem job de expurgo do histórico retido. **Falta fazer:** limite de tentativas
-  de senha, tratado junto para o login e para este endpoint (na aplicação ou no proxy).
+  de ser excluído passa pelo filtro); sem job de expurgo do histórico retido. Limite de tentativas de
+  senha: resolvido junto para o login e para este endpoint — [[limite-de-tentativas-de-senha]].
 - **Não fazer:** apagar a linha de `users`; reativar conta excluída; trocar a trava por leitura simples; fazer a
   exclusão depender do envio do e-mail.
 

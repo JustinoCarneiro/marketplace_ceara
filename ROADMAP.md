@@ -35,6 +35,8 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: unicidade de pessoa sem guardar CPF em claro do cliente (preenchido no 1º pagamento) |
 | role | enum | `ROLE_CLIENT` · `ROLE_PROVIDER` · `ROLE_ADMIN` |
 | ativo | boolean | `false` = suspensa (US26) **ou** excluída (US36); o filtro JWT confere a cada requisição |
+| senha_falhas | int | V23 — erros de senha seguidos desde o último acerto (limite de tentativas, US37) |
+| senha_bloqueada_ate | timestamptz NULL | V23 — até quando a conta não aceita tentativa de senha (login e exclusão de conta) |
 | excluido_em | timestamptz NULL | V22 — preenchido = conta excluída por anonimização (US36); nome/e-mail/senha/CPF já trocados, a linha fica porque outras tabelas apontam para ela |
 | created_at / updated_at | timestamptz | |
 
@@ -228,6 +230,8 @@ Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications
 
 **Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
 
+**Adicionado em 2026-10-04 (2):** limite de tentativas de senha (US37) — 5 erros seguidos bloqueiam a conta por 15 min (`429 TOO_MANY_ATTEMPTS` + `Retry-After`) no login **e** na confirmação da exclusão de conta; colunas `users.senha_falhas`/`senha_bloqueada_ate` (V23); a redefinição de senha por e-mail encerra o bloqueio.
+
 **Adicionado em 2026-10-04:** exclusão de conta (US36) — `POST /api/v1/users/me/delete`, coluna `users.excluido_em` (V22) e a tela "Excluir conta" do app (aba Perfil, nos dois papéis). **Corrigido junto:** o `JwtAuthFilter` agora confere a cada requisição se a conta está ativa — antes um access token já emitido seguia valendo até 15 min depois da suspensão (US26). `UserAdminDto.status` ganhou `EXCLUIDO`; suspender, reativar e moderar conta excluída dão `ACCOUNT_DELETED` (422).
 
 **Adicionado em 2026-10-01:** recuperação de senha (US35) — `POST /api/v1/auth/forgot-password` e `POST /api/v1/auth/reset-password`, tabela `password_reset_codes` (V20) e as telas "Esqueci a senha" / "Nova senha" do app. O e-mail ao usuário (`UserMailSender`) é um contrato à parte do `EmailSender` (que só avisa o admin) e **exige SMTP configurado** (`MAIL_USERNAME`/`MAIL_PASSWORD`); sem ele o app avisa que a recuperação está indisponível. Em dev/CI, `NOTIFICATION_MAIL_SINK_DIR` grava o e-mail em arquivo para os testes lerem o código. Junto, **corrigido**: o flag `ativo` (suspensão, US26) nunca era consultado — conta suspensa continuava entrando e renovando a sessão; agora login e refresh a recusam.
@@ -240,6 +244,8 @@ POST /api/v1/auth/register/client
   422:  { code:"EMAIL_IN_USE", message } | { code:"VALIDATION_ERROR" }   # sem aceite dos termos
 
 POST /api/v1/auth/login           req:{ email, senha } → 200 { accessToken, refreshToken, role }
+  422:  { code:"INVALID_CREDENTIALS" }   # senha errada ou e-mail desconhecido (mesma resposta)
+  429:  { code:"TOO_MANY_ATTEMPTS", message } + cabeçalho Retry-After   # US37: 5 erros seguidos → 15 min, mesmo com a senha certa
 POST /api/v1/auth/refresh         req:{ refreshToken } → 200 { accessToken, refreshToken } | 401
 # login e refresh recusam conta suspensa (US26): 422 ACCOUNT_SUSPENDED (só depois da senha certa) / INVALID_REFRESH_TOKEN
 

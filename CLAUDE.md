@@ -24,7 +24,7 @@ Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construí
 - Latência alvo por endpoint (não global); telas dependentes de integração externa têm SLA próprio.
 
 ## Épicos
-1. **Gestão de Identidade e Verificação** — cadastro Cliente/Prestador, CPF + background check assíncrono, recuperação de senha por código no e-mail (US35), exclusão de conta por anonimização (US36).
+1. **Gestão de Identidade e Verificação** — cadastro Cliente/Prestador, CPF + background check assíncrono, recuperação de senha por código no e-mail (US35), exclusão de conta por anonimização (US36), limite de tentativas de senha (US37).
 2. **Descoberta e Geobusca** — lista por categoria e proximidade (PostGIS), filtros básicos.
 3. **Solicitação Multimídia + IA** — pedido por texto/áudio/foto; IA sugere descrição e orçamento (com fallback manual).
 4. **Propostas e Orçamentos** — prestador envia proposta de preço; cliente aceita (versão simples do "leilão", sem lances em tempo real).

@@ -58,6 +58,17 @@ Como **Usuário** (Cliente ou Prestador), quero excluir minha conta pelo própri
 - **Dado** que o servidor tem e-mail configurado, **então** o dono recebe um aviso de que a conta foi excluída (melhor esforço; o envio nunca desfaz a exclusão).
 - Premissas jurídicas assumidas (a confirmar com a assessoria — `docs/PENDENCIAS_JURIDICAS.md`, item 5): histórico anonimizado retido sem prazo de expurgo por ora; alertas de SOS (que guardam latitude/longitude) e denúncias mantidos por segurança e moderação; IP do aceite de termos mantido como prova do consentimento; CPF cifrado do prestador apagado mesmo após repasses concluídos (se a obrigação fiscal exigir retê-lo, a regra muda).
 
+
+### US37 — Limite de tentativas de senha
+Como **Usuário**, quero que a minha senha não possa ser adivinhada por tentativa e erro, para que ninguém assuma a minha conta nem apague os meus dados com um token roubado.
+- **Dado** 5 senhas erradas seguidas na minha conta — no login ou na confirmação da exclusão de conta (US36) —, **então** a conta não aceita nova tentativa por 15 minutos: a API responde `429` (`TOO_MANY_ATTEMPTS`) com `Retry-After`, a mensagem diz quanto falta e **nem a senha certa** vale durante o bloqueio.
+- **Dado** que acertei a senha, **então** o contador zera. **Dado** que redefini a senha pelo e-mail (US35), **então** o bloqueio termina na hora: é a saída de quem foi bloqueado, inclusive por palpites alheios.
+- **Dado** que o contador é da **conta**, **então** vale para o login e para a exclusão de conta ao mesmo tempo, e outra conta não é afetada. Passados os 15 minutos, o próximo erro recomeça a contagem do zero.
+- **Dado** palpites simultâneos, **então** só 5 são avaliados e os demais já encontram o bloqueio (a conta é lida com trava de linha).
+- **Dado** um e-mail que não existe, **então** a resposta é a mesma de senha errada (`INVALID_CREDENTIALS`) e nada é contado.
+- Limite e duração são configuráveis: `marketplace.password-attempts.max-failures` (5) e `marketplace.password-attempts.lock-seconds` (900).
+- Trade-off assumido: como o bloqueio é por conta, quem sabe o e-mail de alguém pode bloqueá-lo por 15 minutos. O bloqueio é curto e a recuperação por e-mail o encerra. Ver `memoria-tecnica/decisoes/limite-de-tentativas-de-senha.md`.
+
 ---
 
 ## Épico 2 — Descoberta e Geobusca
