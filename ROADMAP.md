@@ -230,6 +230,8 @@ Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications
 
 **Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
 
+**Adicionado em 2026-10-04 (3):** pedido sem prestador deixa de ficar preso — recusar a última proposta ativa (ou o prestador dela excluir a conta) devolve o pedido a `PENDENTE`; `POST /service-requests/{id}/cancel` passa a valer também em `PENDENTE`/`PROPOSTO` para o cliente dono (sem reembolso, propostas encerradas); `PedidoExpiracaoJob` (de hora em hora) cancela `PENDENTE`/`PROPOSTO` sem andamento há `marketplace.request.expiration-days` (15) dias. Botão "Cancelar pedido" no app para esses estados.
+
 **Adicionado em 2026-10-04 (2):** limite de tentativas de senha (US37) — 5 erros seguidos bloqueiam a conta por 15 min (`429 TOO_MANY_ATTEMPTS` + `Retry-After`) no login **e** na confirmação da exclusão de conta; colunas `users.senha_falhas`/`senha_bloqueada_ate` (V23); a redefinição de senha por e-mail encerra o bloqueio.
 
 **Adicionado em 2026-10-04:** exclusão de conta (US36) — `POST /api/v1/users/me/delete`, coluna `users.excluido_em` (V22) e a tela "Excluir conta" do app (aba Perfil, nos dois papéis). **Corrigido junto:** o `JwtAuthFilter` agora confere a cada requisição se a conta está ativa — antes um access token já emitido seguia valendo até 15 min depois da suspensão (US26). `UserAdminDto.status` ganhou `EXCLUIDO`; suspender, reativar e moderar conta excluída dão `ACCOUNT_DELETED` (422).

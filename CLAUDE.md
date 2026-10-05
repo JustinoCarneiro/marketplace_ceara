@@ -40,7 +40,8 @@ Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construí
 ```
 PENDENTE ──(prestador envia proposta)──► PROPOSTO
 PROPOSTO ──(cliente aceita + paga/escrow)──► ACEITO
-PROPOSTO ──(cliente recusa / expira)──► CANCELADO
+PROPOSTO ──(última proposta ativa sai: cliente recusa / prestador excluído)──► PENDENTE
+PENDENTE | PROPOSTO ──(cliente cancela / 15 dias sem andamento)──► CANCELADO
 ACEITO ──(prestador inicia)──► EM_ANDAMENTO
 EM_ANDAMENTO ──(cliente confirma conclusão)──► CONCLUIDO  → split/repasse
 EM_ANDAMENTO ──(qualquer parte abre disputa)──► EM_DISPUTA

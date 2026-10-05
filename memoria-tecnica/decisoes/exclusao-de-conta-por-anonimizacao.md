@@ -91,11 +91,8 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
   Logo "prestador reprovado que exclui e volta com o mesmo CPF" não é barrado — nem seria sem a exclusão. Gap
   anterior do antifraude, anotado aqui; a retenção do hash na exclusão já está pronta para quando o cadastro o gravar.
 - `users.cpf_cifrado` (coluna legada do V1) nenhuma entidade mapeia e nenhum código escreve: é sempre NULL.
-- **Lacuna de produto anterior, agora mais provável:** pedido em `PROPOSTO` sem proposta ativa fica preso — a fila
-  dos prestadores só lista `PENDENTE` e o cliente não cancela `PROPOSTO`. Já acontecia quando o cliente recusa a
-  única proposta (`reject` não muda o pedido; a máquina de estados do `CLAUDE.md` prevê `CANCELADO`, que não está
-  implementado). Excluir a conta de um prestador com a única proposta cai no mesmo estado. **Não decidi sozinho**
-  (voltar a `PENDENTE`? cancelar? expirar?): reverter só na exclusão criaria comportamento diferente do `reject`.
+- **Pedido preso em `PROPOSTO` — resolvido** em [[pedido-sem-prestador-volta-a-fila-cancela-e-expira]]: excluir a conta
+  do prestador que tinha a ÚNICA proposta ativa devolve o pedido do cliente a `PENDENTE` (antes ficava preso e invisível).
 - **Limites aceitos:** janela de milissegundos entre o filtro/checagem e o commit (um pedido criado por quem acabou
   de ser excluído passa pelo filtro); sem job de expurgo do histórico retido. Limite de tentativas de
   senha: resolvido junto para o login e para este endpoint — [[limite-de-tentativas-de-senha]].
