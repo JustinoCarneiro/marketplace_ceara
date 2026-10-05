@@ -109,14 +109,50 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     /**
      * Texto livre e localização dos pedidos do cliente. Fica o que é do histórico e não identifica ninguém:
      * categoria, status, bairro (região ampla, usada nos relatórios), valores e datas.
+     *
+     * <p>{@code motivoDisputa} entrou junto com {@code detalhesDisputa} (achado da revisão cruzada,
+     * 2026-10-05): a API aceita motivo como texto livre, e um pedido disputado — depois mediado — segue
+     * elegível à exclusão (a recusa por pendência só olha {@code EM_DISPUTA} em curso, não resolvida).
      */
     @Modifying
     @Query("""
            UPDATE ServiceRequest s
-              SET s.descricao = NULL, s.aiDescricaoSugerida = NULL, s.detalhesDisputa = NULL, s.localizacao = NULL
+              SET s.descricao = NULL, s.aiDescricaoSugerida = NULL,
+                  s.motivoDisputa = NULL, s.detalhesDisputa = NULL, s.localizacao = NULL
             WHERE s.cliente.id = :userId
            """)
     int apagarDadosPessoaisDosPedidosDoCliente(@Param("userId") UUID userId);
+
+    /**
+     * O mesmo texto de disputa, mas em pedidos onde o usuário excluído é o PRESTADOR (proposta aceita) —
+     * não o cliente. {@code openDispute} aceita qualquer das duas partes; sem isto, a disputa que um
+     * prestador escreveu sobre o próprio atendimento nunca saía da base, mesmo excluindo a conta dele.
+     */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s
+              SET s.motivoDisputa = NULL, s.detalhesDisputa = NULL
+            WHERE EXISTS (
+               SELECT 1 FROM Proposal p
+                WHERE p.serviceRequest.id = s.id
+                  AND p.prestadorId = :userId
+                  AND p.status = com.onda.marketplace.proposal.ProposalStatus.ACEITA
+            )
+           """)
+    int apagarMotivoDeDisputaDosPedidosOndeEhPrestador(@Param("userId") UUID userId);
+
+    /**
+     * Bairro fora da lista fixa ({@link com.onda.marketplace.shared.Bairro#VALIDOS}) é texto livre que a
+     * validação de entrada passou a barrar — mas pode ter entrado antes dela existir. Sanado aqui junto
+     * com o resto, não só bloqueado daqui pra frente (achado da revisão cruzada, 2026-10-05).
+     */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s SET s.bairro = NULL
+            WHERE s.cliente.id = :userId AND s.bairro IS NOT NULL AND s.bairro NOT IN :validos
+           """)
+    int sanearBairroForaDaListaDosPedidosDoCliente(@Param("userId") UUID userId,
+                                                    @Param("validos") Collection<String> validos);
 
     /** Fotos e áudios dos pedidos do cliente (a casa dele, a voz dele). Só a URL fica no banco. */
     @Modifying

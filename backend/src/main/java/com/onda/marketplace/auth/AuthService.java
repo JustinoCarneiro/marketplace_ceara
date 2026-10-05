@@ -46,11 +46,17 @@ public class AuthService {
     /**
      * Registra o CPF do cliente como hash determinístico (HMAC-SHA256) no primeiro pagamento.
      * Garante unicidade de pessoa na plataforma sem armazenar o CPF em claro (LGPD).
+     *
+     * <p>Com trava de linha (achado da revisão cruzada, 2026-10-05): sem ela, uma confirmação em voo ao
+     * mesmo tempo que a exclusão de conta (US36) lê a linha antes do commit da exclusão e, ao salvar
+     * depois, grava de volta TODOS os campos do objeto em memória — nome, e-mail, {@code ativo},
+     * {@code excluido_em} — na forma antiga, desfazendo a anonimização (lost update: UPDATE não é por
+     * coluna). A mesma trava de {@code AccountDeletionService.excluir} serializa as duas.
      */
     @Transactional
     public void verifyIdentity(String cpf, UUID userId) {
         String hash = cpfHashService.hash(cpf);
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdComTrava(userId)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
 
         // Idempotente de verdade: precisa checar o hash ANTES do existsByCpfHash global, senão

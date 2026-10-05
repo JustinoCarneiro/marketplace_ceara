@@ -186,7 +186,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         when(cpfHashService.hash("11122233344")).thenReturn("hash-existente");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
         when(userRepository.existsByCpfHash("hash-existente")).thenReturn(true);
 
         assertThatThrownBy(() -> authService.verifyIdentity("11122233344", userId))
@@ -203,7 +203,7 @@ class AuthServiceTest {
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         user.setCpfHash("hash-ja-verificado");
         when(cpfHashService.hash("11122233344")).thenReturn("hash-ja-verificado");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         assertThatCode(() -> authService.verifyIdentity("11122233344", userId)).doesNotThrowAnyException();
         verify(userRepository, never()).save(any());
@@ -215,7 +215,7 @@ class AuthServiceTest {
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         when(cpfHashService.hash("11122233344")).thenReturn("hash-novo");
         when(userRepository.existsByCpfHash("hash-novo")).thenReturn(false);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         authService.verifyIdentity("11122233344", userId);
 

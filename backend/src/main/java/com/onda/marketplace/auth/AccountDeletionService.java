@@ -117,6 +117,8 @@ public class AccountDeletionService {
         exclusao.encerrarPropostasAtivasDosPedidosDoCliente(userId);
         exclusao.cancelarPedidosSemCompromissoDoCliente(userId, Instant.now());
         exclusao.apagarDadosPessoaisDosPedidosDoCliente(userId);
+        exclusao.apagarMotivoDeDisputaDosPedidosOndeEhPrestador(userId);
+        exclusao.sanearBairroForaDaListaDosPedidosDoCliente(userId, com.onda.marketplace.shared.Bairro.VALIDOS);
         exclusao.apagarMidiaDosPedidosDoCliente(userId);
         exclusao.removerConteudoDasMensagensDoUsuario(userId);
         exclusao.removerComentariosDasAvaliacoesDoUsuario(userId);

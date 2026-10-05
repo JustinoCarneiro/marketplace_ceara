@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -103,6 +104,8 @@ class AccountDeletionServiceTest {
         verify(exclusao, never()).encerrarPropostasAtivasDosPedidosDoCliente(any());
         verify(exclusao, never()).cancelarPedidosSemCompromissoDoCliente(any(), any());
         verify(exclusao, never()).apagarDadosPessoaisDosPedidosDoCliente(any());
+        verify(exclusao, never()).apagarMotivoDeDisputaDosPedidosOndeEhPrestador(any());
+        verify(exclusao, never()).sanearBairroForaDaListaDosPedidosDoCliente(any(), any());
         verify(exclusao, never()).apagarMidiaDosPedidosDoCliente(any());
         verify(exclusao, never()).removerConteudoDasMensagensDoUsuario(any());
         verify(exclusao, never()).removerComentariosDasAvaliacoesDoUsuario(any());
@@ -230,6 +233,10 @@ class AccountDeletionServiceTest {
         verify(exclusao).encerrarPropostasAtivasDosPedidosDoCliente(USER_ID);
         verify(exclusao).cancelarPedidosSemCompromissoDoCliente(any(), any(Instant.class));
         verify(exclusao).apagarDadosPessoaisDosPedidosDoCliente(USER_ID);
+        // achado da revisão cruzada (2026-10-05): o texto de disputa que o usuário escreveu como PRESTADOR
+        // (não cliente) também precisa sair — openDispute aceita qualquer uma das duas partes
+        verify(exclusao).apagarMotivoDeDisputaDosPedidosOndeEhPrestador(USER_ID);
+        verify(exclusao).sanearBairroForaDaListaDosPedidosDoCliente(eq(USER_ID), any());
         verify(exclusao).apagarMidiaDosPedidosDoCliente(USER_ID);
         verify(exclusao).removerConteudoDasMensagensDoUsuario(USER_ID);
         verify(exclusao).removerComentariosDasAvaliacoesDoUsuario(USER_ID);
