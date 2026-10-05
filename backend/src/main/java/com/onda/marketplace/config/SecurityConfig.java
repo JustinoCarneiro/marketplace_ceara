@@ -1,6 +1,7 @@
 package com.onda.marketplace.config;
 
 import com.onda.marketplace.auth.JwtService;
+import com.onda.marketplace.auth.UserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,14 +24,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
-    public SecurityConfig(JwtService jwtService) {
+    public SecurityConfig(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
+        this.userRepository = userRepository;
     }
 
     @Bean
     JwtAuthFilter jwtAuthFilter() {
-        return new JwtAuthFilter(jwtService);
+        return new JwtAuthFilter(jwtService, userRepository::existsByIdAndAtivoTrue);
     }
 
     @Bean
