@@ -80,6 +80,57 @@ class UserAdminServiceTest {
                 .hasFieldOrPropertyWithValue("code", "USER_NOT_FOUND");
     }
 
+    private static User excluido() {
+        User u = user("Maria", "maria@x.com", UserRole.ROLE_CLIENT);
+        u.anonimizar("removido-1@excluido.invalid", "hash-inutilizavel", false);
+        return u;
+    }
+
+    @Test
+    void suspender_contaExcluida_recusa_eNaoSalva() {
+        UUID id = UUID.randomUUID();
+        when(userRepository.findById(id)).thenReturn(Optional.of(excluido()));
+
+        assertThatThrownBy(() -> service.suspender(id))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "ACCOUNT_DELETED");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void reativar_contaExcluida_recusaComErroDeNegocio_naoEstouraComo500() {
+        // User.reativar() lança IllegalStateException para conta excluída; sem o guard aqui o admin veria um 500
+        UUID id = UUID.randomUUID();
+        User u = excluido();
+        when(userRepository.findById(id)).thenReturn(Optional.of(u));
+
+        assertThatThrownBy(() -> service.reativar(id))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "ACCOUNT_DELETED");
+        assertThat(u.isAtivo()).isFalse();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void listar_contaExcluida_apareceComoUsuarioRemovido_comStatusExcluido() {
+        when(userRepository.findAll()).thenReturn(List.of(excluido()));
+
+        List<UserAdminDto> r = service.listar("removido");
+
+        assertThat(r).hasSize(1);
+        assertThat(r.get(0).nome()).isEqualTo("Usuário removido");
+        assertThat(r.get(0).status()).isEqualTo("EXCLUIDO");
+    }
+
+    @Test
+    void listar_contaSuspensa_continuaComoSuspenso() {
+        User u = user("Pedro", "pedro@x.com", UserRole.ROLE_CLIENT);
+        u.suspender();
+        when(userRepository.findAll()).thenReturn(List.of(u));
+
+        assertThat(service.listar(null).get(0).status()).isEqualTo("SUSPENSO");
+    }
+
     @Test
     void listar_filtraPorNomeOuEmail() {
         when(userRepository.findAll()).thenReturn(List.of(

@@ -6,7 +6,8 @@ import java.util.UUID;
 
 /**
  * DTO de saída da gestão de usuários do painel admin (US26).
- * {@code status} é derivado do flag {@code ativo}: "ATIVO" | "SUSPENSO".
+ * {@code status} é derivado do estado da conta: "ATIVO" | "SUSPENSO" (flag {@code ativo}) | "EXCLUIDO"
+ * (o próprio usuário excluiu a conta, US36 — o nome já vem anonimizado).
  * Nunca expõe hash de senha nem CPF (TS04/LGPD).
  */
 public record UserAdminDto(
@@ -22,6 +23,11 @@ public record UserAdminDto(
                 u.getNome(),
                 u.getEmail(),
                 u.getRole().name(),
-                u.isAtivo() ? "ATIVO" : "SUSPENSO");
+                status(u));
+    }
+
+    private static String status(User u) {
+        if (u.isExcluido()) return "EXCLUIDO";
+        return u.isAtivo() ? "ATIVO" : "SUSPENSO";
     }
 }

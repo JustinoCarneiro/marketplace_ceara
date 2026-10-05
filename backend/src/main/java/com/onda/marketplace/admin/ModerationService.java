@@ -33,6 +33,11 @@ public class ModerationService {
                 .orElseThrow(() -> new BusinessException("PROVIDER_NOT_FOUND",
                         "Prestador não encontrado."));
 
+        if (profile.contaExcluida()) {
+            throw new BusinessException("ACCOUNT_DELETED",
+                    "A conta deste prestador foi excluída: não há o que moderar.");
+        }
+
         switch (action) {
             case APROVAR   -> profile.aprovar();
             case REPROVAR  -> profile.reprovar();

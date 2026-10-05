@@ -41,6 +41,7 @@ public class UserAdminService {
     @Transactional
     public void suspender(UUID id) {
         User user = buscar(id);
+        exigirNaoExcluido(user);
         if (user.getRole() == UserRole.ROLE_ADMIN) {
             throw new BusinessException("CANNOT_SUSPEND_ADMIN",
                     "Não é permitido suspender um administrador.");
@@ -52,8 +53,17 @@ public class UserAdminService {
     @Transactional
     public void reativar(UUID id) {
         User user = buscar(id);
+        exigirNaoExcluido(user);
         user.reativar();
         userRepository.save(user);
+    }
+
+    /** Conta excluída (US36) não volta: os dados pessoais já se foram. Erro de negócio, não um 500. */
+    private static void exigirNaoExcluido(User user) {
+        if (user.isExcluido()) {
+            throw new BusinessException("ACCOUNT_DELETED",
+                    "A conta foi excluída pelo próprio usuário e não pode ser alterada.");
+        }
     }
 
     private User buscar(UUID id) {

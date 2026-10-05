@@ -3,6 +3,8 @@ package com.onda.marketplace.admin;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.provider.ProviderProfile;
 import com.onda.marketplace.provider.ProviderProfileRepository;
+import com.onda.marketplace.provider.ProviderProfiles;
+import com.onda.marketplace.provider.ProviderStatus;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +69,24 @@ class ModerationServiceTest {
         service.moderar(USER_ID, ModerationAction.SUSPENDER);
 
         verify(profile).suspender();
+    }
+
+    @Test
+    void moderar_prestadorComContaExcluida_recusa_eNaoMexeNoStatus() {
+        // aprovar um perfil excluído o faria aparecer VERIFICADO na lista do admin, ao lado de "Usuário removido"
+        var profile = ProviderProfiles.comStatus(ProviderStatus.SUSPENSO);
+        profile.getUser().anonimizar("removido-1@excluido.invalid", "hash-inutilizavel", false);
+        when(providerProfileRepository.findByUserId(USER_ID)).thenReturn(Optional.of(profile));
+
+        for (ModerationAction acao : ModerationAction.values()) {
+            assertThatThrownBy(() -> service.moderar(USER_ID, acao))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("code", "ACCOUNT_DELETED");
+        }
+
+        assertThat(profile.getStatusVerificacao()).isEqualTo(ProviderStatus.SUSPENSO);
+        verify(providerProfileRepository, never()).save(any());
+        verifyNoInteractions(notificationService);
     }
 
     @Test
