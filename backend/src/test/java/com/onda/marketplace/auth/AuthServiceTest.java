@@ -265,11 +265,11 @@ class AuthServiceTest {
     void verifyIdentity_cpfJaVinculadoAOutraConta_lancaCpfAlreadyRegistered() {
         UUID userId = UUID.randomUUID();
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
-        when(cpfHashService.hash("11122233344")).thenReturn("hash-existente");
+        when(cpfHashService.hash("11144477735")).thenReturn("hash-existente");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userRepository.existsByCpfHash("hash-existente")).thenReturn(true);
 
-        assertThatThrownBy(() -> authService.verifyIdentity("11122233344", userId))
+        assertThatThrownBy(() -> authService.verifyIdentity("11144477735", userId))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "CPF_ALREADY_REGISTERED");
         verify(userRepository, never()).save(any());
@@ -282,10 +282,24 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         user.setCpfHash("hash-ja-verificado");
-        when(cpfHashService.hash("11122233344")).thenReturn("hash-ja-verificado");
+        when(cpfHashService.hash("11144477735")).thenReturn("hash-ja-verificado");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        assertThatCode(() -> authService.verifyIdentity("11122233344", userId)).doesNotThrowAnyException();
+        assertThatCode(() -> authService.verifyIdentity("11144477735", userId)).doesNotThrowAnyException();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyIdentity_cpfInvalido_recusa_semHashearNemGravar() {
+        // sem validar os dígitos, um número inventado burlaria a unicidade (o hash seria "único" por ser falso)
+        UUID userId = UUID.randomUUID();
+
+        for (String invalido : new String[] {"11122233344", "123.456.789-00", "111.111.111-11"}) {
+            assertThatThrownBy(() -> authService.verifyIdentity(invalido, userId))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("code", "INVALID_CPF");
+        }
+        verifyNoInteractions(cpfHashService);
         verify(userRepository, never()).save(any());
     }
 
@@ -293,11 +307,11 @@ class AuthServiceTest {
     void verifyIdentity_cpfNovo_vinculaAoUsuario() {
         UUID userId = UUID.randomUUID();
         var user = User.builder().email("u@u.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
-        when(cpfHashService.hash("11122233344")).thenReturn("hash-novo");
+        when(cpfHashService.hash("11144477735")).thenReturn("hash-novo");
         when(userRepository.existsByCpfHash("hash-novo")).thenReturn(false);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        authService.verifyIdentity("11122233344", userId);
+        authService.verifyIdentity("11144477735", userId);
 
         assertThat(user.getCpfHash()).isEqualTo("hash-novo");
         verify(userRepository).save(user);

@@ -27,6 +27,9 @@ import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
+import com.onda.marketplace.provider.CpfEncryptor;
+import com.onda.marketplace.provider.ProviderCpfBackfill;
+import com.onda.marketplace.provider.ProviderProfileRepository;
 import com.onda.marketplace.sos.SosAlert;
 import com.onda.marketplace.sos.SosAlertRepository;
 import io.restassured.RestAssured;
@@ -138,6 +141,7 @@ class E2EFluxoPrincipalTest {
     @Autowired ServiceMediaRepository   mediaRepository;
     @Autowired SosAlertRepository       sosAlertRepository;
     @Autowired DenunciaRepository       denunciaRepository;
+    @Autowired ProviderProfileRepository profileRepository;
 
     // Estado compartilhado entre os steps (JUnit @Order garante sequência)
     static String tokenCliente;
@@ -1070,7 +1074,7 @@ class E2EFluxoPrincipalTest {
     // pé. Cada cenário usa contas NOVAS e monta o estado por API/repositório/SQL — não depende dos passos 1–26.
 
     static final String SENHA_PADRAO = "Senha@123";
-    static final String CPF_PAULO = "111.444.777-35";
+    static final String CPF_PAULO = "628.439.157-91";
     static final String CPF_RUI   = "390.533.447-05";
     static final String CPF_PAULA = "168.995.350-09";
     static final String CPF_QUIM  = "935.411.347-80";
@@ -1091,13 +1095,17 @@ class E2EFluxoPrincipalTest {
         return new Conta(UUID.fromString(r.path("userId")), email, r.path("accessToken"), r.path("refreshToken"));
     }
 
-    private Conta cadastrarPrestador(String nome, String email, String cpf) {
-        var r = given().contentType(ContentType.JSON)
+    private io.restassured.response.Response registrarPrestador(String nome, String email, String cpf) {
+        return given().contentType(ContentType.JSON)
                 .body("""
                         {"nome":"%s","email":"%s","senha":"%s","cpf":"%s","categoria":"eletrica",
                          "bio":"Eletricista, moro na Rua das Palmeiras 45","aceitouTermos":true}
                         """.formatted(nome, email, SENHA_PADRAO, cpf))
-                .when().post("/api/v1/auth/register/provider").then().statusCode(201).extract();
+                .when().post("/api/v1/auth/register/provider");
+    }
+
+    private Conta cadastrarPrestador(String nome, String email, String cpf) {
+        var r = registrarPrestador(nome, email, cpf).then().statusCode(201).extract();
         return new Conta(UUID.fromString(r.path("userId")), email, r.path("accessToken"), r.path("refreshToken"));
     }
 
@@ -1291,7 +1299,7 @@ class E2EFluxoPrincipalTest {
     @DisplayName("29 · Cliente exclui: cada tabela no estado certo — dado pessoal fora, histórico de pé, acesso cortado na hora")
     void exclusaoDeConta_clienteTabelaPorTabela() throws Exception {
         var marta = cadastrarCliente("Marta Removível", "marta.exclusao@onda.test");
-        var pedro = cadastrarPrestador("Pedro Parceiro", "pedro.exclusao@onda.test", "745.649.490-00");
+        var pedro = cadastrarPrestador("Pedro Parceiro", "pedro.exclusao@onda.test", "917.254.386-82");
         martaId = marta.id();
         verificarIdentidade(marta, CPF_MARTA);   // vínculo do CPF (só o hash) — a "conta limpa" o perde
 
@@ -1504,16 +1512,12 @@ class E2EFluxoPrincipalTest {
     }
 
     @Test @Order(31)
-    @DisplayName("31 · Antifraude: prestador reprovado que exclui a conta mantém o hash do CPF — o vínculo não se desfaz")
+    @DisplayName("31 · Antifraude: prestador reprovado que exclui a conta mantém o hash do CPF — o mesmo CPF não volta a se cadastrar")
     void exclusaoDeConta_prestadorReprovadoMantemOHashDoCpf() {
-        // Hoje o hash do CPF só é gravado pelo fluxo de verificação de identidade (o cadastro de prestador
-        // não o grava nem o consulta — ver ADR). Por isso o prestador passa por ele aqui: é o único caminho
-        // em que a retenção do hash tem o que reter.
         var quim = cadastrarPrestador("Quim Reprovado", "quim.exclusao@onda.test", CPF_QUIM);
-        moderarPrestador(quim.id().toString(), "REPROVAR");
-        verificarIdentidade(quim, CPF_QUIM);
         String hash = (String) conta(quim.id()).get("cpf_hash");
-        assertThat(hash, notNullValue());
+        assertThat("o cadastro do prestador grava o hash do CPF", hash, notNullValue());
+        moderarPrestador(quim.id().toString(), "REPROVAR");
 
         excluirConta(quim.token(), SENHA_PADRAO).then().statusCode(204);
 
@@ -1521,7 +1525,10 @@ class E2EFluxoPrincipalTest {
         assertThat(u.get("nome"), equalTo("Usuário removido"));
         assertThat("reprovado pela moderação: o hash fica", u.get("cpf_hash"), equalTo(hash));
 
-        // outra conta não consegue vincular o mesmo CPF: excluir não burla o banimento
+        // excluir a conta não desfaz o banimento: o mesmo CPF é recusado no cadastro de prestador...
+        registrarPrestador("Quim Voltou", "quim.voltou@onda.test", CPF_QUIM)
+                .then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));
+        // ...e na verificação de identidade de um cliente
         var outro = cadastrarCliente("Outra Conta", "outra.conta.exclusao@onda.test");
         verificarIdentidade(outro.token(), CPF_QUIM).then().statusCode(422)
                 .body("code", equalTo("CPF_ALREADY_REGISTERED"));
@@ -1862,5 +1869,77 @@ class E2EFluxoPrincipalTest {
         // o instante do cancelamento é gravado (o UPDATE em lote não roda o @PreUpdate)
         assertThat(contar("SELECT count(*) FROM service_requests WHERE id = ?::uuid AND updated_at > now() - interval '1 minute'",
                 pendenteVelho.toString()), equalTo(1));
+    }
+
+    // ─── Uma pessoa = um CPF: o cadastro do prestador grava o hash, valida os dígitos e o backfill alcança os legados ───
+
+    static final String CPF_DANI   = "602.784.915-02";
+    static final String CPF_LEGADO = "471.836.209-13";
+
+    @Autowired CpfEncryptor cpfEncryptor;
+    @Autowired ProviderCpfBackfill cpfBackfill;
+
+    @Test @Order(42)
+    @DisplayName("42 · CPF do prestador: inválido é recusado; o mesmo CPF não faz duas contas (com ou sem máscara) nem passa para um cliente")
+    void cpfUnico_cadastroDoPrestador() {
+        // dígito verificador errado: sem validar, um número inventado burlaria a unicidade. Nada é criado.
+        registrarPrestador("Cpf Invalido", "cpf.invalido@onda.test", "123.456.789-00")
+                .then().statusCode(422).body("code", equalTo("INVALID_CPF"));
+        assertThat(contar("SELECT count(*) FROM users WHERE email = ?", "cpf.invalido@onda.test"), equalTo(0));
+
+        var dani = cadastrarPrestador("Dani Prestadora", "dani.cpf@onda.test", CPF_DANI);
+        String hash = (String) conta(dani.id()).get("cpf_hash");
+        assertThat("só o hash (HMAC, 64 hex), nunca o CPF", hash, allOf(hasLength(64), not(containsString("602"))));
+        assertThat("o CPF cifrado não tem os dígitos em claro",
+                texto("SELECT cpf_cifrado FROM providers_profile WHERE user_id = ?::uuid", dani.id().toString()),
+                not(containsString("602784915")));
+
+        // a MESMA pessoa com outro e-mail, o CPF só em dígitos: mesma identidade, recusada
+        registrarPrestador("Dani Clone", "dani.clone@onda.test", CPF_DANI.replaceAll("[^0-9]", ""))
+                .then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));
+        assertThat(contar("SELECT count(*) FROM users WHERE email = ?", "dani.clone@onda.test"), equalTo(0));
+
+        // cruzando papéis: o cliente não vincula o CPF de um prestador (uma pessoa = um CPF)
+        var cliente = cadastrarCliente("Cliente Clone", "cliente.clone@onda.test");
+        verificarIdentidade(cliente.token(), CPF_DANI).then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));
+        // e a verificação de identidade também valida os dígitos
+        verificarIdentidade(cliente.token(), "123.456.789-00").then().statusCode(422).body("code", equalTo("INVALID_CPF"));
+        assertThat(conta(cliente.id()).get("cpf_hash"), nullValue());
+    }
+
+    @Test @Order(43)
+    @DisplayName("43 · Backfill: prestador legado (só CPF cifrado) ganha o hash; CPF repetido em duas contas é listado e não vinculado; ilegível é pulado")
+    void cpfUnico_backfillDosPrestadoresLegados() {
+        // contas de ANTES da regra: só o CPF cifrado, sem hash
+        var legado1 = legado("legado.um@onda.test", cpfEncryptor.encrypt(CPF_LEGADO));
+        var legado2 = legado("legado.dois@onda.test", cpfEncryptor.encrypt(CPF_LEGADO));      // a mesma pessoa, duas contas
+        var ilegivel = legado("legado.ilegivel@onda.test", "texto-que-nao-decifra");
+
+        var r = cpfBackfill.preencher();
+
+        assertThat(r.vinculados(), equalTo(1));
+        assertThat("o CPF repetido não é resolvido sozinho: a conta fica de fora e listada pelo id", r.duplicados(), hasSize(1));
+        assertThat(r.ilegiveis(), equalTo(1));
+        long comHash = List.of(legado1, legado2).stream().filter(id -> conta(id).get("cpf_hash") != null).count();
+        assertThat("só UMA das duas ganha o hash", comHash, equalTo(1L));
+        assertThat(conta(ilegivel).get("cpf_hash"), nullValue());
+        assertThat(r.duplicados().get(0), anyOf(equalTo(legado1), equalTo(legado2)));
+
+        // o efeito: o CPF do legado agora vale para a regra da unicidade
+        registrarPrestador("Novo Cpf Legado", "novo.cpf.legado@onda.test", CPF_LEGADO)
+                .then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));
+
+        // idempotente: rodar de novo não vincula mais ninguém (o duplicado e o ilegível seguem listados)
+        var de_novo = cpfBackfill.preencher();
+        assertThat(de_novo.vinculados(), equalTo(0));
+        assertThat(de_novo.duplicados(), hasSize(1));
+    }
+
+    /** Prestador "legado": criado direto no banco, como era antes — só com o CPF cifrado, sem hash. */
+    private UUID legado(String email, String cpfCifrado) {
+        User u = userRepository.save(User.builder().nome("Prestador Legado").email(email)
+                .senhaHash(passwordEncoder.encode(SENHA_PADRAO)).role(UserRole.ROLE_PROVIDER).build());
+        profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(u, "eletrica", cpfCifrado));
+        return u.getId();
     }
 }

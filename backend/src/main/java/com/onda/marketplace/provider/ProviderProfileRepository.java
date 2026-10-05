@@ -13,6 +13,13 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
 
     Optional<ProviderProfile> findByUserId(UUID userId);
 
+    /** Prestadores com CPF cifrado e sem hash do CPF na conta (cadastrados antes de o cadastro gravá-lo). */
+    @Query("""
+           SELECT p.user.id AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p
+            WHERE p.user.cpfHash IS NULL AND p.user.excluidoEm IS NULL AND p.cpfCifrado IS NOT NULL
+           """)
+    List<ProviderCpfBackfill.PerfilSemHash> semHashDoCpf();
+
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);
 

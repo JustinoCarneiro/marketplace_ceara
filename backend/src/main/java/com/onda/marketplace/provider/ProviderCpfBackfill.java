@@ -1,0 +1,124 @@
+package com.onda.marketplace.provider;
+
+import com.onda.marketplace.auth.CpfHashService;
+import com.onda.marketplace.auth.User;
+import com.onda.marketplace.auth.UserRepository;
+import com.onda.marketplace.shared.Cpf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Prestadores cadastrados antes de o cadastro gravar o hash do CPF só têm o CPF cifrado ({@code providers_profile}). Na
+ * subida, lê esse CPF, grava o hash e deixa a unicidade (uma pessoa = um CPF) valer para eles também.
+ *
+ * <p>Idempotente (só toca em quem ainda não tem hash) e sem efeito colateral em quem já está certo. Cada prestador é uma
+ * transação: um registro ruim — CPF que não decifra (o seed grava um placeholder), duplicata — não derruba os outros.
+ * Duplicata (o mesmo CPF em duas contas) NÃO é resolvida aqui: a conta não ganha o hash e fica listada no log, só pelo id,
+ * para decisão humana. O CPF nunca vai para o log. Desliga com {@code marketplace.cpf-backfill.enabled=false}.
+ */
+@Component
+public class ProviderCpfBackfill implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(ProviderCpfBackfill.class);
+
+    /** Só o necessário, sem carregar a entidade. */
+    public interface PerfilSemHash {
+        UUID getUserId();
+        String getCpfCifrado();
+    }
+
+    public record Resultado(int vinculados, List<UUID> duplicados, int ilegiveis) {}
+
+    private enum Desfecho { VINCULADO, DUPLICADO, JA_TINHA }
+
+    private final ProviderProfileRepository profileRepository;
+    private final UserRepository            userRepository;
+    private final CpfEncryptor              cpfEncryptor;
+    private final CpfHashService            cpfHashService;
+    private final TransactionTemplate       transacao;
+    private final boolean                   ativo;
+
+    public ProviderCpfBackfill(ProviderProfileRepository profileRepository,
+                               UserRepository userRepository,
+                               CpfEncryptor cpfEncryptor,
+                               CpfHashService cpfHashService,
+                               TransactionTemplate transacao,
+                               @Value("${marketplace.cpf-backfill.enabled:true}") boolean ativo) {
+        this.profileRepository = profileRepository;
+        this.userRepository    = userRepository;
+        this.cpfEncryptor      = cpfEncryptor;
+        this.cpfHashService    = cpfHashService;
+        this.transacao         = transacao;
+        this.ativo             = ativo;
+    }
+
+    @Override
+    public void run(ApplicationArguments args) {
+        if (!ativo) {
+            return;
+        }
+        Resultado r;
+        try {
+            r = preencher();
+        } catch (RuntimeException e) {
+            // Nunca derruba a subida: é uma correção de dados de conveniência e roda de novo no próximo arranque.
+            log.warn("Hash do CPF dos prestadores: falhou ({}); tenta de novo na próxima subida.", e.getClass().getSimpleName());
+            return;
+        }
+        if (r.vinculados() > 0 || !r.duplicados().isEmpty() || r.ilegiveis() > 0) {
+            log.info("Hash do CPF dos prestadores: {} vinculado(s), {} ilegível(is), {} duplicado(s) {}",
+                    r.vinculados(), r.ilegiveis(), r.duplicados().size(),
+                    r.duplicados().isEmpty() ? "" : "— mesmo CPF em mais de uma conta, decidir à mão (ids): " + r.duplicados());
+        }
+    }
+
+    public Resultado preencher() {
+        int vinculados = 0;
+        int ilegiveis = 0;
+        List<UUID> duplicados = new ArrayList<>();
+        for (PerfilSemHash perfil : profileRepository.semHashDoCpf()) {
+            String hash;
+            try {
+                hash = cpfHashService.hash(Cpf.soDigitos(cpfEncryptor.decrypt(perfil.getCpfCifrado())));
+            } catch (RuntimeException e) {
+                ilegiveis++;   // não decifra (chave trocada, placeholder do seed): nada a fazer por aqui
+                continue;
+            }
+            switch (vincular(perfil.getUserId(), hash)) {
+                case VINCULADO -> vinculados++;
+                case DUPLICADO -> duplicados.add(perfil.getUserId());
+                case JA_TINHA  -> { /* ganhou o hash no meio do caminho: nada a refazer */ }
+            }
+        }
+        return new Resultado(vinculados, duplicados, ilegiveis);
+    }
+
+    private Desfecho vincular(UUID userId, String hash) {
+        try {
+            return transacao.execute(status -> {
+                User user = userRepository.findById(userId).orElse(null);
+                if (user == null || user.getCpfHash() != null) {
+                    return Desfecho.JA_TINHA;
+                }
+                if (userRepository.existsByCpfHash(hash)) {
+                    return Desfecho.DUPLICADO;
+                }
+                user.setCpfHash(hash);
+                userRepository.save(user);
+                return Desfecho.VINCULADO;
+            });
+        } catch (DataIntegrityViolationException corrida) {
+            return Desfecho.DUPLICADO;   // outra instância vinculou o mesmo CPF entre a consulta e a gravação
+        }
+    }
+}

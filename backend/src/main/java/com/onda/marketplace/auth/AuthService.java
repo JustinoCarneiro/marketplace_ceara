@@ -1,5 +1,6 @@
 package com.onda.marketplace.auth;
 
+import com.onda.marketplace.shared.Cpf;
 import com.onda.marketplace.shared.exception.BusinessException;
 import com.onda.marketplace.shared.exception.PasswordMismatchException;
 import com.onda.marketplace.shared.exception.TooManyAttemptsException;
@@ -54,6 +55,9 @@ public class AuthService {
      */
     @Transactional
     public void verifyIdentity(String cpf, UUID userId) {
+        if (!Cpf.valido(cpf)) {
+            throw new BusinessException("INVALID_CPF", "CPF inválido. Confira os números.");
+        }
         String hash = cpfHashService.hash(cpf);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));

@@ -1,5 +1,6 @@
 package com.onda.marketplace.provider;
 
+import com.onda.marketplace.shared.Cpf;
 import com.onda.marketplace.shared.exception.BusinessException;
 
 import java.util.Locale;
@@ -63,7 +64,7 @@ public record PixKey(Tipo tipo, String valor) {
         }
 
         String compacto = s.replaceAll("[\\s.\\-/]", "").toUpperCase(Locale.ROOT);
-        if (CPF.matcher(compacto).matches() && cpfValido(compacto)) {
+        if (CPF.matcher(compacto).matches() && Cpf.valido(compacto)) {
             return new PixKey(Tipo.CPF, compacto);
         }
         if (CNPJ.matcher(compacto).matches() && cnpjValido(compacto)) {
@@ -78,20 +79,6 @@ public record PixKey(Tipo tipo, String valor) {
 
     private static boolean todosIguais(String s) {
         return s.chars().distinct().count() == 1;
-    }
-
-    private static boolean cpfValido(String d) {
-        return !todosIguais(d) && cpfDigito(d, 9) == d.charAt(9) - '0'
-                && cpfDigito(d, 10) == d.charAt(10) - '0';
-    }
-
-    private static int cpfDigito(String d, int n) {
-        int soma = 0;
-        for (int i = 0; i < n; i++) {
-            soma += (d.charAt(i) - '0') * (n + 1 - i);
-        }
-        int resto = (soma * 10) % 11;
-        return resto == 10 ? 0 : resto;
     }
 
     // Módulo 11 com o valor do caractere = código ASCII − 48 (regra da Receita, que vale

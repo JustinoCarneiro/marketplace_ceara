@@ -30,6 +30,10 @@ cpf:
 marketplace:
   webhook:
     secret: "test-webhook-secret-for-tests-only"
+  # O H2 daqui não cria as tabelas com coluna geográfica (providers_profile): o backfill do hash do CPF dos prestadores,
+  # que consulta essa tabela na subida, não roda no contexto de teste. Ele é provado no E2E (Postgres real).
+  cpf-backfill:
+    enabled: false
 
 notification:
   # Testes não têm SMTP; a ausência de canal é declarada para o contexto subir.
