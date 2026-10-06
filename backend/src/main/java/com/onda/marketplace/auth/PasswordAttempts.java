@@ -33,12 +33,20 @@ public class PasswordAttempts {
         this.bloqueio = Duration.ofSeconds(bloqueioSegundos);
     }
 
-    /** @throws TooManyAttemptsException se a conta está bloqueada para novas tentativas */
+    /**
+     * @throws TooManyAttemptsException se a conta está bloqueada para novas tentativas
+     *
+     * <p>O tempo que falta vem do {@code senha_bloqueada_ate} GRAVADO, nunca da configuração atual — achado da
+     * revisão cruzada (2026-10-05): um {@code Math.min} com {@code lock-seconds} aqui fazia a resposta anunciar
+     * um tempo mais curto do que o bloqueio realmente dura se a configuração fosse reduzida depois de o bloqueio
+     * ter sido gravado (ex.: 900s → 300s com um bloqueio de 900s em andamento: a pessoa tentava de novo aos 5
+     * minutos, anunciados, e encontrava a conta ainda bloqueada por mais 10).
+     */
     public void exigirLiberada(User user) {
         Instant agora = Instant.now();
         if (user.senhaBloqueada(agora)) {
             long faltam = Duration.between(agora, user.getSenhaBloqueadaAte()).toSeconds() + 1;
-            throw new TooManyAttemptsException(Math.min(faltam, bloqueio.toSeconds()));
+            throw new TooManyAttemptsException(faltam);
         }
     }
 

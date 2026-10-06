@@ -30,12 +30,17 @@ public class AccountDeletedMailListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void aoExcluir(AccountDeleted evento) {
         try {
+            // Texto corrigido na revisão cruzada (2026-10-05): a versão anterior prometia "nenhuma informação
+            // que identifique você" — falso, o fluxo retém IP do aceite dos termos, coordenadas de SOS e o
+            // texto de denúncias (ver memoria-tecnica/decisoes/exclusao-de-conta-por-anonimizacao.md).
             mailSender.enviar(evento.email(), "Onda — sua conta foi excluída", """
                     Olá, %s!
 
-                    Sua conta no Onda foi excluída, como você pediu. Seus dados pessoais foram removidos; \
-                    guardamos apenas o histórico de pagamentos e de avaliações, sem nenhuma informação que \
-                    identifique você.
+                    Sua conta no Onda foi excluída, como você pediu. Seu nome e e-mail saíram de tudo que você \
+                    usava no app. Por exigência legal, alguns registros continuam guardados — o histórico de \
+                    pagamentos e avaliações, o aceite dos termos de uso (com o IP de quando você aceitou) e \
+                    eventuais alertas de segurança ou denúncias que você tenha feito ou recebido —, mas sem o \
+                    seu nome.
 
                     Se NÃO foi você, fale com o suporte em suporte@onda.app.
 

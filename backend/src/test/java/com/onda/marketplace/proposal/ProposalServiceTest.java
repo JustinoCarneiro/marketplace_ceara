@@ -63,7 +63,7 @@ class ProposalServiceTest {
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
         UUID prestadorId = UUID.randomUUID();
         prestadorCom(prestadorId, ProviderStatus.VERIFICADO);
-        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.create(sr.getId(),
@@ -82,7 +82,7 @@ class ProposalServiceTest {
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
         UUID prestadorId = UUID.randomUUID();
         prestadorCom(prestadorId, status);
-        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() ->
                 service.create(sr.getId(),
@@ -100,7 +100,7 @@ class ProposalServiceTest {
     @Test
     void create_prestadorSemPerfil_recusaComoNaoVerificado() {
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         // profileRepository sem stub: Optional.empty()
 
         assertThatThrownBy(() ->
@@ -117,7 +117,7 @@ class ProposalServiceTest {
         // US15: só PENDENTE/PROPOSTO aceitam proposta nova — antes, ACEITO/EM_ANDAMENTO/
         // EM_DISPUTA passavam batido e dava pra empilhar proposta num serviço em execução.
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() ->
                 service.create(sr.getId(),
@@ -210,6 +210,8 @@ class ProposalServiceTest {
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of());
 
         ProposalDto dto = service.reject(prop.getId(), CLIENTE_ID);
 
@@ -224,6 +226,7 @@ class ProposalServiceTest {
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of());
 
         service.reject(prop.getId(), CLIENTE_ID);
@@ -239,6 +242,7 @@ class ProposalServiceTest {
         var outra = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(recusada.getId())).thenReturn(Optional.of(recusada));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of(outra));
 
         service.reject(recusada.getId(), CLIENTE_ID);
@@ -266,7 +270,7 @@ class ProposalServiceTest {
     @Test
     void create_pedidoNaoExistente_lancaBusinessException() {
         UUID randomId = UUID.randomUUID();
-        when(requestRepository.findById(randomId)).thenReturn(Optional.empty());
+        when(requestRepository.findByIdComTrava(randomId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                 service.create(randomId,

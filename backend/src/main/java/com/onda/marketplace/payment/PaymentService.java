@@ -76,16 +76,37 @@ public class PaymentService {
     /**
      * Processa confirmação do gateway via webhook.
      * Estado financeiro dirigido por evento confirmado — não por transação de banco.
+     *
+     * <p>Achado da revisão cruzada (2026-10-05): {@code ServiceExecutionService.cancel} pode cancelar o pedido
+     * ENQUANTO um pagamento já está a caminho (cobrança enfileirada no outbox antes do cancelamento, confirmação
+     * chega depois) — nesse instante `cancel()` não encontra transação RETIDA (ela ainda nem existe) e não cria
+     * reembolso nenhum. Sem esta checagem, o dinheiro ficaria retido para sempre num pedido já CANCELADO. Este é
+     * o evento confirmado que dirige o estado financeiro (princípio do CLAUDE.md), então é AQUI que a
+     * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
      */
     @Transactional
     public void confirmPayment(String gatewayTransactionId, String status) {
         transactionRepository.findByGatewayTransactionId(gatewayTransactionId).ifPresent(tx -> {
             if ("PAGO".equalsIgnoreCase(status)) {
                 tx.reter();
+                boolean pedidoJaCancelado = requestRepository.findById(tx.getServiceRequestId())
+                        .map(sr -> sr.getStatus() == ServiceRequestStatus.CANCELADO)
+                        .orElse(false);
+                if (pedidoJaCancelado) {
+                    tx.reembolsar();
+                    outboxRepository.save(outboxEventReembolso(tx));
+                }
             }
             // REJEITADO: mantém PENDENTE para retry idempotente pelo OutboxProcessor
             transactionRepository.save(tx);
         });
+    }
+
+    /** Mesmo formato de payload que ServiceExecutionService usa para PAYMENT_REFUNDED — o OutboxProcessor é um só. */
+    private static OutboxEvent outboxEventReembolso(Transaction tx) {
+        String payload = String.format(
+                "{\"transactionId\":\"%s\",\"serviceRequestId\":\"%s\"}", tx.getId(), tx.getServiceRequestId());
+        return new OutboxEvent("transaction", tx.getId(), "PAYMENT_REFUNDED", payload);
     }
 
     private TransactionDto criar(UUID serviceRequestId, InitiatePaymentRequest req,

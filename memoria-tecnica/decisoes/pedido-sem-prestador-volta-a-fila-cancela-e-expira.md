@@ -42,9 +42,54 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   `window.confirm` no web (o `Alert.alert` não faz nada lá, e a demo é o build web), o que também conserta o cancelamento
   de `ACEITO` na demo.
 
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P1 — `cancel()` sobrescrevia um aceite concorrente sem deixar rastro.** Lia o status, decidia cancelar e só depois
+  gravava — sem reconferir na escrita. Entre a leitura e a gravação, o pedido podia ter sido aceito e o pagamento
+  iniciado numa transação concorrente; o `save()` do objeto em memória sobrescrevia esse aceite com `CANCELADO` sem
+  erro nem reembolso (a transação ainda nem existia quando `cancel()` checou). Corrigido com um `UPDATE` guardado
+  (`cancelarSeEmEstadoCancelavel`) que reconfere o estado ATUAL na própria escrita: 0 linhas afetadas relê e informa o
+  estado de verdade, em vez de seguir como se tivesse cancelado. Prova determinística em
+  `cancel_corridaComAceiteConcorrente_naoSobrescreve_eLancaComOEstadoDeVerdade`.
+- **Lacuna relacionada, achada ao corrigir a de cima:** com a cobrança enfileirada no outbox antes do cancelamento e a
+  confirmação do gateway chegando depois, `cancel()` não encontrava transação `RETIDO` (ela ainda nem existia) e não
+  criava reembolso — o dinheiro ficaria retido para sempre num pedido já `CANCELADO`. Corrigido em
+  `PaymentService.confirmPayment` (o evento confirmado que dirige o estado financeiro, princípio do `CLAUDE.md`):
+  confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
+- **P2 — a expiração em lote só reconferia o status na escrita, não o prazo nem a proposta nova.** Uma proposta nova
+  podia chegar entre a consulta (que montou a lista) e o `UPDATE`; ela reinicia o prazo (é andamento), mas checar só o
+  status não via isso, e o pedido expirava apesar da proposta ser recente. Corrigido reconferindo as TRÊS condições
+  (status, prazo e nenhuma proposta recente) na própria escrita (`cancelarSemAndamento`, agora com 3 parâmetros); e
+  `encerrarAtivasDosPedidos` passou a rodar só sobre o que a escrita **de fato** cancelou (`idsComStatus`, lido depois,
+  na mesma transação), nunca sobre o lote inteiro da consulta — senão uma proposta nova chegada a tempo ainda podia ser
+  encerrada por engano, mesmo com o pedido correto não expirando.
+- **P2 — reabertura concorrente podia esconder uma proposta nova.** `reabrirSeNaoHaPropostaAtiva` (chamado por
+  `reject` ao recusar a última proposta ativa) e `create()` (proposta nova) liam e escreviam o pedido sem se bloquear.
+  Uma proposta nova gravada bem entre a conferência e a escrita da reabertura ficava invisível: o pedido voltava a
+  `PENDENTE` com uma proposta `ATIVA` escondida — nem a fila dos prestadores, nem o cliente percebiam, o pedido
+  simplesmente não aparecia mais pra ninguém, sem erro nenhum. Diferente dos achados acima (um guard na escrita
+  bastava: a condição inteira cabe numa única consulta), aqui há DOIS caminhos de escrita independentes disputando o
+  mesmo pedido — um guard em cada um não os serializa entre si. Corrigido com trava de escrita na linha
+  (`ServiceRequestRepository.findByIdComTrava`, `@Lock(PESSIMISTIC_WRITE)`, o mesmo padrão já usado em `UserRepository`
+  para a exclusão de conta e o limite de tentativas): `create()` e a reabertura de `reject()` agora travam o mesmo
+  pedido antes de decidir, o que força quem chega depois a reler o estado JÁ commitado pelo primeiro. Prova
+  determinística no E2E, passo 45 (molde dos passos 33/42): a reabertura fica parada ANTES do commit, já com a trava;
+  só então a proposta nova é disparada pela API real — ela espera, e ao continuar vê o `PENDENTE` já commitado, abre a
+  proposta normalmente e o pedido volta a `PROPOSTO` sem perder nada.
+  **Achado relacionado, não alterado:** a reabertura da exclusão de conta do prestador
+  (`AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador`) corre o mesmo risco em teoria, mas já é um
+  `UPDATE` guardado que reconfere a condição inteira (status, proposta ativa dele, nenhuma proposta ativa de outro) na
+  própria escrita — e, como é a mesma linha do `ServiceRequest`, a trava que `create()` agora obtém já o protege por
+  tabela (o MVCC do Postgres faz QUALQUER escritor da mesma linha esperar um `SELECT ... FOR UPDATE` em voo e reler o
+  estado fresco ao continuar, não só quem pediu a trava). Nenhuma mudança de código necessária aqui.
+  **Fora do escopo, por decisão de foco:** `accept()` também muda o status do pedido (`PROPOSTO → ACEITO`) e fecha as
+  outras propostas ativas, sem adquirir a mesma trava — um `create()` correndo bem no meio de um `accept()` não foi
+  endereçado aqui (não é o achado do Codex, é um risco adjacente, de menor probabilidade: a janela é bem mais estreita
+  e o pior caso é uma proposta `ATIVA` sobrando num pedido `ACEITO`, não dinheiro perdido).
+
 ## Efeito nos testes
-`ProposalServiceTest`, `ServiceExecutionServiceTest`, `ServiceRequestExpirationServiceTest`, `AccountDeletionServiceTest` e o
-E2E (passo 30 ajustado; passos 39–41 novos). `mobile/tests/14-cancelar-pedido-sem-prestador.spec.ts`.
+`ProposalServiceTest`, `ServiceExecutionServiceTest`, `PaymentServiceTest`, `ServiceRequestExpirationServiceTest`,
+`AccountDeletionServiceTest` e o E2E (passo 30 ajustado; passos 39–41 e 45 novos; passo 41 ganhou um bloco extra provando
+a guarda contra a proposta nova). `mobile/tests/14-cancelar-pedido-sem-prestador.spec.ts`.
 
 ## Ligado a
 - US15, US16, US19 e US36 em `docs/spec.md`; `ProposalService`, `ServiceExecutionService`, `ServiceRequestExpirationService`.

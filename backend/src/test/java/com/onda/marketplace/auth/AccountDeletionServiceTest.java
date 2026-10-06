@@ -60,8 +60,12 @@ class AccountDeletionServiceTest {
 
     @BeforeEach
     void setUp() {
+        // PasswordAuthenticator REAL (não mockado) sobre os MESMOS mocks: a lógica (senha, bloqueio, admin,
+        // idempotência) continua testável aqui; só a transação PRÓPRIA (REQUIRES_NEW) é invisível a um teste
+        // unitário — isso só o E2E contra o Postgres prova (mesmo motivo do @Lock: ver E2EFluxoPrincipalTest).
+        var passwordAuthenticator = new PasswordAuthenticator(userRepository, passwordEncoder, new PasswordAttempts(5, 900));
         service = new AccountDeletionService(userRepository, profileRepository, exclusao,
-                passwordEncoder, new PasswordAttempts(5, 900), eventos);
+                passwordEncoder, passwordAuthenticator, eventos);
     }
 
     // ---------- apoio ----------
@@ -108,6 +112,8 @@ class AccountDeletionServiceTest {
         verify(exclusao, never()).encerrarPropostasAtivasDosPedidosDoCliente(any());
         verify(exclusao, never()).cancelarPedidosSemCompromissoDoCliente(any(), any());
         verify(exclusao, never()).apagarDadosPessoaisDosPedidosDoCliente(any());
+        verify(exclusao, never()).apagarMotivoDeDisputaDosPedidosOndeEhPrestador(any());
+        verify(exclusao, never()).sanearBairroForaDaListaDosPedidosDoCliente(any(), any());
         verify(exclusao, never()).apagarMidiaDosPedidosDoCliente(any());
         verify(exclusao, never()).removerConteudoDasMensagensDoUsuario(any());
         verify(exclusao, never()).removerComentariosDasAvaliacoesDoUsuario(any());
@@ -204,14 +210,23 @@ class AccountDeletionServiceTest {
     }
 
     @Test
-    void oErroDeSenhaEhGravadoMesmoComAExcecao_masAsOutrasRecusasContinuamDesfazendoTudo() throws Exception {
-        // noRollbackFor SÓ para as duas exceções do limite: com noRollbackFor = BusinessException, qualquer outra recusa
-        // de negócio lançada depois de uma escrita parcial também seria confirmada
-        var metodo = AccountDeletionService.class.getMethod("excluir", UUID.class, String.class);
+    void oContadorDeSenhaTemTransacaoPropriaQueSempreCommita() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): o acerto/erro de senha fica em PasswordAuthenticator, numa
+        // transação PRÓPRIA (REQUIRES_NEW) — não mais dentro de excluir(). Antes, um acerto seguido de uma recusa
+        // por pendência (ACCOUNT_HAS_ACTIVE_ORDERS, que corretamente desfaz tudo) desfazia também o PRÓPRIO acerto,
+        // na mesma transação. noRollbackFor SÓ para as duas exceções do limite: com noRollbackFor = BusinessException,
+        // qualquer outra recusa de negócio lançada depois de uma escrita parcial também seria confirmada.
+        var metodo = PasswordAuthenticator.class.getMethod("autenticarPorId", UUID.class, String.class);
         var tx = metodo.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
 
+        assertThat(tx.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
         assertThat(tx.noRollbackFor())
                 .containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
+
+        // excluir() em si não precisa mais do noRollbackFor: por esta altura, nada ainda foi escrito na transação dela
+        var excluir = AccountDeletionService.class.getMethod("excluir", UUID.class, String.class);
+        var txExcluir = excluir.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(txExcluir).isNotNull();
     }
 
     @Test
@@ -295,6 +310,10 @@ class AccountDeletionServiceTest {
         verify(exclusao).encerrarPropostasAtivasDosPedidosDoCliente(USER_ID);
         verify(exclusao).cancelarPedidosSemCompromissoDoCliente(any(), any(Instant.class));
         verify(exclusao).apagarDadosPessoaisDosPedidosDoCliente(USER_ID);
+        // achado da revisão cruzada (2026-10-05): o texto de disputa que o usuário escreveu como PRESTADOR
+        // (não cliente) também precisa sair — openDispute aceita qualquer uma das duas partes
+        verify(exclusao).apagarMotivoDeDisputaDosPedidosOndeEhPrestador(USER_ID);
+        verify(exclusao).sanearBairroForaDaListaDosPedidosDoCliente(eq(USER_ID), any());
         verify(exclusao).apagarMidiaDosPedidosDoCliente(USER_ID);
         verify(exclusao).removerConteudoDasMensagensDoUsuario(USER_ID);
         verify(exclusao).removerComentariosDasAvaliacoesDoUsuario(USER_ID);

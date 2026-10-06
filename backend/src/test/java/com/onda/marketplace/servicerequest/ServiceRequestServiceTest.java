@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,6 +84,54 @@ class ServiceRequestServiceTest {
         assertThat(dto.status()).isEqualTo("PENDENTE");
         assertThat(dto.aiDescricaoSugerida()).isNull();
         verify(requestRepository).save(any());
+    }
+
+    // Achado da revisão cruzada (2026-10-05): sem isto, qualquer texto — nome, telefone, endereço —
+    // entrava em categoria/bairro, campos que o admin trata como agregáveis e que sobrevivem à exclusão.
+
+    @Test
+    void create_categoriaComDigito_recusa_semConsultarNemGravarNada() {
+        var req = new CreateServiceRequestRequest("Elétrica 2", "x", -3.7, -38.5, null);
+
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), req, "idem-cat-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_CATEGORIA");
+        verifyNoInteractions(requestRepository, userRepository, aiService);
+    }
+
+    @Test
+    void create_categoriaPareceContatoOuNome_recusa() {
+        for (String ruim : new String[] {"eletrica@gmail.com", "85999990000", "José da Silva Encanador!!"}) {
+            assertThatThrownBy(() -> service.create(UUID.randomUUID(),
+                    new CreateServiceRequestRequest(ruim, null, -3.7, -38.5, null), "idem-cat-" + ruim))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("code", "INVALID_CATEGORIA");
+        }
+    }
+
+    @Test
+    void create_bairroForaDaLista_recusa_semConsultarNemGravarNada() {
+        var req = new CreateServiceRequestRequest("ELETRICISTA", "x", -3.7, -38.5, "Rua das Flores 123");
+
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), req, "idem-bai-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_BAIRRO");
+        verifyNoInteractions(requestRepository, userRepository, aiService);
+    }
+
+    @Test
+    void create_bairroNuloOuDaLista_passa() {
+        when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
+        when(aiService.suggest(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertThatCode(() -> service.create(UUID.randomUUID(),
+                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, null), "idem-bai-2"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> service.create(UUID.randomUUID(),
+                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, "Meireles"), "idem-bai-3"))
+                .doesNotThrowAnyException();
     }
 
     @Test

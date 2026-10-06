@@ -31,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -264,16 +265,41 @@ class ServiceExecutionServiceTest {
         var tx = transaction(TransactionStatus.RETIDO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        // a escrita confere o estado ATUAL (não o lido no início) — ver cancel_corridaComAceiteConcorrente_naoSobrescreve
+        verify(srRepository).cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO)), any());
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_REFUNDED");
+    }
+
+    @Test
+    void cancel_corridaComAceiteConcorrente_naoSobrescreve_eLancaComOEstadoDeVerdade() {
+        // Achado da revisão cruzada (2026-10-05): cancel() lia PROPOSTO; em outra transação, o cliente aceitava a
+        // proposta (ACEITO) e iniciava o pagamento; sem reconferir o estado na escrita, o save() sobrescrevia o
+        // ACEITO com CANCELADO sem deixar rastro (nem erro, nem reembolso — a transação ainda nem existia quando
+        // cancel() checou). A escrita guardada (0 linhas afetadas) detecta a corrida; o método relê e informa o
+        // estado DE VERDADE (ACEITO), não o status PROPOSTO que tinha lido no início.
+        var sr = sr(ServiceRequestStatus.PROPOSTO);   // lido como PROPOSTO...
+        when(srRepository.findById(SR_ID))
+                .thenReturn(Optional.of(sr))                                    // ...1ª leitura
+                .thenReturn(Optional.of(sr(ServiceRequestStatus.ACEITO)));      // ...mas, na releitura, já é ACEITO
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO)), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION")
+                .hasMessageContaining("ACEITO");   // o estado relido, não o PROPOSTO da 1ª leitura
+
+        verifyNoInteractions(proposalRepository, outboxRepository);
     }
 
     @Test
@@ -287,7 +313,7 @@ class ServiceExecutionServiceTest {
         assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
-        verify(srRepository, never()).save(any());
+        verify(srRepository, never()).cancelarSeEmEstadoCancelavel(any(), any(), any());
         verify(outboxRepository, never()).save(any());
     }
 
@@ -296,12 +322,12 @@ class ServiceExecutionServiceTest {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        verify(srRepository).cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any());
         verify(outboxRepository, never()).save(any());
     }
 
@@ -312,12 +338,12 @@ class ServiceExecutionServiceTest {
         var sr = sr(ServiceRequestStatus.PENDENTE);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO)), any())).thenReturn(1);
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of());
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
         verifyNoInteractions(outboxRepository);   // ainda não há dinheiro: ele só entra no aceite
     }
 
@@ -328,12 +354,11 @@ class ServiceExecutionServiceTest {
         var p2 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(120), 1, null, ProposalStatus.ATIVA);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of(p1, p2));
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
         assertThat(p1.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
         assertThat(p2.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
         verify(proposalRepository).save(p1);

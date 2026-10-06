@@ -224,6 +224,41 @@ class PaymentServiceTest {
     }
 
     @Test
+    void confirmPayment_pedidoJaCancelado_retemEDevolveNaMesmaHora() {
+        // Achado da revisão cruzada (2026-10-05): cancel() pode ter cancelado o pedido enquanto o pagamento já
+        // estava a caminho (cobrança enfileirada antes do cancelamento). Sem isto, o dinheiro ficaria retido pra
+        // sempre: cancel() não encontrou transação RETIDA na hora (ela ainda nem existia) e não criou reembolso.
+        var srId = UUID.randomUUID();
+        var tx = new Transaction(srId, BigDecimal.valueOf(200),
+                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-cancelado");
+        when(transactionRepository.findByGatewayTransactionId("gw-cancelado")).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.findById(srId)).thenReturn(Optional.of(serviceRequest(ServiceRequestStatus.CANCELADO)));
+
+        service.confirmPayment("gw-cancelado", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.REEMBOLSADO);
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_REFUNDED");
+    }
+
+    @Test
+    void confirmPayment_pedidoAindaAtivo_retemNormalmente_semReembolso() {
+        var srId = UUID.randomUUID();
+        var tx = new Transaction(srId, BigDecimal.valueOf(200),
+                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-ativo");
+        when(transactionRepository.findByGatewayTransactionId("gw-ativo")).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.findById(srId)).thenReturn(Optional.of(serviceRequest(ServiceRequestStatus.ACEITO)));
+
+        service.confirmPayment("gw-ativo", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
     void confirmPayment_statusRejeitado_mantemPendente() {
         var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
                 BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-5");

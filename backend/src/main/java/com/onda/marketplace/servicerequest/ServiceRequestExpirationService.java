@@ -38,15 +38,28 @@ public class ServiceRequestExpirationService {
         this.prazo = Duration.ofDays(dias);
     }
 
-    /** @return quantos pedidos foram cancelados por falta de andamento */
+    /**
+     * @return quantos pedidos foram cancelados por falta de andamento
+     *
+     * <p>Achado da revisão cruzada (2026-10-05): o UPDATE confere a condição completa de novo (ver
+     * {@code ServiceRequestRepository.cancelarSemAndamento}) — não só vai primeiro, mas é ele quem decide quais
+     * pedidos foram REALMENTE cancelados. {@code encerrarAtivasDosPedidos} só roda sobre esse subconjunto
+     * ({@code idsComStatus}, lido DEPOIS, na mesma transação): antes, rodava sobre o lote inteiro (a lista
+     * antiga, da consulta), então uma proposta nova — chegada bem a tempo de salvar o pedido da expiração —
+     * podia ser encerrada mesmo assim, deixando o pedido PROPOSTO sem nenhuma proposta ativa (a mesma lacuna que
+     * a fila ter voltado a PENDENTE existe pra evitar).
+     */
     @Transactional
     public int expirar(Instant agora) {
-        List<UUID> parados = requestRepository.idsSemAndamentoDesde(SEM_PRESTADOR, agora.minus(prazo));
+        Instant limite = agora.minus(prazo);
+        List<UUID> parados = requestRepository.idsSemAndamentoDesde(SEM_PRESTADOR, limite);
         int cancelados = 0;
         for (int i = 0; i < parados.size(); i += LOTE) {
             List<UUID> lote = parados.subList(i, Math.min(i + LOTE, parados.size()));
-            proposalRepository.encerrarAtivasDosPedidos(lote);
-            cancelados += requestRepository.cancelarSemAndamento(lote, agora);
+            requestRepository.cancelarSemAndamento(lote, limite, agora);
+            List<UUID> efetivamenteCancelados = requestRepository.idsComStatus(lote, ServiceRequestStatus.CANCELADO);
+            proposalRepository.encerrarAtivasDosPedidos(efetivamenteCancelados);
+            cancelados += efetivamenteCancelados.size();
         }
         return cancelados;
     }

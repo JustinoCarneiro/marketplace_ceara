@@ -70,8 +70,8 @@ export default function DeleteAccountScreen() {
           </View>
           <Text style={styles.doneTitle}>Conta excluída</Text>
           <Text style={styles.doneText}>
-            Seus dados pessoais foram removidos e o histórico de pagamentos ficou sem identificação.
-            Obrigado por ter usado o Onda.
+            Seu nome e e-mail saíram de tudo que você usava no app. O histórico de pagamentos e avaliações
+            fica, sem o seu nome. Obrigado por ter usado o Onda.
           </Text>
           <TouchableOpacity testID="btn-concluir-exclusao" style={styles.cta} onPress={logout} activeOpacity={0.85}>
             <Text style={styles.ctaText}>Concluir</Text>
@@ -112,7 +112,9 @@ export default function DeleteAccountScreen() {
               Suas mensagens do chat e os comentários que você escreveu nas avaliações são removidos.
             </Text>
             <Text style={styles.item}>
-              O histórico de pagamentos e as notas das avaliações ficam, sem nenhuma informação que identifique você.
+              O histórico de pagamentos e as notas das avaliações ficam, sem o seu nome. Por exigência legal,
+              o registro de aceite dos termos (com o IP de quando você aceitou) e eventuais alertas de
+              segurança ou denúncias também continuam.
             </Text>
             <Text style={styles.item}>
               Não dá para desfazer. Depois, você pode criar uma nova conta com o mesmo e-mail.
