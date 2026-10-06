@@ -2,8 +2,6 @@ package com.onda.marketplace.auth;
 
 import com.onda.marketplace.shared.Cpf;
 import com.onda.marketplace.shared.exception.BusinessException;
-import com.onda.marketplace.shared.exception.PasswordMismatchException;
-import com.onda.marketplace.shared.exception.TooManyAttemptsException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,7 +25,7 @@ public class AuthService {
     private final PasswordEncoder           passwordEncoder;
     private final CpfHashService            cpfHashService;
     private final TermsAcceptanceRepository termsAcceptanceRepository;
-    private final PasswordAttempts          passwordAttempts;
+    private final PasswordAuthenticator     passwordAuthenticator;
     private final long                      refreshTokenDays;
 
     public AuthService(
@@ -37,14 +35,14 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             CpfHashService cpfHashService,
             TermsAcceptanceRepository termsAcceptanceRepository,
-            PasswordAttempts passwordAttempts,
+            PasswordAuthenticator passwordAuthenticator,
             @Value("${jwt.refresh-token-days:30}") long refreshTokenDays) {
         this.userRepository            = userRepository;
         this.refreshTokenRepository    = refreshTokenRepository;
         this.jwtService                = jwtService;
         this.passwordEncoder           = passwordEncoder;
         this.cpfHashService            = cpfHashService;
-        this.passwordAttempts          = passwordAttempts;
+        this.passwordAuthenticator     = passwordAuthenticator;
         this.termsAcceptanceRepository = termsAcceptanceRepository;
         this.refreshTokenDays          = refreshTokenDays;
     }
@@ -53,11 +51,17 @@ public class AuthService {
      * Confirma a identidade da conta pelo CPF (1º pagamento de quem ainda não tem CPF vinculado). Só o hash é guardado (LGPD).
      * Garante "uma pessoa = um CPF" na plataforma inteira; a conta única com papéis (V24) é o que deixa o prestador
      * contratar sem uma segunda conta.
+     *
+     * <p>Com trava de linha (achado da revisão cruzada, 2026-10-05 — a mesma trava já usada por {@code become-provider}
+     * e por {@code AccountDeletionService.excluir}): sem ela, confirmar a identidade e criar o perfil de prestador ao
+     * mesmo tempo liam o mesmo estado inicial (CPF ainda vazio); a última escrita vence, e o hash da conta podia
+     * divergir do CPF cifrado do perfil, contornando {@code CPF_MISMATCH}. Contra uma exclusão em voo, a mesma trava
+     * evita o lost update que desfaria a anonimização (UPDATE não é por coluna).
      */
     @Transactional
     public void verifyIdentity(String cpf, UUID userId) {
         exigirCpfValido(cpf);   // antes de qualquer consulta: CPF inventado nem chega ao banco
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdComTrava(userId)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
         if (vincularCpf(user, cpf)) {
             userRepository.save(user);
@@ -122,19 +126,22 @@ public class AuthService {
     }
 
     /**
-     * Limite de tentativas de senha: a conta é lida com trava de linha (palpites simultâneos se enfileiram) e o contador
-     * é gravado MESMO com a exceção — daí o {@code noRollbackFor}, só para as duas exceções do limite.
+     * Limite de tentativas de senha (US37): a confirmação da senha e o contador ficam em
+     * {@link PasswordAuthenticator}, numa transação própria que sempre commita — achado da revisão cruzada,
+     * 2026-10-05: {@code ACCOUNT_SUSPENDED} (abaixo) não entra em {@code noRollbackFor} de propósito (a recusa
+     * precisa desfazer tudo o mais), mas antes disso também desfazia o ACERTO da senha que tinha acabado de
+     * zerar o contador. Separado, o acerto persiste mesmo quando a conta é recusada por outro motivo depois.
+     *
+     * <p><b>Sem {@code @Transactional} de propósito.</b> Este método não faz nenhuma leitura/escrita própria —
+     * tudo passa por {@code autenticarPorEmail} (sua própria transação) e por {@code buildAuthResponse}
+     * ({@code refreshTokenRepository.save}, já transacional por padrão no Spring Data). Tentei deixar
+     * {@code @Transactional} aqui "só por garantia" e quebrei o teste de 30 logins simultâneos (passo 37): o
+     * Spring abre a conexão da transação ENVOLVENTE assim que o método é chamado, mesmo sem nenhum acesso ao
+     * banco nela — com 30 chamadas ao mesmo tempo, cada uma segurando essa conexão ociosa enquanto espera a
+     * transação própria (de dentro) terminar, o pool esgotava e sobravam respostas que não eram nem 422 nem 429.
      */
-    @Transactional(noRollbackFor = {PasswordMismatchException.class, TooManyAttemptsException.class})
     public AuthResponse login(LoginRequest req) {
-        User user = userRepository.findByEmailComTrava(req.email())
-                .orElseThrow(() -> new BusinessException("INVALID_CREDENTIALS", "Credenciais inválidas."));
-        passwordAttempts.exigirLiberada(user);   // bloqueada: nem a senha certa entra, e o BCrypt nem roda
-        if (!passwordEncoder.matches(req.senha(), user.getSenhaHash())) {
-            passwordAttempts.registrarErro(user);
-            throw new PasswordMismatchException("INVALID_CREDENTIALS", "Credenciais inválidas.");
-        }
-        passwordAttempts.registrarAcerto(user);
+        User user = passwordAuthenticator.autenticarPorEmail(req.email(), req.senha());
         // US26: suspender bloqueia o acesso. Só DEPOIS de conferir a senha — quem não sabe as
         // credenciais não descobre que a conta está suspensa.
         if (!user.isAtivo()) {

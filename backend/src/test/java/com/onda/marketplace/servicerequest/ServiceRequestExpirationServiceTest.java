@@ -18,6 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,30 +59,39 @@ class ServiceRequestExpirationServiceTest {
         assertThat(service().expirar(AGORA)).isZero();
 
         verify(proposalRepository, never()).encerrarAtivasDosPedidos(anyCollection());
-        verify(requestRepository, never()).cancelarSemAndamento(anyCollection(), any());
+        verify(requestRepository, never()).cancelarSemAndamento(anyCollection(), any(), any());
     }
 
     @Test
     void encerraAsPropostasEOsPedidos_cravandoOInstante_edizQuantosCancelou() {
         List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID());
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.cancelarSemAndamento(ids, AGORA)).thenReturn(2);
+        when(requestRepository.idsComStatus(ids, ServiceRequestStatus.CANCELADO)).thenReturn(ids);
 
         int cancelados = service().expirar(AGORA);
 
         assertThat(cancelados).isEqualTo(2);
+        // o UPDATE roda ANTES (decide quem foi cancelado de verdade); encerrarAtivasDosPedidos só sobre o
+        // resultado dele (idsComStatus), nunca sobre a lista antiga da consulta — ver o teste da corrida abaixo
+        verify(requestRepository).cancelarSemAndamento(eq(ids), any(), eq(AGORA));   // o UPDATE em lote não roda o @PreUpdate
         verify(proposalRepository).encerrarAtivasDosPedidos(ids);
-        verify(requestRepository).cancelarSemAndamento(ids, AGORA);   // o UPDATE em lote não roda o @PreUpdate
     }
 
     @Test
-    void contaSohOQueFoiDeFatoCancelado() {
-        // um aceite que chegou entre a consulta e a escrita não é desfeito: o UPDATE confere o estado de novo
-        List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+    void contaSohOQueFoiDeFatoCancelado_eSoEncerraAsPropostasDessesMesmos() {
+        // Achado da revisão cruzada (2026-10-05): uma proposta nova chegou a tempo (entre a consulta e o UPDATE)
+        // pra UM dos três candidatos — ele não é cancelado (o UPDATE guardado não o afeta) e a proposta dele não
+        // pode ser encerrada, mesmo estando na lista original da consulta.
+        UUID escapou = UUID.randomUUID();
+        List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID(), escapou);
+        List<UUID> cancelados = List.of(ids.get(0), ids.get(1));   // só estes dois; "escapou" ficou de fora
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.cancelarSemAndamento(ids, AGORA)).thenReturn(2);
+        when(requestRepository.idsComStatus(ids, ServiceRequestStatus.CANCELADO)).thenReturn(cancelados);
 
         assertThat(service().expirar(AGORA)).isEqualTo(2);
+
+        verify(proposalRepository).encerrarAtivasDosPedidos(cancelados);
+        verify(proposalRepository, never()).encerrarAtivasDosPedidos(ids);   // nunca a lista inteira (tem o "escapou")
     }
 
     @Test
@@ -89,7 +99,7 @@ class ServiceRequestExpirationServiceTest {
         List<UUID> ids = new ArrayList<>();
         for (int i = 0; i < 1200; i++) ids.add(UUID.randomUUID());
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.cancelarSemAndamento(anyCollection(), any())).thenReturn(1);
+        when(requestRepository.idsComStatus(anyCollection(), any())).thenAnswer(i -> i.getArgument(0));
 
         service().expirar(AGORA);
 

@@ -39,11 +39,33 @@ próximo erro recomeça do zero. Configurável: `marketplace.password-attempts.m
 - Não cobre o `refresh` (token, não senha) nem o admin à parte: o admin usa o mesmo login e herda o limite.
 - O painel não mostra nem desbloqueia: o desbloqueio é esperar ou recuperar a senha por e-mail.
 
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P2 — o acerto de senha não sobrevivia a uma recusa de negócio logo depois.** `login()`/`excluir()` zeravam o
+  contador e, na MESMA transação, podiam lançar `ACCOUNT_SUSPENDED` (US26) ou `ACCOUNT_HAS_ACTIVE_ORDERS` (US36) —
+  exceções que corretamente desfazem tudo o mais, mas também desfaziam o acerto que tinha acabado de zerar o
+  contador. Quem informava a senha certa, mas era barrado por outro motivo, voltava a contar de um número errado
+  no próximo erro. Corrigido extraindo o acerto/erro para `PasswordAuthenticator`, numa transação PRÓPRIA
+  (`REQUIRES_NEW`) que sempre commita; `login()`/`excluir()` continuam livres para desfazer o resto. Prova
+  determinística no E2E, passos 40–41 (login e exclusão).
+- **Regressão própria, achada e corrigida no processo:** a primeira versão da correção manteve `login()` com
+  `@Transactional` "por garantia", mesmo sem nenhuma leitura/escrita própria (tudo passa pela transação do
+  `PasswordAuthenticator` e pelo `save` do Spring Data). Isso quebrou o passo 37 (30 logins simultâneos): o Spring
+  abre a conexão da transação envolvente assim que o método é chamado, mesmo vazia — 30 chamadas ao mesmo tempo
+  seguravam 30 conexões ociosas enquanto esperavam a transação de dentro, o pool esgotava e sobravam respostas que
+  não eram nem 422 nem 429. `login()` ficou sem `@Transactional`.
+- **P3 — `Retry-After` podia anunciar menos tempo do que o bloqueio realmente dura.** `exigirLiberada` capava o
+  tempo restante pela configuração ATUAL (`Math.min` com `lock-seconds`); reduzir a configuração com um bloqueio já
+  gravado sob o valor antigo fazia a resposta mentir a duração. Corrigido: o tempo vem só do que está gravado em
+  `senha_bloqueada_ate`.
+- **P2 — demo sem SMTP configurado:** aceito como limitação por ora (sem credenciais de e-mail disponíveis); ver
+  `memoria-tecnica/decisoes/vps-deploy-marketplace-ceara.md` (se existir) ou a configuração de ambiente da demo —
+  sem canal de recuperação, quem é bloqueado nesse ambiente só tem a saída de esperar os 15 minutos.
+
 ## Efeito nos testes
-`UserTentativasDeSenhaTest`, `PasswordAttemptsTest`, `AuthServiceTest`, `AccountDeletionServiceTest`,
-`PasswordResetServiceTest`, `ErrorControllerAdviceTest` e o E2E (passos 35–38; o tempo passa por `UPDATE` em
-`senha_bloqueada_ate`). A mutação mostrou que o que só o Postgres real prova (persistência do contador, trava de linha) é
-pego pelo E2E e não pelo unitário.
+`UserTentativasDeSenhaTest`, `PasswordAttemptsTest`, `PasswordAuthenticatorTest` (novo), `AuthServiceTest`,
+`AccountDeletionServiceTest`, `PasswordResetServiceTest`, `ErrorControllerAdviceTest` e o E2E (passos 35–38 e 40–41; o
+tempo passa por `UPDATE` em `senha_bloqueada_ate`). A mutação mostrou que o que só o Postgres real prova (persistência
+do contador, trava de linha, a transação própria do acerto) é pego pelo E2E e não pelo unitário.
 
 ## Ligado a
 - US37, US35 e US36 em `docs/spec.md`; `PasswordAttempts`, `AuthService.login`, `AccountDeletionService`.

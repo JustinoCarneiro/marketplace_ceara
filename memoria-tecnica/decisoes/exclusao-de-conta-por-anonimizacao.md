@@ -102,6 +102,38 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
 - **Não fazer:** apagar a linha de `users`; reativar conta excluída; trocar a trava por leitura simples; fazer a
   exclusão depender do envio do e-mail.
 
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P1 — escrita concorrente desfazia a anonimização.** `AuthService.verifyIdentity` lia o usuário sem trava
+  (`findById`). Uma confirmação de identidade em voo ao mesmo tempo que uma exclusão podia ler a conta "viva"
+  antes do commit da exclusão e, ao salvar depois, gravar de volta TODOS os campos do objeto em memória — nome,
+  e-mail, `ativo`, `excluido_em` — desfazendo a anonimização (lost update: o `UPDATE` do Hibernate não é por
+  coluna). Corrigido: `verifyIdentity` passou a usar a mesma trava (`findByIdComTrava`) de `excluir`, serializando
+  as duas. Prova determinística (latch + duas transações, molde do passo 33): `E2EFluxoPrincipalTest`, passo 35.
+- **P2 — `motivoDisputa` não saía.** A limpeza de texto livre só apagava `detalhesDisputa`; `motivoDisputa` (a API
+  aceita como texto livre) ficava. Um pedido disputado e depois mediado continua elegível à exclusão (a recusa só
+  olha `EM_DISPUTA` em curso), então o motivo escrito durante a disputa sobrevivia à exclusão. Corrigido: a mesma
+  `UPDATE` agora limpa os dois.
+- **P2 — texto de disputa escrito pelo PRESTADOR nunca saía.** `openDispute` aceita qualquer uma das duas partes,
+  mas só a limpeza do lado do CLIENTE existia. Um prestador que escreveu o motivo/detalhes de uma disputa (já
+  mediada) e depois exclui a própria conta não levava esse texto junto. Corrigido: nova consulta
+  (`apagarMotivoDeDisputaDosPedidosOndeEhPrestador`) limpa motivo/detalhes nos pedidos onde o usuário excluído é o
+  prestador com proposta aceita — sem tocar nos campos que pertencem ao cliente do pedido (descrição, localização).
+- **P2 — `bairro`/`categoria` aceitavam qualquer texto.** A criação do pedido só limitava o tamanho do bairro e
+  exigia categoria não vazia: um endereço, nome ou telefone passava, e esses campos sobrevivem à exclusão (são
+  tratados como dado agregável nos relatórios do admin). `service_categories` (US28, painel admin) existe para
+  outra finalidade e nasce vazia em todo ambiente — validar contra ela bloquearia todo pedido até o admin cadastrar
+  algo à mão; não era um catálogo utilizável aqui. Corrigido com o que de fato é um catálogo fechado hoje: o
+  `bairro` passou a aceitar só os 10 nomes que o app já mostra em chips (`shared/Bairro`, espelhando
+  `NewRequestScreen.BAIRROS`); a `categoria` passou por uma validação de formato (só letra e espaço, sem dígito) —
+  defesa, não catálogo fechado, documentada como tal. A exclusão também sanitiza bairro fora da lista gravado antes
+  desta validação existir (`sanearBairroForaDaListaDosPedidosDoCliente`). **Falta fazer:** se um catálogo de
+  categorias de verdade for necessário, `service_categories` precisa ser semeado e unificado com os valores que o
+  app usa hoje (há uma inconsistência pré-existente de maiúsculas/acento entre telas do mobile, não mexida aqui).
+- **P3 — o aviso (e-mail e tela) prometia mais do que é verdade.** "Guardamos apenas o histórico de pagamentos e
+  de avaliações, sem nenhuma informação que identifique você" é falso: o IP do aceite dos termos, as coordenadas
+  de um SOS e o texto de uma denúncia continuam. Corrigido: o texto agora promete só o que é verdade (nome/e-mail
+  saem; alguns registros ficam, por exigência legal, sem o nome).
+
 ## Efeito nos testes
 Unitário (`AccountDeletionServiceTest`, `AccountControllerTest`, `AccountDeletedMailListenerTest`,
 `UserAnonimizacaoTest`, `ProviderProfileAnonimizacaoTest`, `JwtAuthFilterTest`, admin) prova as regras; mock

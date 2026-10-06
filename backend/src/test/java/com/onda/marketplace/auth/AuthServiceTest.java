@@ -36,10 +36,13 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        // PasswordAuthenticator REAL sobre os MESMOS mocks (ver PasswordAuthenticatorTest para a lógica isolada;
+        // a transação própria, REQUIRES_NEW, só o E2E prova).
+        var passwordAuthenticator = new PasswordAuthenticator(userRepository, passwordEncoder, new PasswordAttempts(5, 900));
         authService = new AuthService(
                 userRepository, refreshTokenRepository, jwtService,
                 passwordEncoder, cpfHashService, termsAcceptanceRepository,
-                new PasswordAttempts(5, 900), 30L);
+                passwordAuthenticator, 30L);
     }
 
     @Test
@@ -230,11 +233,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_aContaContaComTrava_epersisteOErroMesmoComAExcecao() throws Exception {
-        // o contador só vale se a transação NÃO voltar junto com a exceção (noRollbackFor), e se a linha for travada
-        var metodo = AuthService.class.getMethod("login", LoginRequest.class);
+    void login_delegaAContagemAUmaTransacaoPropriaQueSempreCommita() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): o acerto/erro de senha mora em PasswordAuthenticator, numa
+        // transação PRÓPRIA (REQUIRES_NEW) — não mais dentro de login(). Antes, um acerto seguido de
+        // ACCOUNT_SUSPENDED (que corretamente desfaz tudo o mais) desfazia também o PRÓPRIO acerto, na mesma
+        // transação. Ver PasswordAuthenticatorTest para a verificação completa das anotações.
+        var metodo = PasswordAuthenticator.class.getMethod("autenticarPorEmail", String.class, String.class);
         var tx = metodo.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
 
+        assertThat(tx.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
         assertThat(tx.noRollbackFor()).containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
     }
 
@@ -423,7 +430,7 @@ class AuthServiceTest {
     void verifyIdentity_cpfNovo_vinculaOHashDaChaveAtual_comAVersaoAtual() {
         UUID userId = UUID.randomUUID();
         var user = semCpf();
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         authService.verifyIdentity(CPF, userId);
 
@@ -435,7 +442,7 @@ class AuthServiceTest {
     @Test
     void verifyIdentity_cpfJaVinculadoAOutraConta_lancaCpfAlreadyRegistered_consultandoAsDuasChaves() {
         UUID userId = UUID.randomUUID();
-        when(userRepository.findById(userId)).thenReturn(Optional.of(semCpf()));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(semCpf()));
         when(userRepository.existsByCpfHashIn(any())).thenReturn(true);
 
         assertThatThrownBy(() -> authService.verifyIdentity(CPF, userId))
@@ -458,7 +465,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         var user = semCpf();
         user.vincularCpf(cpfHashService.hash(CPF), 2);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         assertThatCode(() -> authService.verifyIdentity(CPF, userId)).doesNotThrowAnyException();
         verify(userRepository, never()).save(any());
@@ -470,7 +477,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         var user = semCpf();
         user.vincularCpf(cpfHashService.hash(CPF), 2);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.verifyIdentity("52998224725", userId))
                 .isInstanceOf(BusinessException.class)
@@ -484,7 +491,7 @@ class AuthServiceTest {
         // o cliente que confirmou o CPF antes da separação das chaves: na próxima confirmação o hash dele migra
         UUID userId = UUID.randomUUID();
         var user = comHashDaChaveAntiga(CPF);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         authService.verifyIdentity(CPF, userId);
 
@@ -498,7 +505,7 @@ class AuthServiceTest {
     void verifyIdentity_hashDeChaveAntiga_outroCpf_recusa() {
         UUID userId = UUID.randomUUID();
         var user = comHashDaChaveAntiga(CPF);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> authService.verifyIdentity("52998224725", userId))
                 .isInstanceOf(BusinessException.class)
@@ -522,7 +529,7 @@ class AuthServiceTest {
     @Test
     void verifyIdentity_contaInexistente_recusa() {
         UUID userId = UUID.randomUUID();
-        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.verifyIdentity(CPF, userId))
                 .isInstanceOf(BusinessException.class)

@@ -63,7 +63,9 @@ public class ProposalService {
 
     @Transactional
     public ProposalDto create(UUID serviceRequestId, CreateProposalRequest req, UUID prestadorId) {
-        ServiceRequest sr = requestRepository.findById(serviceRequestId)
+        // Trava de escrita (revisão cruzada, 2026-10-05): serializa contra a reabertura de reject() —
+        // ver o porquê em ServiceRequestRepository.findByIdComTrava.
+        ServiceRequest sr = requestRepository.findByIdComTrava(serviceRequestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         // Conta única com papéis: o prestador pode ser também o cliente deste pedido. Ninguém contrata a si mesmo (fabricaria
@@ -145,7 +147,7 @@ public class ProposalService {
 
         proposal.recusar();
         proposalRepository.save(proposal);
-        reabrirSeNaoHaPropostaAtiva(proposal.getServiceRequest());
+        reabrirSeNaoHaPropostaAtiva(proposal.getServiceRequest().getId());
         return toDto(proposal);
     }
 
@@ -153,8 +155,17 @@ public class ProposalService {
      * A fila dos prestadores só lista PENDENTE, então um pedido PROPOSTO sem proposta ativa ficava preso e invisível
      * (e o cliente não tinha como cancelá-lo). Recusada a última proposta ativa, ele volta à fila. Recusar UMA de várias
      * não mexe em nada: as outras continuam disputando.
+     *
+     * <p>Achado da revisão cruzada (2026-10-05): reabre e reconfere com a MESMA trava de escrita que
+     * {@code create()} agora usa (ver {@code ServiceRequestRepository.findByIdComTrava}) — sem ela, uma proposta
+     * nova (ATIVA) podia ser gravada bem entre a leitura e esta escrita, e a reabertura sobrescrevia PENDENTE por
+     * cima dela, escondendo a proposta nova da fila dos outros prestadores. Reler o pedido AQUI, sob a trava —
+     * em vez de reusar a referência já carregada em reject() — é o que faz o reconferimento valer: é essa releitura
+     * que, bloqueada até a transação concorrente terminar, vê o estado de verdade.
      */
-    private void reabrirSeNaoHaPropostaAtiva(ServiceRequest sr) {
+    private void reabrirSeNaoHaPropostaAtiva(UUID srId) {
+        ServiceRequest sr = requestRepository.findByIdComTrava(srId)
+                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
         if (sr.getStatus() == ServiceRequestStatus.PROPOSTO
                 && proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA).isEmpty()) {
             sr.setStatus(ServiceRequestStatus.PENDENTE);

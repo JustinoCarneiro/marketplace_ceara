@@ -140,6 +140,12 @@ public class ServiceExecutionService {
      * PENDENTE | PROPOSTO | ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED).
      * Em PENDENTE/PROPOSTO só o cliente dono participa (o prestador com proposta ativa ainda não é parte do pedido) e as
      * propostas ativas são encerradas: sem isso o cliente não tinha saída de um pedido que ninguém atendia.
+     *
+     * <p>Achado da revisão cruzada (2026-10-05): a escrita confere o estado ATUAL na própria transação SQL
+     * ({@code cancelarSeEmEstadoCancelavel}), não o que foi lido no início do método — sem isso, um aceite (e
+     * início de pagamento) concorrente, entre a leitura e a gravação, era silenciosamente sobrescrito para
+     * CANCELADO. Se o estado mudou nesse intervalo, a escrita não afeta nenhuma linha e o método relê para
+     * devolver o erro certo, em vez de seguir como se tivesse cancelado.
      */
     @Transactional
     public void cancel(UUID srId, UUID userId) {
@@ -153,13 +159,21 @@ public class ServiceExecutionService {
         }
 
         boolean semPrestador = CANCELAVEIS_SEM_PRESTADOR.contains(sr.getStatus());
+        Set<ServiceRequestStatus> estadosValidos = semPrestador ? CANCELAVEIS_SEM_PRESTADOR : CANCELAVEIS;
         if (!semPrestador && !CANCELAVEIS.contains(sr.getStatus())) {
             throw new BusinessException("INVALID_STATE_TRANSITION",
                     "cancel() exige PENDENTE, PROPOSTO, ACEITO ou EM_ANDAMENTO, atual: " + sr.getStatus());
         }
 
-        sr.setStatus(ServiceRequestStatus.CANCELADO);
-        srRepository.save(sr);
+        int linhas = srRepository.cancelarSeEmEstadoCancelavel(srId, estadosValidos, Instant.now());
+        if (linhas == 0) {
+            // o estado mudou entre a leitura e esta escrita (corrida) — relê pra dar o erro com o estado de verdade
+            ServiceRequestStatus atual = srRepository.findById(srId)
+                    .map(ServiceRequest::getStatus)
+                    .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+            throw new BusinessException("INVALID_STATE_TRANSITION",
+                    "cancel() exige PENDENTE, PROPOSTO, ACEITO ou EM_ANDAMENTO, atual: " + atual);
+        }
 
         if (semPrestador) {
             proposalRepository.findByServiceRequestIdAndStatus(srId, ProposalStatus.ATIVA).forEach(p -> {

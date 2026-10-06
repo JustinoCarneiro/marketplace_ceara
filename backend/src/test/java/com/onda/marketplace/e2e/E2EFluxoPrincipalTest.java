@@ -2,6 +2,7 @@ package com.onda.marketplace.e2e;
 
 import com.lowagie.text.pdf.PdfReader;
 import com.lowagie.text.pdf.parser.PdfTextExtractor;
+import com.onda.marketplace.auth.AuthService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
@@ -132,6 +133,7 @@ class E2EFluxoPrincipalTest {
     @Autowired ServiceRequestRepository serviceRequestRepository;
     @Autowired TransactionRepository    transactionRepository;
     @Autowired PasswordEncoder          passwordEncoder;
+    @Autowired AuthService              authService;
     @Autowired com.onda.marketplace.auth.PasswordResetCodeRepository passwordResetCodeRepository;
     @Autowired org.springframework.transaction.support.TransactionTemplate transacao;
     // Exclusão de conta (US36): monta o estado de cada cenário direto no banco.
@@ -1306,9 +1308,15 @@ class E2EFluxoPrincipalTest {
         UUID aberto    = pedidoDe(marta, "Vazamento na cozinha, Rua das Flores 123", "PENDENTE");
         UUID concluido = pedidoDe(marta, "Troca de chuveiro, Rua das Flores 123", "CONCLUIDO");
         jdbc.update("""
-                UPDATE service_requests SET ai_descricao_sugerida = 'texto da IA', detalhes_disputa = 'detalhe da disputa'
+                UPDATE service_requests SET ai_descricao_sugerida = 'texto da IA',
+                       motivo_disputa = 'motivo da disputa', detalhes_disputa = 'detalhe da disputa'
                  WHERE id IN (?::uuid, ?::uuid)
                 """, aberto.toString(), concluido.toString());
+        // bairro de antes da validação de entrada existir (ou de um caminho que não passasse por ela):
+        // texto livre direto no banco, como a API nunca deixaria entrar hoje
+        UUID comBairroLegado = pedidoDe(marta, "Pedido com bairro legado, fora da lista", "PENDENTE");
+        jdbc.update("UPDATE service_requests SET bairro = 'Rua das Flores, 123' WHERE id = ?::uuid",
+                comBairroLegado.toString());
         proposta(aberto, pedro.id(), ProposalStatus.ATIVA);
         proposta(concluido, pedro.id(), ProposalStatus.ACEITA);
         pagamento(concluido, TransactionStatus.LIBERADO);
@@ -1350,11 +1358,17 @@ class E2EFluxoPrincipalTest {
         for (UUID pedido : List.of(aberto, concluido)) {
             assertThat(vazio("descricao", "service_requests", pedido), is(true));
             assertThat(vazio("ai_descricao_sugerida", "service_requests", pedido), is(true));
+            assertThat("achado da revisão cruzada: motivo_disputa ficava, só detalhes_disputa saía",
+                    vazio("motivo_disputa", "service_requests", pedido), is(true));
             assertThat(vazio("detalhes_disputa", "service_requests", pedido), is(true));
             assertThat(vazio("localizacao", "service_requests", pedido), is(true));
             assertThat(texto("SELECT bairro FROM service_requests WHERE id = ?::uuid", pedido.toString()), equalTo("Meireles"));
             assertThat(texto("SELECT categoria FROM service_requests WHERE id = ?::uuid", pedido.toString()), equalTo("eletrica"));
         }
+        // achado da revisão cruzada: bairro fora da lista oficial (dado de antes da validação existir) é
+        // saneado na exclusão, não só bloqueado em pedido novo
+        assertThat("bairro fora da lista oficial sai na exclusão",
+                vazio("bairro", "service_requests", comBairroLegado), is(true));
 
         // proposals: a aberta foi encerrada; a aceita do pedido concluído é histórico e fica
         assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", aberto.toString()), equalTo("ENCERRADA"));
@@ -1448,6 +1462,13 @@ class E2EFluxoPrincipalTest {
         UUID alheio = pedidoDe(cliente, "Pedido sem proposta ativa, Rua C 30", "PROPOSTO");
         proposta(feito, paula.id(), ProposalStatus.ACEITA);
         pagamento(feito, TransactionStatus.LIBERADO);
+        // histórico de uma disputa já mediada (o pedido está CONCLUIDO, não EM_DISPUTA — senão ela nem excluiria):
+        // o motivo/detalhes foi escrito por ELA, prestadora, não pelo cliente
+        jdbc.update("""
+                UPDATE service_requests SET motivo_disputa = 'motivo escrito pela prestadora',
+                       detalhes_disputa = 'detalhe escrito pela prestadora'
+                 WHERE id = ?::uuid
+                """, feito.toString());
         mensagem(feito, paula.id(), "Chego às 14h, meu telefone é 85 98888-0000");
         avaliacao(feito, paula.id(), cliente.id(), ReviewType.PRESTADOR_AVALIA_CLIENTE, 5, "Cliente pontual");
         avaliacao(feito, cliente.id(), paula.id(), ReviewType.CLIENTE_AVALIA_PRESTADOR, 5, "Excelente");
@@ -1499,6 +1520,13 @@ class E2EFluxoPrincipalTest {
         assertThat("pedido que não era dela não é mexido", statusDoPedido(alheio), equalTo("PROPOSTO"));
         assertThat(texto("SELECT descricao FROM service_requests WHERE id = ?::uuid", feito.toString()), equalTo("Pedido feito, Rua C 30"));
         assertThat(conta(cliente.id()).get("nome"), equalTo("Cliente da Paula"));
+
+        // achado da revisão cruzada: o texto de disputa que ELA (prestadora) escreveu some junto, mesmo não
+        // sendo a cliente do pedido; a descrição acima (dela, cliente) prova que nada do pedido do cliente foi tocado
+        assertThat("motivo escrito pela prestadora sai da base quando ela exclui a conta",
+                vazio("motivo_disputa", "service_requests", feito), is(true));
+        assertThat("detalhes escritos pela prestadora saem junto",
+                vazio("detalhes_disputa", "service_requests", feito), is(true));
 
         // depois: sumiu da busca por proximidade
         var depois = given().header("Authorization", "Bearer " + cliente.token())
@@ -1863,12 +1891,182 @@ class E2EFluxoPrincipalTest {
                 texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", aceitoVelho.toString()), equalTo("ACEITA"));
         assertThat(statusDoPedido(pendenteRecente), equalTo("PENDENTE"));
         // a guarda do UPDATE: um pedido que deixou de estar sem prestador entre a consulta e a escrita (aqui, o ACEITO) não é cancelado
-        int mexidos = transacao.execute(st -> serviceRequestRepository.cancelarSemAndamento(List.of(aceitoVelho), Instant.now()));
+        Instant limite = Instant.now().minus(java.time.Duration.ofDays(15));
+        int mexidos = transacao.execute(st -> serviceRequestRepository.cancelarSemAndamento(List.of(aceitoVelho), limite, Instant.now()));
         assertThat(mexidos, equalTo(0));
         assertThat(statusDoPedido(aceitoVelho), equalTo("ACEITO"));
         // o instante do cancelamento é gravado (o UPDATE em lote não roda o @PreUpdate)
         assertThat(contar("SELECT count(*) FROM service_requests WHERE id = ?::uuid AND updated_at > now() - interval '1 minute'",
                 pendenteVelho.toString()), equalTo(1));
+
+        // achado da revisão cruzada (2026-10-05): a MESMA guarda fecha a corrida com uma proposta nova — o pedido
+        // "propostoComOfertaNova" já tinha isso provado pelo caminho normal (a consulta nem o lista, porque a
+        // proposta é recente); aqui simula-se o caso em que ele chegasse a ENTRAR no lote mesmo assim (proposta
+        // recém-chegada no instante entre a consulta e a escrita de uma chamada real), e a escrita o recusa sozinha
+        int mexidosComPropostaNova = transacao.execute(st ->
+                serviceRequestRepository.cancelarSemAndamento(List.of(propostoComOfertaNova), limite, Instant.now()));
+        assertThat("a proposta recente barra mesmo que o pedido tenha chegado ao lote por engano",
+                mexidosComPropostaNova, equalTo(0));
+        assertThat(statusDoPedido(propostoComOfertaNova), equalTo("PROPOSTO"));
+        assertThat("a proposta dele continua ATIVA — não foi encerrada por engano",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid", propostoComOfertaNova.toString()),
+                equalTo("ATIVA"));
+    }
+
+    @Test @Order(42)
+    @DisplayName("42 · Confirmar identidade durante uma exclusão em voo ESPERA a trava e não desfaz a anonimização (lost update)")
+    void exclusaoDeConta_confirmarIdentidadeEmVoo_naoDesfazAAnonimizacao() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): verifyIdentity lia o usuário sem trava. Se uma exclusão
+        // estivesse em voo (já com a trava, ainda sem commitar), verifyIdentity lia a conta "viva" antes,
+        // e ao salvar depois gravava de volta TODOS os campos do objeto em memória — nome, e-mail, ativo,
+        // excluido_em — na forma antiga: a anonimização desfeita (lost update; UPDATE não é por coluna).
+        // Prova determinística: a exclusão fica parada ANTES do commit (como o passo 33), e só então a
+        // confirmação é disparada — com a trava, ela TEM de esperar; sem a trava, ela correria na frente.
+        var bia = cadastrarCliente("Bia Corrida", "bia.corrida.exclusao@onda.test");
+        String emailOriginal = bia.email();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        // "exclusão em voo": já com a trava da linha, parada antes do commit da anonimização
+        var exclusaoEmVoo = pool.submit(() -> transacao.executeWithoutResult(status -> {
+            User u = userRepository.findByIdComTrava(bia.id()).orElseThrow();
+            u.anonimizar("removido-corrida@excluido.invalid",
+                    passwordEncoder.encode(UUID.randomUUID().toString()), false);
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                "a exclusão em voo deveria ter a trava");
+
+        var confirmacaoTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var confirmacao = pool.submit(() -> {
+            authService.verifyIdentity("900.110.220-33", bia.id());
+            confirmacaoTerminou.set(true);
+        });
+        Thread.sleep(800);
+        assertThat("a confirmação deveria estar ESPERANDO a trava da exclusão em voo, não ter terminado",
+                confirmacaoTerminou.get(), is(false));
+
+        liberar.countDown();   // a exclusão termina e COMMITA a anonimização
+        exclusaoEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        confirmacao.get(10, java.util.concurrent.TimeUnit.SECONDS);   // só agora, sobre o estado JÁ anonimizado
+        pool.shutdown();
+
+        var u = conta(bia.id());
+        assertThat("o nome anonimizado não pode voltar ao original", u.get("nome"), equalTo("Usuário removido"));
+        assertThat("o e-mail anonimizado não pode voltar ao original", u.get("email"), not(equalTo(emailOriginal)));
+        assertThat("ativo continua false: a confirmação não pode reabrir a conta", u.get("ativo"), equalTo(false));
+        assertThat("excluido_em continua preenchido", u.get("excluido_em"), notNullValue());
+    }
+
+    @Test @Order(43)
+    @DisplayName("43 · O acerto de senha na exclusão PERSISTE mesmo quando ela é recusada por pendência logo depois")
+    void limiteDeTentativas_acertoPersisteQuandoAExclusaoEhRecusadaDepois() {
+        // Achado da revisão cruzada (2026-10-05): excluir() lia a senha certa, zerava o contador, e SÓ DEPOIS
+        // conferia pendências (pedido em curso). ACCOUNT_HAS_ACTIVE_ORDERS tem de desfazer tudo o mais — mas,
+        // na mesma transação, "tudo o mais" incluía o próprio zeramento do contador: ele voltava a valer os
+        // 4 erros de antes, e o PRÓXIMO erro já bloqueava a conta com só 1 erro depois do "acerto".
+        var caio  = cadastrarCliente("Caio Pendencia Tentativas", "caio.tentativas.pendencia@onda.test");
+        var paulo = cadastrarPrestador("Paulo Pendencia Tentativas", "paulo.tentativas.pendencia@onda.test", "635.084.325-00");
+        UUID emCurso = pedidoDe(caio, "Pedido em curso, Rua K 70", "ACEITO");
+        proposta(emCurso, paulo.id(), ProposalStatus.ACEITA);
+
+        for (int i = 1; i <= 4; i++) {
+            excluirConta(caio.token(), "errada-" + i).then().statusCode(422).body("code", equalTo("INVALID_PASSWORD"));
+        }
+        assertThat(tentativas(caio.id()).get("senha_falhas"), equalTo(4));
+
+        // senha CERTA, mas a conta tem pedido em curso: a exclusão é recusada, não a senha
+        excluirConta(caio.token(), SENHA_PADRAO).then().statusCode(422).body("code", equalTo("ACCOUNT_HAS_ACTIVE_ORDERS"));
+        assertThat(conta(caio.id()).get("excluido_em"), nullValue());
+
+        // o acerto PERSISTIU: o contador está em 0, não em 4
+        assertThat("o acerto de senha não pode ser desfeito pela recusa de negócio que vem depois",
+                tentativas(caio.id()).get("senha_falhas"), equalTo(0));
+
+        // prova final: UM erro agora bloqueia com 5 no total só se o contador NÃO tivesse zerado; com 0, falta muito
+        excluirConta(caio.token(), "errada-de-novo").then().statusCode(422).body("code", equalTo("INVALID_PASSWORD"));
+        assertThat(tentativas(caio.id()).get("senha_falhas"), equalTo(1));
+    }
+
+    @Test @Order(44)
+    @DisplayName("44 · O acerto de senha no LOGIN também persiste quando a conta é recusada por estar suspensa logo depois")
+    void limiteDeTentativas_acertoPersisteQuandoOLoginEhRecusadoPorContaSuspensaDepois() {
+        var greg = cadastrarCliente("Greg Suspenso Tentativas", "greg.tentativas.suspenso@onda.test");
+        for (int i = 1; i <= 4; i++) {
+            login(greg.email(), "errada-" + i).then().statusCode(422).body("code", equalTo("INVALID_CREDENTIALS"));
+        }
+        assertThat(tentativas(greg.id()).get("senha_falhas"), equalTo(4));
+
+        given().header("Authorization", "Bearer " + tokenAdmin())
+                .when().post("/api/v1/admin/users/{id}/suspend", greg.id()).then().statusCode(200);
+
+        // senha CERTA, mas a conta está suspensa: o login é recusado por isso, não pela senha
+        login(greg.email(), SENHA_PADRAO).then().statusCode(422).body("code", equalTo("ACCOUNT_SUSPENDED"));
+
+        assertThat("o acerto de senha não pode ser desfeito pela recusa de negócio (conta suspensa) que vem depois",
+                tentativas(greg.id()).get("senha_falhas"), equalTo(0));
+    }
+
+    @Test @Order(45)
+    @DisplayName("45 · Reabertura (recusada a última proposta) e uma proposta nova concorrente não se atropelam: a trava serializa")
+    void pedidoSemPrestador_reaberturaConcorrenteComPropostaNova_naoEscondeAPropostaNova() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): reabrirSeNaoHaPropostaAtiva (reject da ÚLTIMA proposta ativa) e
+        // create() (proposta nova) liam e escreviam o pedido sem se bloquear. Uma proposta nova gravada bem entre
+        // a conferência e a escrita da reabertura virava invisível: o pedido voltava a PENDENTE com uma proposta
+        // ATIVA escondida (nem a fila dos prestadores, nem o cliente percebiam — o pedido simplesmente nunca
+        // aparecia pra mais ninguém). Prova determinística, no molde dos passos 33/42: a reabertura fica parada
+        // ANTES do commit, já com a trava; só então a proposta nova é disparada pela API — com a trava, ela TEM de
+        // esperar; sem a trava, ela correria na frente e a proposta nova some.
+        var rose = cadastrarCliente("Rose Reabertura", "rose.reabertura@onda.test");
+        var p1 = cadastrarPrestador("Prestador Um Reabertura", "um.reabertura@onda.test", "927.318.465-70");
+        var p2 = cadastrarPrestador("Prestador Dois Reabertura", "dois.reabertura@onda.test", "384.651.927-09");
+        moderarPrestador(p2.id().toString(), "APROVAR");
+        UUID pedido = pedidoDe(rose, "Pedido com uma proposta, Rua F 60", "PROPOSTO");
+        proposta(pedido, p1.id(), ProposalStatus.ATIVA);
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        // "reabertura em voo": a última proposta ativa já foi recusada, a trava já foi obtida, parada antes do commit
+        var reaberturaEmVoo = pool.submit(() -> transacao.executeWithoutResult(status -> {
+            ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
+            proposalRepository.findByServiceRequestIdAndStatus(pedido, ProposalStatus.ATIVA)
+                    .forEach(p -> { p.recusar(); proposalRepository.save(p); });
+            if (proposalRepository.findByServiceRequestIdAndStatus(pedido, ProposalStatus.ATIVA).isEmpty()) {
+                sr.setStatus(ServiceRequestStatus.PENDENTE);
+            }
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                "a reabertura em voo deveria ter a trava");
+
+        var propostaNovaTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var propostaNova = pool.submit(() -> {
+            proporPelaApi(p2, pedido);
+            propostaNovaTerminou.set(true);
+        });
+        Thread.sleep(800);
+        assertThat("a proposta nova deveria estar ESPERANDO a trava da reabertura em voo, não ter terminado",
+                propostaNovaTerminou.get(), is(false));
+
+        liberar.countDown();   // a reabertura termina e COMMITA o PENDENTE
+        reaberturaEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        propostaNova.get(10, java.util.concurrent.TimeUnit.SECONDS);   // só agora, sobre o PENDENTE já commitado
+        pool.shutdown();
+
+        assertThat("a proposta nova reabre o pedido: ele não pode ficar PENDENTE com uma proposta ativa escondida",
+                statusDoPedido(pedido), equalTo("PROPOSTO"));
+        assertThat("a proposta recusada continua recusada",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid",
+                        pedido.toString(), p1.id().toString()), equalTo("RECUSADA"));
+        assertThat("a proposta nova está ativa — não foi perdida pela reabertura concorrente",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid",
+                        pedido.toString(), p2.id().toString()), equalTo("ATIVA"));
     }
 
     // ─── Uma pessoa = um CPF: o cadastro do prestador grava o hash, valida os dígitos e o backfill alcança os legados ───
@@ -1879,8 +2077,8 @@ class E2EFluxoPrincipalTest {
     @Autowired CpfEncryptor cpfEncryptor;
     @Autowired ProviderCpfBackfill cpfBackfill;
 
-    @Test @Order(42)
-    @DisplayName("42 · CPF do prestador: inválido é recusado; o mesmo CPF não faz duas contas (com ou sem máscara) nem passa para um cliente")
+    @Test @Order(46)
+    @DisplayName("46 · CPF do prestador: inválido é recusado; o mesmo CPF não faz duas contas (com ou sem máscara) nem passa para um cliente")
     void cpfUnico_cadastroDoPrestador() {
         // dígito verificador errado: sem validar, um número inventado burlaria a unicidade. Nada é criado.
         registrarPrestador("Cpf Invalido", "cpf.invalido@onda.test", "123.456.789-00")
@@ -1907,8 +2105,8 @@ class E2EFluxoPrincipalTest {
         assertThat(conta(cliente.id()).get("cpf_hash"), nullValue());
     }
 
-    @Test @Order(43)
-    @DisplayName("43 · Backfill: prestador legado (só CPF cifrado) ganha o hash; CPF repetido em duas contas é listado e não vinculado; ilegível é pulado")
+    @Test @Order(47)
+    @DisplayName("47 · Backfill: prestador legado (só CPF cifrado) ganha o hash; CPF repetido em duas contas é listado e não vinculado; ilegível é pulado")
     void cpfUnico_backfillDosPrestadoresLegados() {
         // contas de ANTES da regra: só o CPF cifrado, sem hash
         var legado1 = legado("legado.um@onda.test", cpfEncryptor.encrypt(CPF_LEGADO));
@@ -1986,8 +2184,8 @@ class E2EFluxoPrincipalTest {
         return jdbc.queryForList("SELECT papel FROM user_papeis WHERE user_id = ?::uuid ORDER BY papel", String.class, userId.toString());
     }
 
-    @Test @Order(44)
-    @DisplayName("44 · Conta única: o prestador contrata outro prestador pela MESMA conta — alterna para cliente, sem segunda conta nem CPF novo")
+    @Test @Order(48)
+    @DisplayName("48 · Conta única: o prestador contrata outro prestador pela MESMA conta — alterna para cliente, sem segunda conta nem CPF novo")
     void contaUnica_prestadorContrataPelaMesmaConta() {
         var duda = cadastrarPrestador("Duda Prestadora", "duda.unica@onda.test", CPF_DUDA);
         var edu = cadastrarPrestador("Edu Eletricista", "edu.unica@onda.test", CPF_EDU);
@@ -2026,8 +2224,8 @@ class E2EFluxoPrincipalTest {
         assertThat(lista.getList("find { it.id == '%s' }.papeis".formatted(duda.id())), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
     }
 
-    @Test @Order(45)
-    @DisplayName("45 · Ninguém contrata a si mesmo: o pedido da própria conta não aparece na fila dela e a proposta a ele é recusada")
+    @Test @Order(49)
+    @DisplayName("49 · Ninguém contrata a si mesmo: o pedido da própria conta não aparece na fila dela e a proposta a ele é recusada")
     void contaUnica_naoContrataASiMesma() {
         var fabi = cadastrarPrestador("Fabi Prestadora", "fabi.unica@onda.test", CPF_FABI);
         moderarPrestador(fabi.id().toString(), "APROVAR");
@@ -2050,8 +2248,8 @@ class E2EFluxoPrincipalTest {
         assertThat(contar("SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid", pedido.toString()), equalTo(0));
     }
 
-    @Test @Order(46)
-    @DisplayName("46 · Quero ser prestador: o cliente passa a prestar serviço NA MESMA conta (CPF, categoria, termos), em verificação")
+    @Test @Order(50)
+    @DisplayName("50 · Quero ser prestador: o cliente passa a prestar serviço NA MESMA conta (CPF, categoria, termos), em verificação")
     void contaUnica_clienteViraPrestadorNaMesmaConta() {
         var ana = cadastrarCliente("Ana Cliente", "ana.vira.prestadora@onda.test");
 
@@ -2079,8 +2277,8 @@ class E2EFluxoPrincipalTest {
         assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", ana.id().toString()), equalTo(1));
     }
 
-    @Test @Order(47)
-    @DisplayName("47 · Quero ser prestador — CPF: dígito errado, CPF de outra conta e CPF diferente do já confirmado são recusados; o mesmo CPF passa")
+    @Test @Order(51)
+    @DisplayName("51 · Quero ser prestador — CPF: dígito errado, CPF de outra conta e CPF diferente do já confirmado são recusados; o mesmo CPF passa")
     void contaUnica_cpfNoQueroSerPrestador() {
         var beto = cadastrarCliente("Beto Cliente", "beto.cliente@onda.test");
         tornarPrestador(beto.token(), "123.456.789-00").then().statusCode(422).body("code", equalTo("INVALID_CPF"));
@@ -2101,8 +2299,8 @@ class E2EFluxoPrincipalTest {
         assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
     }
 
-    @Test @Order(48)
-    @DisplayName("48 · Excluir a conta de dois papéis: vale para os dois lados (bloqueio por serviço como prestador; limpeza do perfil e dos pedidos como cliente)")
+    @Test @Order(52)
+    @DisplayName("52 · Excluir a conta de dois papéis: vale para os dois lados (bloqueio por serviço como prestador; limpeza do perfil e dos pedidos como cliente)")
     void contaUnica_exclusaoValeParaOsDoisPapeis() {
         // bloqueio: serviço ACEITO como PRESTADOR impede a exclusão mesmo pedida pela sessão de CLIENTE
         var ivo = cadastrarPrestador("Ivo Dual", "ivo.dual@onda.test", CPF_IVO);
@@ -2132,8 +2330,8 @@ class E2EFluxoPrincipalTest {
         given().header("Authorization", "Bearer " + hugo.token()).when().get("/api/v1/providers/me/chave-pix").then().statusCode(401);
     }
 
-    @Test @Order(49)
-    @DisplayName("49 · Rotação do HMAC: hash da chave antiga é reconhecido, o cliente confirma de novo no pagamento e migra; o prestador migra na subida")
+    @Test @Order(53)
+    @DisplayName("53 · Rotação do HMAC: hash da chave antiga é reconhecido, o cliente confirma de novo no pagamento e migra; o prestador migra na subida")
     void cpfHashChave_rotacao() {
         var antiga = new com.onda.marketplace.auth.CpfHashService(CHAVE_HASH_ANTIGA, 1);
 
