@@ -98,7 +98,10 @@ public class ProviderCpfBackfill implements ApplicationRunner {
             }
             switch (vincular(perfil.getUserId(), cpf)) {
                 case VINCULADO -> vinculados++;
-                case DUPLICADO -> duplicados.add(perfil.getUserId());
+                case DUPLICADO -> {
+                    duplicados.add(perfil.getUserId());
+                    marcarCpfNaoConciliado(perfil.getUserId());
+                }
                 case JA_TINHA  -> { /* ganhou o hash no meio do caminho: nada a refazer */ }
             }
         }
@@ -123,5 +126,17 @@ public class ProviderCpfBackfill implements ApplicationRunner {
         } catch (DataIntegrityViolationException corrida) {
             return Desfecho.DUPLICADO;   // outra instância vinculou o mesmo CPF entre a consulta e a gravação
         }
+    }
+
+    /**
+     * Achado da revisão cruzada (2026-10-05): o prestador legado sem hash continuava VERIFICADO e apto a propor — o
+     * self-hire só compara IDs de conta, nunca enxerga que é a MESMA pessoa por trás de duas contas com o mesmo CPF.
+     * Marca o perfil para o guard de verificação recusar operar (propor/aceitar) até o suporte resolver a duplicata.
+     */
+    private void marcarCpfNaoConciliado(UUID userId) {
+        profileRepository.findByUserId(userId).ifPresent(perfil -> {
+            perfil.marcarCpfNaoConciliado();
+            profileRepository.save(perfil);
+        });
     }
 }

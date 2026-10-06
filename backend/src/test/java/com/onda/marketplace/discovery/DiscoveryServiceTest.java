@@ -29,7 +29,7 @@ class DiscoveryServiceTest {
     @Test
     void findNearby_returnsProjectedDtos() {
         NearbyProviderView view = mockView(UUID.randomUUID(), "João", "ENCANADOR", 800.0);
-        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), isNull(), anyInt()))
+        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), isNull(), anyInt(), any(UUID.class)))
                 .thenReturn(List.of(view));
 
         var query = new NearbyQuery(-3.7319, -38.5267, 5000.0, null, 20);
@@ -42,28 +42,29 @@ class DiscoveryServiceTest {
 
     @Test
     void findNearby_comCategoria_passaFiltroAoRepository() {
-        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), eq("ELETRICISTA"), anyInt()))
+        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), eq("ELETRICISTA"), anyInt(), any(UUID.class)))
                 .thenReturn(List.of());
+        UUID quemBusca = UUID.randomUUID();
 
         var query = new NearbyQuery(-3.7319, -38.5267, 2000.0, "ELETRICISTA", 10);
-        discoveryService.findNearby(query, UUID.randomUUID());
+        discoveryService.findNearby(query, quemBusca);
 
-        verify(profileRepository).findNearby(-3.7319, -38.5267, 2000.0, "ELETRICISTA", 10);
+        verify(profileRepository).findNearby(-3.7319, -38.5267, 2000.0, "ELETRICISTA", 10, quemBusca);
     }
 
     @Test
-    void findNearby_naoDevolveOProprioUsuario_aContaEUmaEPodeSerClienteEPrestador() {
-        // conta única com papéis: o prestador que busca um eletricista como cliente não pode aparecer na própria busca
-        // (ninguém contrata a si mesmo). Os outros prestadores continuam aparecendo.
+    void findNearby_passaQuemBuscaAoRepository_aExclusaoDoProprioUsuarioEhNaPropriaConsulta() {
+        // Achado da revisão cruzada (2026-10-05): a exclusão do próprio usuário mudou de lugar — era um filtro em
+        // Java DEPOIS do LIMIT (com limite=1, se ele fosse o 1º resultado, o filtro o removia e não trazia o 2º: a
+        // busca voltava vazia havendo outro prestador próximo). Agora é WHERE na própria consulta, antes do LIMIT —
+        // o efeito é coisa do Postgres (índice GiST, ProviderProfileRepository), aqui só se prova que o id chega lá.
         UUID euMesmo = UUID.randomUUID();
-        UUID outro   = UUID.randomUUID();
-        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), isNull(), anyInt()))
-                .thenReturn(List.of(mockView(euMesmo, "Eu", "ELETRICISTA", 100.0), mockView(outro, "Outro", "ELETRICISTA", 200.0)));
+        when(profileRepository.findNearby(anyDouble(), anyDouble(), anyDouble(), isNull(), anyInt(), eq(euMesmo)))
+                .thenReturn(List.of());
 
-        List<NearbyProviderDto> result = discoveryService.findNearby(
-                new NearbyQuery(-3.7319, -38.5267, 5000.0, null, 20), euMesmo);
+        discoveryService.findNearby(new NearbyQuery(-3.7319, -38.5267, 5000.0, null, 20), euMesmo);
 
-        assertThat(result).extracting(NearbyProviderDto::id).containsExactly(outro);
+        verify(profileRepository).findNearby(-3.7319, -38.5267, 5000.0, null, 20, euMesmo);
     }
 
     private NearbyProviderView mockView(UUID id, String nome, String categoria, double distancia) {

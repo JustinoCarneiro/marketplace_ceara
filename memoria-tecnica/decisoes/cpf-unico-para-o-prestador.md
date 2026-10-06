@@ -27,7 +27,8 @@ Além disso **nada validava os dígitos verificadores**: com unicidade por hash,
    com `marketplace.cpf-backfill.enabled=false`.
 4. **Duplicata legada não se resolve sozinha**: quando o mesmo CPF está em duas contas antigas, a segunda fica sem hash e vai
    listada no log **só pelo id** (o CPF nunca vai para o log), para decisão humana (qual conta é a verdadeira? é fraude ou
-   duplicidade honesta?).
+   duplicidade honesta?). O perfil dela é marcado `cpf_conciliado = false` (V27) e o guard de verificação recusa operar —
+   ver "Revisão cruzada" abaixo.
 
 **Regra de produto: uma pessoa = um CPF, em todo o sistema** — e, desde 2026-10-05, **uma conta só** (cliente e prestador no
 mesmo `user_id`: [[conta-unica-com-papeis]]). A primeira versão desta decisão assumia que o prestador não podia ter conta de cliente;
@@ -45,11 +46,32 @@ passou a ter chave própria e versionada: [[chave-do-hash-do-cpf]].
   alcança.
 - Não valida titularidade (que o CPF é da pessoa): só que existe e é único. Titularidade é o background check (hoje stub).
 
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P1 — duplicata legada ainda contratava a si mesma.** O backfill deixava a conta duplicada sem hash, mas o perfil
+  `VERIFICADO` continuava apto a propor — o self-hire (`ProposalService.create`) só compara IDs de conta diferentes,
+  nunca enxerga que é a MESMA pessoa por trás de duas contas com o mesmo CPF (exatamente o cenário da auto-contratação
+  que a conta única resolveu para contas NOVAS, mas não para duplicatas de ANTES dela). O cliente podia aceitar, pagar
+  e avaliar essa proposta — reputação e dinheiro fabricados sem ninguém de verdade do outro lado. Corrigido: o backfill
+  marca o perfil duplicado (`providers_profile.cpf_conciliado = false`, V27) e `ProviderVerificationGuard`
+  (`exigirVerificado`/`exigirContratavel`) passa a recusar operar mesmo com o perfil `VERIFICADO` — sem suspender a
+  conta sozinho, a decisão de qual conta é a verdadeira continua humana. Prova no E2E, passo 56.
+- **P2 — corrida por CPF devolvia erro interno (500).** Dois cadastros com o mesmo CPF podiam passar pela consulta de
+  duplicata antes de qualquer gravação; a restrição `UNIQUE` impedia a dupla, mas a 2ª transação caía sem tradução.
+  Corrigido traduzindo a violação dessa restrição (`users_cpf_hash_key`) para `CPF_ALREADY_REGISTERED`/422 em
+  `ErrorControllerAdvice`.
+- **P3 — a busca podia voltar vazia havendo outro prestador próximo.** `DiscoveryService` excluía o próprio usuário
+  DEPOIS da consulta a `ProviderProfileRepository.findNearby`, já com o `LIMIT` aplicado: com `limite=1`, se ele fosse
+  o resultado mais próximo, o filtro o removia e não trazia o 2º. Corrigido excluindo na própria consulta nativa
+  (`WHERE pp.user_id <> :quemBusca`), antes do `LIMIT`. Prova no E2E, passo 55.
+
 ## Efeito nos testes
-`CpfTest`, `ProviderServiceTest`, `AuthServiceTest`, `ProviderCpfBackfillTest` e o E2E: passo 31 reescrito (o cenário antifraude de
-verdade: prestador reprovado exclui a conta e não volta com o mesmo CPF), passos 42 (inválido, duplicado com e sem máscara, cruzando
-papéis) e 43 (o backfill alcança os legados). `mobile/tests/15-cpf-unico.spec.ts`.
+`CpfTest`, `ProviderServiceTest`, `AuthServiceTest`, `ProviderCpfBackfillTest`, `ProviderVerificationGuardTest` (novo: CPF
+não conciliado), `DiscoveryServiceTest` (exclusão na consulta, não depois), `ErrorControllerAdviceTest` (corrida por CPF) e
+o E2E: passo 31 reescrito (o cenário antifraude de verdade: prestador reprovado exclui a conta e não volta com o mesmo
+CPF), passos 42 (inválido, duplicado com e sem máscara, cruzando papéis), 43 (o backfill alcança os legados), 55 (busca com
+limite=1) e 56 (duplicata legada não contrata a si mesma). `mobile/tests/15-cpf-unico.spec.ts`.
 
 ## Ligado a
-- US02 e US36 em `docs/spec.md`; `ProviderService`, `AuthService.verifyIdentity`, `ProviderCpfBackfill`, `shared/Cpf`.
+- US02 e US36 em `docs/spec.md`; `ProviderService`, `AuthService.verifyIdentity`, `ProviderCpfBackfill`, `shared/Cpf`,
+  `ProviderVerificationGuard`, `DiscoveryService`.
 - [[exclusao-de-conta-por-anonimizacao]] (onde o gap apareceu) e `docs/PENDENCIAS_INTEGRIDADE.md` (Camada 2).

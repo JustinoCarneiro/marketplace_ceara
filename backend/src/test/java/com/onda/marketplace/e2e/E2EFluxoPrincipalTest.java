@@ -1942,7 +1942,7 @@ class E2EFluxoPrincipalTest {
 
         var confirmacaoTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
         var confirmacao = pool.submit(() -> {
-            authService.verifyIdentity("900.110.220-33", bia.id());
+            authService.verifyIdentity("654.218.853-30", bia.id());
             confirmacaoTerminou.set(true);
         });
         Thread.sleep(800);
@@ -1969,7 +1969,7 @@ class E2EFluxoPrincipalTest {
         // na mesma transação, "tudo o mais" incluía o próprio zeramento do contador: ele voltava a valer os
         // 4 erros de antes, e o PRÓXIMO erro já bloqueava a conta com só 1 erro depois do "acerto".
         var caio  = cadastrarCliente("Caio Pendencia Tentativas", "caio.tentativas.pendencia@onda.test");
-        var paulo = cadastrarPrestador("Paulo Pendencia Tentativas", "paulo.tentativas.pendencia@onda.test", "635.084.325-00");
+        var paulo = cadastrarPrestador("Paulo Pendencia Tentativas", "paulo.tentativas.pendencia@onda.test", "847.504.181-70");
         UUID emCurso = pedidoDe(caio, "Pedido em curso, Rua K 70", "ACEITO");
         proposta(emCurso, paulo.id(), ProposalStatus.ACEITA);
 
@@ -2021,8 +2021,8 @@ class E2EFluxoPrincipalTest {
         // ANTES do commit, já com a trava; só então a proposta nova é disparada pela API — com a trava, ela TEM de
         // esperar; sem a trava, ela correria na frente e a proposta nova some.
         var rose = cadastrarCliente("Rose Reabertura", "rose.reabertura@onda.test");
-        var p1 = cadastrarPrestador("Prestador Um Reabertura", "um.reabertura@onda.test", "927.318.465-70");
-        var p2 = cadastrarPrestador("Prestador Dois Reabertura", "dois.reabertura@onda.test", "384.651.927-09");
+        var p1 = cadastrarPrestador("Prestador Um Reabertura", "um.reabertura@onda.test", "193.429.848-43");
+        var p2 = cadastrarPrestador("Prestador Dois Reabertura", "dois.reabertura@onda.test", "071.474.522-75");
         moderarPrestador(p2.id().toString(), "APROVAR");
         UUID pedido = pedidoDe(rose, "Pedido com uma proposta, Rua F 60", "PROPOSTO");
         proposta(pedido, p1.id(), ProposalStatus.ATIVA);
@@ -2164,9 +2164,10 @@ class E2EFluxoPrincipalTest {
         return new Conta(UUID.fromString(r.path("userId")), c.email(), r.path("accessToken"), r.path("refreshToken"));
     }
 
-    private io.restassured.response.Response tornarPrestador(String token, String cpf) {
+    private io.restassured.response.Response tornarPrestador(String token, String refreshToken, String cpf) {
         return given().contentType(ContentType.JSON).header("Authorization", "Bearer " + token)
-                .body("{\"cpf\":\"%s\",\"categoria\":\"eletrica\",\"bio\":\"Instalação elétrica\",\"aceitouTermos\":true}".formatted(cpf))
+                .body("{\"cpf\":\"%s\",\"categoria\":\"eletrica\",\"bio\":\"Instalação elétrica\",\"aceitouTermos\":true,\"refreshToken\":\"%s\"}"
+                        .formatted(cpf, refreshToken))
                 .when().post("/api/v1/auth/become-provider");
     }
 
@@ -2258,7 +2259,7 @@ class E2EFluxoPrincipalTest {
         given().contentType(ContentType.JSON).body("{\"cpf\":\"%s\",\"categoria\":\"eletrica\",\"aceitouTermos\":true}".formatted(CPF_ANA))
                 .when().post("/api/v1/auth/become-provider").then().statusCode(401);
 
-        var r = tornarPrestador(ana.token(), CPF_ANA).then().statusCode(201)
+        var r = tornarPrestador(ana.token(), ana.refresh(), CPF_ANA).then().statusCode(201)
                 .body("role", equalTo("ROLE_PROVIDER")).body("papeis", contains("ROLE_CLIENT", "ROLE_PROVIDER")).extract();
         assertThat("a MESMA conta", UUID.fromString(r.path("userId")), equalTo(ana.id()));
         assertThat(contar("SELECT count(*) FROM users WHERE email = ?", ana.email()), equalTo(1));
@@ -2272,8 +2273,8 @@ class E2EFluxoPrincipalTest {
 
         // já é prestadora: não cria segundo perfil (pela sessão de cliente; a de prestador nem passa da autorização)
         var anaCliente = comoPapel(new Conta(ana.id(), ana.email(), r.path("accessToken"), r.path("refreshToken")), "ROLE_CLIENT");
-        tornarPrestador(anaCliente.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("ALREADY_PROVIDER"));
-        tornarPrestador(r.path("accessToken"), CPF_ANA).then().statusCode(403);
+        tornarPrestador(anaCliente.token(), anaCliente.refresh(), CPF_ANA).then().statusCode(422).body("code", equalTo("ALREADY_PROVIDER"));
+        tornarPrestador(r.path("accessToken"), r.path("refreshToken"), CPF_ANA).then().statusCode(403);
         assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", ana.id().toString()), equalTo(1));
     }
 
@@ -2281,21 +2282,21 @@ class E2EFluxoPrincipalTest {
     @DisplayName("51 · Quero ser prestador — CPF: dígito errado, CPF de outra conta e CPF diferente do já confirmado são recusados; o mesmo CPF passa")
     void contaUnica_cpfNoQueroSerPrestador() {
         var beto = cadastrarCliente("Beto Cliente", "beto.cliente@onda.test");
-        tornarPrestador(beto.token(), "123.456.789-00").then().statusCode(422).body("code", equalTo("INVALID_CPF"));
-        tornarPrestador(beto.token(), CPF_DUDA).then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));   // da Duda (passo 44)
+        tornarPrestador(beto.token(), beto.refresh(), "123.456.789-00").then().statusCode(422).body("code", equalTo("INVALID_CPF"));
+        tornarPrestador(beto.token(), beto.refresh(), CPF_DUDA).then().statusCode(422).body("code", equalTo("CPF_ALREADY_REGISTERED"));   // da Duda (passo 44)
         assertThat(papeisDe(beto.id()), contains("ROLE_CLIENT"));
         assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", beto.id().toString()), equalTo(0));
 
         // quem já confirmou o CPF (1º pagamento) não troca de identidade ao virar prestador...
         var caio = cadastrarCliente("Caio Cliente", "caio.cliente@onda.test");
         verificarIdentidade(caio, CPF_CAIO);
-        tornarPrestador(caio.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
+        tornarPrestador(caio.token(), caio.refresh(), CPF_ANA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
         assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT"));
         // ...nem pela confirmação de identidade: o CPF confirmado não se troca
         verificarIdentidade(caio.token(), CPF_ANA).then().statusCode(422).body("code", equalTo("CPF_MISMATCH"));
         assertThat(texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", caio.id().toString()), equalTo(cpfHashService.hash(CPF_CAIO)));
         // ...com o MESMO, passa
-        tornarPrestador(caio.token(), CPF_CAIO).then().statusCode(201);
+        tornarPrestador(caio.token(), caio.refresh(), CPF_CAIO).then().statusCode(201);
         assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT", "ROLE_PROVIDER"));
     }
 
@@ -2378,11 +2379,131 @@ class E2EFluxoPrincipalTest {
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> cpfHashKeyCheck.run(null));
     }
 
+    @Test @Order(55)
+    @DisplayName("55 · Busca com limite=1: o próprio usuário sendo o mais próximo não esvazia o resultado — o 2º aparece")
+    void geobusca_limiteUm_proprioUsuarioMaisProximo_naoEsvaziaOResultado_segundoAparece() {
+        // Achado da revisão cruzada (2026-10-05): o próprio usuário era excluído DEPOIS da consulta, já com o LIMIT
+        // aplicado. Com limite=1, se ele fosse o 1º resultado (o mais próximo), o filtro de depois o removia e não
+        // trazia o 2º — a busca voltava vazia havendo outro prestador próximo. Agora a exclusão é WHERE na própria
+        // consulta, antes do LIMIT: o lugar dele na lista vai para quem vem depois.
+        double lat = -3.7319, lng = -38.5267;
+        var eva = cadastrarPrestador("Eva Geobusca", "eva.geobusca@onda.test", "695.487.362-41");
+        var fer = cadastrarPrestador("Fer Geobusca", "fer.geobusca@onda.test", "445.238.256-88");
+        moderarPrestador(eva.id().toString(), "APROVAR");
+        moderarPrestador(fer.id().toString(), "APROVAR");
+        jdbc.update("UPDATE providers_profile SET categoria = 'eletrica', "
+                + "localizacao = ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography WHERE user_id = ?::uuid",
+                lng, lat, eva.id().toString());   // EVA: distância 0 — a mais próxima possível
+        jdbc.update("UPDATE providers_profile SET categoria = 'eletrica', "
+                + "localizacao = ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography WHERE user_id = ?::uuid",
+                lng + 0.01, lat, fer.id().toString());   // FER: um pouco mais longe, mas dentro do raio
+
+        // EVA busca COM A PRÓPRIA SESSÃO (conta única com papéis: ela também é cliente) — ela mesma é o 1º resultado
+        var resultado = given().header("Authorization", "Bearer " + eva.token())
+                .queryParam("lat", lat).queryParam("lng", lng)
+                .queryParam("raio", 50000).queryParam("categoria", "eletrica").queryParam("limite", 1)
+                .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
+
+        assertThat("o próprio id nunca aparece", resultado, not(hasItem(eva.id().toString())));
+        assertThat("o 2º mais próximo aparece no lugar, não a lista vazia", resultado, hasItem(fer.id().toString()));
+        assertThat(resultado, hasSize(1));
+    }
+
+    @Test @Order(56)
+    @DisplayName("56 · Duplicata legada (mesmo CPF em 2 contas) não contrata a si mesma: o backfill marca o perfil, e o guard recusa a proposta")
+    void backfill_duplicataLegada_marcaOPerfil_eOGuardRecusaAProposta() {
+        // Achado da revisão cruzada (2026-10-05): se um prestador legado e um cliente já tinham o mesmo CPF, o backfill
+        // deixava o prestador sem hash, mas o perfil VERIFICADO continuava apto a propor. O self-hire só compara IDs de
+        // conta diferentes — nunca enxerga que é a MESMA pessoa por trás de duas contas. O cliente podia aceitar, pagar
+        // e avaliar essa proposta, fabricando reputação (e dinheiro) sem nenhuma conta de verdade do outro lado.
+        String cpfDaPessoa = "206.761.794-01";
+        var dani = cadastrarCliente("Dani Duplicata", "dani.duplicata@onda.test");
+        verificarIdentidade(dani, cpfDaPessoa);   // a conta cliente confirma o CPF primeiro
+
+        // a MESMA pessoa, legada, com uma conta de prestador separada (de antes da conta única com papéis)
+        UUID prestadorDuplicado = legado("dani.legado.duplicata@onda.test", cpfEncryptor.encrypt(cpfDaPessoa));
+        moderarPrestador(prestadorDuplicado.toString(), "APROVAR");
+        assertThat(texto("SELECT status_verificacao FROM providers_profile WHERE user_id = ?::uuid", prestadorDuplicado.toString()),
+                equalTo("VERIFICADO"));
+
+        var r = cpfBackfill.preencher();
+        assertThat("o CPF já tem dono (a conta cliente): a legada fica listada, não ganha o hash",
+                r.duplicados(), hasItem(prestadorDuplicado));
+        assertThat(conta(prestadorDuplicado).get("cpf_hash"), nullValue());
+
+        // o perfil continua VERIFICADO (o backfill não suspende sozinho)... mas o guard recusa operar
+        assertThat(texto("SELECT status_verificacao FROM providers_profile WHERE user_id = ?::uuid", prestadorDuplicado.toString()),
+                equalTo("VERIFICADO"));
+        assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid AND cpf_conciliado = false",
+                prestadorDuplicado.toString()), equalTo(1));
+
+        UUID pedido = pedidoDe(dani, "Pedido da própria Dani, pela conta de prestador duplicada, Rua L 20", "PENDENTE");
+        String tokenPrestadorDuplicado = login("dani.legado.duplicata@onda.test", SENHA_PADRAO)
+                .then().statusCode(200).extract().path("accessToken");
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + tokenPrestadorDuplicado)
+                .body("{\"valor\":150.00,\"prazoDias\":1,\"horarioProposto\":\"%s\"}".formatted(Instant.now().plus(2, ChronoUnit.DAYS)))
+                .when().post("/api/v1/service-requests/{id}/proposals", pedido)
+                .then().statusCode(422).body("code", equalTo("PROVIDER_NOT_VERIFIED"))
+                .body("message", containsString("vinculado a outra conta"));
+        assertThat("nenhuma proposta foi gravada: a duplicata nunca chega a operar",
+                contar("SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid", pedido.toString()), equalTo(0));
+    }
+
     /** Prestador "legado": criado direto no banco, como era antes — só com o CPF cifrado, sem hash. */
     private UUID legado(String email, String cpfCifrado) {
         User u = userRepository.save(User.builder().nome("Prestador Legado").email(email)
                 .senhaHash(passwordEncoder.encode(SENHA_PADRAO)).role(UserRole.ROLE_PROVIDER).build());
         profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(u, "eletrica", cpfCifrado));
         return u.getId();
+    }
+
+    @Test @Order(54)
+    @DisplayName("54 · Confirmar identidade e virar prestador ao mesmo tempo (CPFs diferentes) TRAVAM a linha: o 2º vê o CPF já confirmado e recusa")
+    void verifyIdentity_eTornarPrestador_concorrentes_naoDivergemOHashDaContaDoCpfDoPerfil() throws Exception {
+        // Achado da revisão cruzada (2026-10-05): verifyIdentity lia a conta sem a trava usada por become-provider. Com
+        // CPF ainda vazio, as duas liam o mesmo estado inicial; a última escrita da conta vencia, deixando o hash da
+        // conta diferente do CPF que o perfil de prestador tinha cifrado — e CPF_MISMATCH nunca disparava para avisar.
+        // Prova determinística, no molde dos passos 33/42: a confirmação fica parada ANTES do commit, já com a trava;
+        // só então o become-provider (CPF diferente) é disparado pela API real — ele espera, e ao continuar vê o hash
+        // já commitado e recusa (CPF_MISMATCH), em vez de gravar um perfil com um CPF que a conta não reconhece.
+        var caio = cadastrarCliente("Caio Corrida Cpf", "caio.corrida.cpf@onda.test");
+        String cpfDaConfirmacao = "812.171.911-94";
+        String cpfDoCadastroPrestador = "918.771.850-27";
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+
+        // "confirmação em voo": já com a trava da linha, parada antes do commit do CPF
+        var confirmacaoEmVoo = pool.submit(() -> transacao.executeWithoutResult(status -> {
+            User u = userRepository.findByIdComTrava(caio.id()).orElseThrow();
+            authService.vincularCpf(u, cpfDaConfirmacao);
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                "a confirmação em voo deveria ter a trava");
+
+        var tornarPrestadorTerminou = new java.util.concurrent.atomic.AtomicBoolean(false);
+        var virarPrestador = pool.submit(() -> {
+            tornarPrestador(caio.token(), caio.refresh(), cpfDoCadastroPrestador).then().statusCode(422)
+                    .body("code", equalTo("CPF_MISMATCH"));
+            tornarPrestadorTerminou.set(true);
+        });
+        Thread.sleep(800);
+        assertThat("o become-provider deveria estar ESPERANDO a trava da confirmação em voo, não ter terminado",
+                tornarPrestadorTerminou.get(), is(false));
+
+        liberar.countDown();   // a confirmação termina e COMMITA o CPF
+        confirmacaoEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        virarPrestador.get(10, java.util.concurrent.TimeUnit.SECONDS);   // só agora, sobre o hash já commitado
+        pool.shutdown();
+
+        assertThat("o hash gravado é o da confirmação — o become-provider recusado não o sobrescreveu",
+                texto("SELECT cpf_hash FROM users WHERE id = ?::uuid", caio.id().toString()),
+                equalTo(cpfHashService.hash(cpfDaConfirmacao)));
+        assertThat("sem perfil de prestador: o CPF divergente não foi gravado em lugar nenhum",
+                contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", caio.id().toString()), equalTo(0));
+        assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT"));
     }
 }

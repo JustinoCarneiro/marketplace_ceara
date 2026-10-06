@@ -122,9 +122,12 @@ class ProviderCpfBackfillTest {
     void cpfJaVinculadoAOutraConta_naoGrava_eAvisaQualConta_consultandoAsDuasChaves() {
         // dois prestadores legados com o mesmo CPF: o segundo não ganha o hash e fica listado para decisão humana
         User u = usuario();
+        var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
+        perfil.aprovar();   // VERIFICADO: é exatamente o caso que self-hire não enxergava (achado 2026-10-05)
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
         when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(true);
+        when(profileRepository.findByUserId(u.getId())).thenReturn(Optional.of(perfil));
 
         var r = backfill.preencher();
 
@@ -135,6 +138,9 @@ class ProviderCpfBackfillTest {
         verify(userRepository).existsByCpfHashInAndIdNot(hashes.capture(), eq(u.getId()));
         assertThat(hashes.getValue()).containsExactlyInAnyOrder(
                 hash.hash("11144477735"), new CpfHashService(CHAVE_ANTIGA, 1).hash("11144477735"));
+        // o perfil duplicado é marcado: o guard de verificação passa a recusar operar até o suporte resolver
+        assertThat(perfil.isCpfConciliado()).isFalse();
+        verify(profileRepository).save(perfil);
     }
 
     @Test
@@ -155,15 +161,19 @@ class ProviderCpfBackfillTest {
     @Test
     void corridaNaRestricaoUnica_contaComoDuplicado_enaoDerrubaOBackfill() {
         User u = usuario();
+        var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
+        perfil.aprovar();
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
         when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(false);
         when(userRepository.save(any())).thenThrow(new DataIntegrityViolationException("uk_users_cpf_hash"));
+        when(profileRepository.findByUserId(u.getId())).thenReturn(Optional.of(perfil));
 
         var r = backfill.preencher();
 
         assertThat(r.duplicados()).containsExactly(u.getId());
         assertThat(r.vinculados()).isZero();
+        assertThat(perfil.isCpfConciliado()).isFalse();
     }
 
     @Test

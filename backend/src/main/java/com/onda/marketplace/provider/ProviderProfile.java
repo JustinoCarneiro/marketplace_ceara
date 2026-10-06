@@ -47,6 +47,14 @@ public class ProviderProfile {
     @Column(name = "nota_media")
     private BigDecimal notaMedia;
 
+    /**
+     * {@code false}: o CPF deste perfil colidiu com o de OUTRA conta na unicidade (duplicata legada, achada no
+     * backfill). O guard de verificação recusa operar até o suporte resolver à mão — ver
+     * {@code ProviderCpfBackfill} e {@code ProviderVerificationGuard}.
+     */
+    @Column(name = "cpf_conciliado", nullable = false)
+    private boolean cpfConciliado = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -81,6 +89,8 @@ public class ProviderProfile {
     public void  setLocalizacao(Point p)   { this.localizacao = p; }
 
     public void setNotaMedia(BigDecimal v) { this.notaMedia = v; }
+    public boolean isCpfConciliado()       { return cpfConciliado; }
+    public void marcarCpfNaoConciliado()   { this.cpfConciliado = false; }
 
     /** A conta dona deste perfil foi excluída (US36): não há mais a quem aprovar, reprovar ou suspender. */
     public boolean contaExcluida() { return user != null && user.isExcluido(); }

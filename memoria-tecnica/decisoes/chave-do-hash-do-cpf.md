@@ -63,12 +63,34 @@ e a subida recusa se sobrar conta mais antiga.
   risco antigo (uma chave com duas finalidades) só some quando a versão 1 zera e a variável é removida.
 - Os segredos vivem só no ambiente; o repositório (público) guarda modelos com placeholders (`*.example`). Nos workflows de CI o
   valor é uma chave de teste fixa, como já era para as demais.
+- **Pendência não resolvida (Codex, 2026-10-05, P2):** uma conta reprovada que exclui a conta mantém o hash do CPF (é
+  o registro antifraude "não burla o banimento"), mas perde o CPF cifrado — fica fora do backfill e, numa rotação
+  futura, não há como regravar esse hash sozinho. Enquanto houver uma conta assim na versão anterior, `CPF_HASH_KEY_PREVIOUS`
+  tem de continuar configurada para sempre, travando a rotação seguinte. Precisa de uma decisão de produto (um
+  registro antifraude migrável, separado do hash de login, ou um conjunto de chaves versionado maior que duas) antes
+  de ter uma correção — não implementado nesta revisão.
+
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P1 — `CpfHashKeyCheck` conferia a VERSÃO, nunca se a CHAVE é a mesma que calculou os hashes já gravados.** Trocar
+  o VALOR de `CPF_HASH_KEY` sem subir `CPF_HASH_KEY_VERSION`, ou informar um `CPF_HASH_KEY_PREVIOUS` errado (mesma
+  versão, chave diferente), subia sem erro nenhum: a restrição `UNIQUE(cpf_hash)` passava a comparar hashes
+  calculados com chaves diferentes — que nunca batem — e a unicidade do CPF se furava silenciosamente (uma conta
+  nova podia gravar um CPF que já tinha dono, com outro hash). Corrigido com um **verificador por versão**
+  (`cpf_hash_key_verificacoes`, V26 — HMAC de uma semente fixa, nunca um CPF de verdade): a 1ª subida de cada versão
+  o grava, as seguintes conferem; se não bater, a subida é recusada. Na 1ª subida de uma versão sem verificador
+  ainda, cruza contra uma âncora real quando existe uma (um prestador com CPF decifrável já gravado nessa versão) —
+  nunca confia às cegas quando há como provar. Também passou a recusar subir se alguma conta tiver hash de uma
+  versão MAIOR que a configurada (indício de rollback).
+- **P2 — o compose não repassava `CPF_HASH_KEY_VERSION`.** Definir a versão 3 no host deixava o container no padrão
+  (2) mesmo assim — hashes novos saíam com a versão errada. Corrigido nos dois compose (`prod`, `homolog`) e
+  documentado em `.env.prod.example`.
 
 ## Efeito nos testes
-Unitários: `CpfHashServiceTest`, `CpfHashKeyCheckTest`, `AuthServiceTest` (confirmação com hash de chave antiga, `CPF_MISMATCH`),
-`ProviderCpfBackfillTest` (regravação por versão, duplicata ignorando a própria conta), `PaymentServiceTest`. E2E: passo 49
-(rotação ponta a ponta contra o Postgres real, com `hash-key-previous` configurado no perfil `e2e`) e a validação de schema do
-Hibernate sobre `cpf_hash_versao`.
+Unitários: `CpfHashServiceTest`, `CpfHashKeyCheckTest` (reescrito: verificador por versão, cruzamento com e sem âncora,
+chave trocada por baixo, rollback), `AuthServiceTest` (confirmação com hash de chave antiga, `CPF_MISMATCH`),
+`ProviderCpfBackfillTest` (regravação por versão, duplicata ignorando a própria conta), `PaymentServiceTest`. E2E: passo 53
+(rotação ponta a ponta contra o Postgres real, com `hash-key-previous` configurado no perfil `e2e` — prova também o
+verificador e a recusa de versão desconhecida) e a validação de schema do Hibernate sobre `cpf_hash_versao`.
 
 ## Ligado a
 - [[cpf-unico-para-o-prestador]], [[conta-unica-com-papeis]];

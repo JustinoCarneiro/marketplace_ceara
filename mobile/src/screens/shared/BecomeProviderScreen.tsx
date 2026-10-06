@@ -24,6 +24,7 @@ const CATEGORIES = ['Elétrica', 'Hidráulica', 'Limpeza', 'Pintura', 'Reforma',
 export default function BecomeProviderScreen() {
   const nav = useNavigation<NativeStackNavigationProp<ParamListBase>>();
   const token = useAuthStore(s => s.accessToken);
+  const refresh = useAuthStore(s => s.refreshToken);
   const login = useAuthStore(s => s.login);
 
   const [cpf, setCpf] = useState('');
@@ -38,7 +39,7 @@ export default function BecomeProviderScreen() {
     if (!categoria) { setError('Selecione uma categoria.'); return; }
     if (!acceptedTerms) { setError('É preciso aceitar os Termos de Uso e a Política de Privacidade.'); return; }
     setLoading(true);
-    const r = await tornarPrestador(token ?? '', { cpf, categoria, bio, aceitouTermos: acceptedTerms });
+    const r = await tornarPrestador(token ?? '', { cpf, categoria, bio, aceitouTermos: acceptedTerms, refreshToken: refresh ?? '' });
     setLoading(false);
     if (!r.ok) { setError(r.mensagem); return; }
     login(r.sessao);   // já em modo prestador (em verificação); o RootNavigator troca a pilha

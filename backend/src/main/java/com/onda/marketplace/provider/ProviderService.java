@@ -80,6 +80,7 @@ public class ProviderService {
         if (!user.temPapel(UserRole.ROLE_CLIENT)) {
             throw new BusinessException("ROLE_NOT_AVAILABLE", "Esta conta não pode virar prestador.");
         }
+        authService.consumirRefreshDaConta(req.refreshToken(), userId);   // achado da revisão cruzada, 2026-10-05
         authService.vincularCpf(user, req.cpf());   // INVALID_CPF / CPF_MISMATCH / CPF_ALREADY_REGISTERED
         user.concederPapel(UserRole.ROLE_PROVIDER);
         userRepository.save(user);

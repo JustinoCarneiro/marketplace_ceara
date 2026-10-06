@@ -38,7 +38,7 @@ export default function ProfileScreen() {
   async function alternar() {
     setErroTroca('');
     setTrocando(true);
-    const r = await alternarPapel(token ?? '', refresh, outroPapel);
+    const r = await alternarPapel(token ?? '', refresh ?? '', outroPapel);
     setTrocando(false);
     if (!r.ok) { setErroTroca(r.mensagem); return; }
     login(r.sessao);   // o RootNavigator troca a pilha pelo papel novo

@@ -24,6 +24,17 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
            """)
     List<ProviderCpfBackfill.PerfilSemHash> semHashDoCpf(@Param("versaoAtual") int versaoAtual);
 
+    /**
+     * Prestadores cujo hash já está gravado EXATAMENTE nesta versão, com CPF cifrado disponível — a âncora que
+     * {@code CpfHashKeyCheck} usa para cruzar a chave dessa versão (atual ou anterior) contra um CPF de verdade,
+     * na 1ª subida em que ainda não há um verificador gravado para ela (achado da revisão cruzada, 2026-10-05).
+     */
+    @Query("""
+           SELECT p.user.id AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p
+            WHERE p.user.cpfHash IS NOT NULL AND p.user.cpfHashVersao = :versao AND p.cpfCifrado IS NOT NULL
+           """)
+    List<ProviderCpfBackfill.PerfilSemHash> comHashNaVersao(@Param("versao") int versao);
+
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);
 
@@ -40,6 +51,11 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     // público) busca por user_id. Selecionar pp.id fazia esse lookup falhar sempre com
     // PROVIDER_NOT_FOUND — nenhum teste E2E cobria "tocar num card da busca", só o fluxo de
     // pedido por categoria, por isso sobreviveu a todas as auditorias anteriores.
+    //
+    // Achado da revisão cruzada (2026-10-05): o próprio usuário era excluído DEPOIS desta consulta
+    // (DiscoveryService), já com o LIMIT aplicado — com limite=1, se ele fosse o 1º resultado, o filtro
+    // de depois o removia e não trazia o 2º: a busca voltava vazia havendo outro prestador próximo.
+    // Excluído AQUI, antes do LIMIT, o lugar dele na lista vai para quem vem depois.
     @Query(nativeQuery = true, value = """
             SELECT pp.user_id             AS id,
                    u.nome,
@@ -54,6 +70,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
             WHERE u.ativo = TRUE
               AND pp.status_verificacao = 'VERIFICADO'
               AND pp.localizacao IS NOT NULL
+              AND pp.user_id <> :quemBusca
               AND (:categoria IS NULL OR pp.categoria = :categoria)
               AND ST_DWithin(pp.localizacao,
                       ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
@@ -66,5 +83,6 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
             @Param("lng")        double lng,
             @Param("raioMetros") double raioMetros,
             @Param("categoria")  String categoria,
-            @Param("limite")     int    limite);
+            @Param("limite")     int    limite,
+            @Param("quemBusca")  UUID   quemBusca);
 }

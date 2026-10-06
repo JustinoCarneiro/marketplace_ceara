@@ -18,15 +18,16 @@ public class DiscoveryService {
 
     /**
      * {@code quemBusca}: o próprio usuário não aparece na busca — a conta é uma só e pode ser cliente e prestador, e
-     * ninguém contrata a si mesmo. (O filtro é depois da consulta: a lista pode vir com um a menos que o limite.)
+     * ninguém contrata a si mesmo. Excluído na própria consulta, ANTES do {@code LIMIT} (achado da revisão cruzada,
+     * 2026-10-05): filtrar depois, com o limite já aplicado, podia voltar vazio havendo outro prestador próximo — se
+     * ele fosse o 1º resultado (limite=1), o filtro o removia e não trazia o 2º.
      */
     @Transactional(readOnly = true)
     public List<NearbyProviderDto> findNearby(NearbyQuery query, UUID quemBusca) {
         return profileRepository
-                .findNearby(query.lat(), query.lng(), query.raio(), query.categoria(), query.limite())
+                .findNearby(query.lat(), query.lng(), query.raio(), query.categoria(), query.limite(), quemBusca)
                 .stream()
                 .map(NearbyProviderDto::from)
-                .filter(p -> !quemBusca.equals(p.id()))
                 .toList();
     }
 }

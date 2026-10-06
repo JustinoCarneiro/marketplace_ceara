@@ -28,14 +28,17 @@ Mexe em autenticação, em PII (CPF) e no caminho do dinheiro: classe **R2**.
   inclusive os já existentes, pelo backfill da migration); admin: `{ADMIN}`, separado.
 - **Contexto da sessão = claim `role` do JWT.** Os `@PreAuthorize` dos controllers continuam lendo só o token, então não
   mudou nenhuma regra de autorização: o prestador no modo cliente não vê endpoints de prestador e vice-versa.
-- **`POST /api/v1/auth/switch-role`** `{ papel, refreshToken? }`: emite um token e um refresh no novo papel (e revoga o
-  refresh anterior, se informado). Só vale para papel que a conta **tem**; `ROLE_ADMIN` nunca. Erros: `ROLE_NOT_AVAILABLE`,
-  `INVALID_ROLE`. `refresh_tokens.papel` guarda o contexto: **renovar a sessão não devolve ao papel principal**.
-- **`POST /api/v1/auth/become-provider`** `{ cpf, categoria, bio?, aceitouTermos }` (exige sessão de **cliente**): o
-  cliente passa a prestar serviço **na mesma conta**. Valida o CPF, grava o hash, cria o perfil `EM_VERIFICACAO` (mesma
-  verificação de qualquer prestador novo), dispara o background check e registra um novo aceite dos termos. Lê a conta com
-  trava de linha: o toque duplo não cria dois perfis. Erros: `ALREADY_PROVIDER`, `ROLE_NOT_AVAILABLE`, `INVALID_CPF`,
-  `CPF_ALREADY_REGISTERED`, `CPF_MISMATCH`.
+- **`POST /api/v1/auth/switch-role`** `{ papel, refreshToken }`: emite um token e um refresh no novo papel e revoga o
+  anterior. **`refreshToken` é obrigatório e precisa ser desta conta e ainda valer** (achado da revisão cruzada,
+  2026-10-05 — ver abaixo). Só vale para papel que a conta **tem**; `ROLE_ADMIN` nunca. Erros: `ROLE_NOT_AVAILABLE`,
+  `INVALID_ROLE`, `INVALID_REFRESH_TOKEN`. `refresh_tokens.papel` guarda o contexto: **renovar a sessão não devolve ao
+  papel principal**.
+- **`POST /api/v1/auth/become-provider`** `{ cpf, categoria, bio?, aceitouTermos, refreshToken }` (exige sessão de
+  **cliente**): o cliente passa a prestar serviço **na mesma conta**. Valida o CPF, grava o hash, cria o perfil
+  `EM_VERIFICACAO` (mesma verificação de qualquer prestador novo), dispara o background check e registra um novo aceite
+  dos termos. Lê a conta com trava de linha: o toque duplo não cria dois perfis. `refreshToken` é obrigatório pelo mesmo
+  motivo do `switch-role`. Erros: `ALREADY_PROVIDER`, `ROLE_NOT_AVAILABLE`, `INVALID_CPF`, `CPF_ALREADY_REGISTERED`,
+  `CPF_MISMATCH`, `INVALID_REFRESH_TOKEN`.
 - **`AuthResponse.papeis`**: todos os papéis da conta, para o app oferecer "alternar".
 - **CPF volta a ser único na tabela inteira** (`users.cpf_hash UNIQUE`, V9): com uma conta por pessoa não há mais motivo
   para tolerar o mesmo CPF em duas contas. `verify-identity` e `become-provider` recusam CPF **diferente** do já confirmado
@@ -72,15 +75,38 @@ _Os três padrões abaixo (prestador reprovado ainda contrata; "clientes ativos"
 - **Titularidade do CPF não é validada** (só dígitos + unicidade): um CPF de terceiro ou inventado-válido passa. O freio
   real é o background check (hoje stub).
 - **Fluxos Maestro (CI) não cobrem a troca de papel** — só o Playwright do app web (`mobile/tests/16-conta-unica.spec.ts`).
+- **Pendência não resolvida (Codex, 2026-10-05, P2):** o backfill de `user_papeis` (V24) roda uma vez, na subida. Se uma
+  instância ANTIGA (de antes da V24) cadastrar alguém DEPOIS do backfill — num deploy em rolagem com as duas versões
+  no ar —, ela grava só `users.role`; a instância NOVA vê `papeis` vazio e recusa `switch-role`/`become-provider` para
+  essa conta, e um prestador cadastrado assim fica sem o hash do CPF regravado. A demo (1 instância; Coolify troca o
+  container, não roda as duas ao mesmo tempo) não expõe isso. Precisa de uma decisão de processo de deploy (impedir
+  escrita da versão antiga durante o corte, ou reconciliar `user_papeis` a cada subida, não só na migração) — não
+  implementado nesta revisão.
 - **Aceite dos termos:** `become-provider` grava um novo aceite (a tabela é append-only). Se a assessoria quiser um documento
   de termos próprio para prestador, é uma versão nova do documento, não uma mudança de código.
+
+## Revisão cruzada (Codex, 2026-10-05) — achados corrigidos nesta branch
+- **P1 — um access token sozinho bastava para abrir uma sessão de 30 dias.** `switchRole` aceitava `refreshToken`
+  ausente, revogado, expirado ou de OUTRA conta e seguia emitindo a sessão nova mesmo assim (o refresh era só
+  "revogado se informado E válido E desta conta" — nunca uma condição para EMITIR); `become-provider` nem pedia
+  refresh algum. Como o access token dura até 15 min e **não** é revogado pela troca de senha (só os refresh tokens
+  são, via `revogarTodosDoUsuario`), um access token vazado nesse intervalo bastava para abrir uma sessão de 30 dias
+  que sobrevivia à revogação de todas as outras. Corrigido: os dois agora **exigem e consomem** um refresh válido
+  desta conta antes de emitir outro (`AuthService.consumirRefreshDaConta`, reusado pelos dois) — refresh inválido
+  recusa com `INVALID_REFRESH_TOKEN`, nada é emitido. `refreshToken` passou de opcional a obrigatório nos dois DTOs.
+- **P1 — `verifyIdentity` sem a mesma trava que `become-provider` já usava.** Com o CPF da conta ainda vazio, uma
+  confirmação de identidade (cliente) e um cadastro de prestador (mesma conta) concorrentes liam o mesmo estado
+  inicial; a última escrita vencia, deixando o hash da conta diferente do CPF cifrado no perfil — sem nunca disparar
+  `CPF_MISMATCH` para avisar. Corrigido: `verifyIdentity` agora lê com `findByIdComTrava` (a mesma trava de
+  `become-provider` e da exclusão de conta), serializando as duas. Prova determinística no E2E, passo 54 (molde dos
+  passos 33/42).
 
 ## Efeito nos testes
 Unitários: `UserPapeisTest`, `AuthServiceTest` (sessão, contexto, `switchRole`, CPF), `ProviderServiceTest` (cadastro com os
 dois papéis, `tornarPrestador`), `ProposalServiceTest`, `ServiceRequestServiceTest`, `DiscoveryServiceTest`,
 `JwtServiceTest`, controllers. E2E contra o Postgres real: passos 44–48 (contratar pela mesma conta, não contratar a si
-mesma, "quero ser prestador", CPF no cadastro, exclusão com os dois papéis). Painel: `admin/tests/15-papeis-da-conta.spec.ts`.
-App: `mobile/tests/16-conta-unica.spec.ts`.
+mesma, "quero ser prestador", CPF no cadastro, exclusão com os dois papéis), passo 54 (a trava do CPF concorrente).
+Painel: `admin/tests/15-papeis-da-conta.spec.ts`. App: `mobile/tests/16-conta-unica.spec.ts`.
 
 ## Ligado a
 - US38 e US16 em `docs/spec.md`; `docs/PENDENCIAS_INTEGRIDADE.md` (Camadas 1–3).

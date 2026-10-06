@@ -31,10 +31,17 @@ public class ProviderVerificationGuard {
     public void exigirVerificado(UUID prestadorId) {
         // Sem perfil (dado inconsistente: o cadastro sempre cria um) também não opera, e com o mesmo
         // código: quem consome a API trata um caso só — "não pode operar" — e o aceite já fazia assim.
-        ProviderStatus status = profileRepository.findByUserId(prestadorId)
-                .map(ProviderProfile::getStatusVerificacao)
+        ProviderProfile profile = profileRepository.findByUserId(prestadorId)
                 .orElseThrow(() -> new BusinessException(CODE,
                         "Seu cadastro de prestador não foi encontrado. Fale com o suporte."));
+        // Achado da revisão cruzada (2026-10-05): duplicata legada (o CPF dele já tem dono sob outra conta) continuava
+        // VERIFICADA e apta a propor — o self-hire só compara IDs de conta, nunca enxerga que é a MESMA pessoa.
+        if (!profile.isCpfConciliado()) {
+            throw new BusinessException(CODE,
+                    "Seu CPF também está vinculado a outra conta nesta plataforma. Fale com o suporte para resolver "
+                            + "antes de operar.");
+        }
+        ProviderStatus status = profile.getStatusVerificacao();
         if (status == ProviderStatus.VERIFICADO) {
             return;
         }
@@ -53,11 +60,12 @@ public class ProviderVerificationGuard {
      * (o admin reprova ou suspende). A mensagem fala com o cliente, não com o prestador.
      */
     public void exigirContratavel(UUID prestadorId) {
-        boolean verificado = profileRepository.findByUserId(prestadorId)
+        boolean contratavel = profileRepository.findByUserId(prestadorId)
+                .filter(ProviderProfile::isCpfConciliado)   // achado da revisão cruzada, 2026-10-05
                 .map(ProviderProfile::getStatusVerificacao)
                 .filter(status -> status == ProviderStatus.VERIFICADO)
                 .isPresent();
-        if (!verificado) {
+        if (!contratavel) {
             throw new BusinessException(CODE,
                     "Este prestador não está disponível no momento. Escolha outra proposta.");
         }

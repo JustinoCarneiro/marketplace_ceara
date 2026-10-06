@@ -5,6 +5,7 @@ import com.onda.marketplace.auth.AuthService;
 import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.auth.JwtService;
 import com.onda.marketplace.auth.PasswordAttempts;
+import com.onda.marketplace.auth.PasswordAuthenticator;
 import com.onda.marketplace.auth.RefreshToken;
 import com.onda.marketplace.auth.RefreshTokenRepository;
 import com.onda.marketplace.auth.TermsAcceptance;
@@ -51,8 +52,9 @@ class ProviderServiceTest {
         var encryptor = new CpfEncryptor("01234567890123456789012345678901");
         // AuthService REAL sobre repositórios mockados: é ele quem vincula o CPF e emite a sessão, e o que se prova aqui é
         // exatamente essa integração (papéis da conta, contexto do token, hash do CPF)
+        var passwordAuthenticator = new PasswordAuthenticator(userRepository, encoder, new PasswordAttempts(5, 900));
         var authService = new AuthService(userRepository, refreshTokenRepository, jwtService, encoder,
-                cpfHashService, termsAcceptanceRepository, new PasswordAttempts(5, 900), 30L);
+                cpfHashService, termsAcceptanceRepository, passwordAuthenticator, 30L);
         providerService = new ProviderService(userRepository, profileRepository, authService, encoder, encryptor,
                 backgroundCheckService, termsAcceptanceRepository);
     }
@@ -173,7 +175,13 @@ class ProviderServiceTest {
     }
 
     private BecomeProviderRequest tornar(String cpf) {
-        return new BecomeProviderRequest(cpf, "ELETRICISTA", "Faço instalação elétrica", true);
+        return new BecomeProviderRequest(cpf, "ELETRICISTA", "Faço instalação elétrica", true, "refresh-anterior");
+    }
+
+    /** Refresh VÁLIDO e desta conta — stub de {@code consumirRefreshDaConta} (achado da revisão cruzada, 2026-10-05). */
+    private void comRefreshValido(User user) {
+        when(refreshTokenRepository.findByTokenHash(any()))
+                .thenReturn(Optional.of(new RefreshToken(user, "hash", java.time.Instant.now().plusSeconds(3600), user.getRole())));
     }
 
     @Test
@@ -182,6 +190,7 @@ class ProviderServiceTest {
         when(userRepository.findByIdComTrava(ana.getId())).thenReturn(Optional.of(ana));
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        comRefreshValido(ana);
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(jwtService.generateAccessToken(any(), any())).thenReturn("tok");
 
@@ -208,6 +217,7 @@ class ProviderServiceTest {
         User ana = clienteLogado();
         ana.vincularCpf(cpfHashService.hash("11144477735"), 2);   // confirmou no 1º pagamento
         when(userRepository.findByIdComTrava(ana.getId())).thenReturn(Optional.of(ana));
+        comRefreshValido(ana);
 
         // outro CPF seria trocar de identidade depois de confirmada
         assertThatThrownBy(() -> providerService.tornarPrestador(ana.getId(), tornar("529.982.247-25"), "203.0.113.5"))
@@ -222,6 +232,7 @@ class ProviderServiceTest {
     void tornarPrestador_cpfDeOutraConta_recusa() {
         User ana = clienteLogado();
         when(userRepository.findByIdComTrava(ana.getId())).thenReturn(Optional.of(ana));
+        comRefreshValido(ana);
         when(userRepository.existsByCpfHashIn(any())).thenReturn(true);
 
         assertThatThrownBy(() -> providerService.tornarPrestador(ana.getId(), tornar("111.444.777-35"), "203.0.113.5"))
@@ -262,6 +273,7 @@ class ProviderServiceTest {
         when(userRepository.findByIdComTrava(ana.getId())).thenReturn(Optional.of(ana));
         when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        comRefreshValido(ana);
         when(refreshTokenRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(jwtService.generateAccessToken(any(), any())).thenReturn("tok");
 

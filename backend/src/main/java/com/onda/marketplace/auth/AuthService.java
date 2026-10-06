@@ -172,8 +172,14 @@ public class AuthService {
 
     /**
      * Troca o papel em uso na sessão (a conta é uma só e pode ter mais de um): emite um token no novo contexto e revoga a
-     * sessão anterior, se informada. Só vale para papel que a conta TEM — cadastrar-se como prestador é
+     * sessão anterior. Só vale para papel que a conta TEM — cadastrar-se como prestador é
      * {@code POST /auth/become-provider}.
+     *
+     * <p>Exige e consome um refresh token VÁLIDO desta conta antes de emitir o novo (achado da revisão cruzada,
+     * 2026-10-05): antes, um refresh ausente, revogado, expirado ou de OUTRA conta era simplesmente ignorado — a
+     * troca seguia e emitia a sessão de 30 dias mesmo assim. Um access token (até 15 min, nunca revogado pela
+     * troca de senha) bastava sozinho para abrir uma sessão longa que sobrevivia à revogação de todas as sessões
+     * que a troca de senha faz. Exigir o refresh e recusar se ele não bater fecha essa porta.
      */
     @Transactional
     public AuthResponse switchRole(UUID userId, SwitchRoleRequest req) {
@@ -190,15 +196,24 @@ public class AuthService {
                     ? "Esta conta ainda não é de prestador. Cadastre-se como prestador no Perfil."
                     : "Esta conta não tem esse papel.");
         }
-        if (req.refreshToken() != null && !req.refreshToken().isBlank()) {
-            refreshTokenRepository.findByTokenHash(sha256(req.refreshToken()))
-                    .filter(anterior -> anterior.getUser().getId().equals(userId))
-                    .ifPresent(anterior -> {
-                        anterior.revoke();
-                        refreshTokenRepository.save(anterior);
-                    });
-        }
+        consumirRefreshDaConta(req.refreshToken(), userId);
         return emitirSessao(user, papel);
+    }
+
+    /**
+     * Valida que {@code refreshToken} é desta conta e ainda vale, e o revoga — usado por {@code switchRole} e
+     * {@code ProviderService.tornarPrestador} (become-provider) antes de emitir uma sessão nova a partir de um
+     * access token só.
+     */
+    public void consumirRefreshDaConta(String refreshToken, UUID userId) {
+        RefreshToken anterior = refreshTokenRepository.findByTokenHash(sha256(refreshToken))
+                .filter(rt -> rt.getUser().getId().equals(userId))
+                .orElseThrow(() -> new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado."));
+        if (!anterior.isValid()) {
+            throw new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado.");
+        }
+        anterior.revoke();
+        refreshTokenRepository.save(anterior);
     }
 
     /**

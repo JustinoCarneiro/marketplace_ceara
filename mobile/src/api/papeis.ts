@@ -25,14 +25,15 @@ async function pedirSessao(caminho: string, accessToken: string, corpo: object, 
 
 /**
  * Conta única com papéis: alterna a MESMA conta entre cliente e prestador, sem novo login. O servidor emite um token no
- * novo papel e revoga a sessão anterior (por isso o refresh token vai junto).
+ * novo papel e revoga a sessão anterior (por isso o refresh token vai junto — e é obrigatório: o servidor recusa a
+ * troca sem ele, achado da revisão cruzada de 2026-10-05, para um access token sozinho não bastar).
  */
-export function alternarPapel(accessToken: string, refreshToken: string | null, papel: 'ROLE_CLIENT' | 'ROLE_PROVIDER') {
+export function alternarPapel(accessToken: string, refreshToken: string, papel: 'ROLE_CLIENT' | 'ROLE_PROVIDER') {
   return pedirSessao('/auth/switch-role', accessToken, { papel, refreshToken },
     'Não foi possível trocar de modo. Tente novamente.');
 }
 
-export interface DadosPrestador { cpf: string; categoria: string; bio: string; aceitouTermos: boolean }
+export interface DadosPrestador { cpf: string; categoria: string; bio: string; aceitouTermos: boolean; refreshToken: string }
 
 /** "Quero ser prestador": o cliente logado passa a prestar serviço NA MESMA conta (fica em verificação). */
 export function tornarPrestador(accessToken: string, dados: DadosPrestador) {

@@ -102,7 +102,7 @@ class ProposalServiceTest {
         // conta única com papéis: o prestador que também abriu o pedido como cliente não propõe a si mesmo (fabricaria
         // reputação). Nada é gravado e o pedido não vira PROPOSTO.
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findById(sr.getId())).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() ->
                 service.create(sr.getId(),

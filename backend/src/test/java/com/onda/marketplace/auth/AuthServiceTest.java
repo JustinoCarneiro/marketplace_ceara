@@ -371,17 +371,41 @@ class AuthServiceTest {
     }
 
     @Test
-    void switchRole_naoRevogaOTokenDeOutraConta() {
+    void switchRole_refreshDeOutraConta_recusaSemEmitirNada() {
+        // Achado da revisão cruzada (2026-10-05): antes, um refresh que não era desta conta (ou ausente, revogado,
+        // expirado) era simplesmente ignorado e a troca seguia emitindo a sessão nova mesmo assim — um access token
+        // sozinho bastava para abrir uma sessão de 30 dias. Agora é recusado, nada é emitido.
         User duda = contaComDoisPapeis(UserRole.ROLE_PROVIDER);
         User outra = contaComDoisPapeis(UserRole.ROLE_CLIENT);
         var tokenDeOutra = new RefreshToken(outra, "x", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_CLIENT);
         when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(tokenDeOutra));
-        sessaoPossivel();
 
-        authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-de-outra-conta"));
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-de-outra-conta")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
 
         assertThat(tokenDeOutra.isRevogado()).isFalse();
+        verify(jwtService, never()).generateAccessToken(any(), any());
+    }
+
+    @Test
+    void switchRole_refreshAusenteOuExpirado_recusaSemEmitirNada() {
+        User duda = contaComDoisPapeis(UserRole.ROLE_PROVIDER);
+        when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-inexistente")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(jwtService, never()).generateAccessToken(any(), any());
+
+        var expirado = new RefreshToken(duda, "y", java.time.Instant.now().minusSeconds(1), UserRole.ROLE_PROVIDER);
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(expirado));
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-expirado")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(jwtService, never()).generateAccessToken(any(), any());
     }
 
     @Test

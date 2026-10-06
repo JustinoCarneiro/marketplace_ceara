@@ -41,7 +41,7 @@ test.describe('Papéis da conta no painel', () => {
     const ctx = await request.newContext();
     const res = await ctx.post(`${API}/auth/become-provider`, {
       headers: { Authorization: `Bearer ${cliente.token}` },
-      data: { cpf: cpfNovo(), categoria: 'Elétrica', bio: 'Instalações', aceitouTermos: true },
+      data: { cpf: cpfNovo(), categoria: 'Elétrica', bio: 'Instalações', aceitouTermos: true, refreshToken: cliente.refresh },
     });
     expect(res.status(), 'become-provider').toBe(201);
 

@@ -21,6 +21,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** Contas cujo hash é de uma versão de chave anterior a esta (a conferência de configuração na subida). */
     long countByCpfHashIsNotNullAndCpfHashVersaoLessThan(int versao);
 
+    /**
+     * Contas cujo hash é de uma versão MAIOR que a configurada — sinal de rollback (achado da revisão cruzada,
+     * 2026-10-05): a aplicação não sabe recalcular um hash de uma versão mais nova que a sua própria.
+     */
+    long countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(int versao);
+
     /** Filtro de autenticação: o token só vale enquanto a conta está ativa (não suspensa, não excluída). */
     boolean existsByIdAndAtivoTrue(UUID id);
 

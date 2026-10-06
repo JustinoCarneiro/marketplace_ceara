@@ -70,7 +70,7 @@ class ProviderRegistrationControllerTest {
         mvc.perform(post("/api/v1/auth/become-provider")
                         .with(csrf()).with(user(doToken.toString()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"cpf\":\"111.444.777-35\",\"categoria\":\"ELETRICISTA\",\"bio\":\"Faço instalação\",\"aceitouTermos\":true}"))
+                        .content("{\"cpf\":\"111.444.777-35\",\"categoria\":\"ELETRICISTA\",\"bio\":\"Faço instalação\",\"aceitouTermos\":true,\"refreshToken\":\"refresh-anterior\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("ROLE_PROVIDER"))
                 .andExpect(jsonPath("$.papeis.length()").value(2));

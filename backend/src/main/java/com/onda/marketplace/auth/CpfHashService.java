@@ -22,6 +22,8 @@ public class CpfHashService {
 
     private static final String ALGORITHM = "HmacSHA256";
     private static final int    TAMANHO_MINIMO_DA_CHAVE = 32;
+    /** Semente fixa do verificador de chave — nunca um CPF de verdade, só prova QUAL chave calculou o hash. */
+    private static final String SEMENTE_VERIFICADOR = "00000000000";
 
     private final byte[] chaveAtual;
     private final int    versaoAtual;
@@ -73,6 +75,21 @@ public class CpfHashService {
             hashes.add(calcular(chaveAnterior, cpf));
         }
         return hashes;
+    }
+
+    /**
+     * "Assinatura" da chave ATUAL: o HMAC de uma semente fixa (nunca um CPF) — a mesma chave sempre produz o mesmo
+     * verificador, uma chave diferente (mesmo que a versão não tenha mudado) produz outro. {@code CpfHashKeyCheck}
+     * grava isto na 1ª subida de cada versão e confere nas seguintes (achado da revisão cruzada, 2026-10-05: antes,
+     * só a VERSÃO gravada era conferida, nunca se a chave configurada é a mesma que calculou os hashes já gravados).
+     */
+    public String verificadorChaveAtual() {
+        return calcular(chaveAtual, SEMENTE_VERIFICADOR);
+    }
+
+    /** Idem, para a chave ANTERIOR — {@code null} se não há rotação em curso. */
+    public String verificadorChaveAnterior() {
+        return chaveAnterior == null ? null : calcular(chaveAnterior, SEMENTE_VERIFICADOR);
     }
 
     /** Este hash gravado (com esta versão) é deste CPF? Versão sem chave configurada não confere. */

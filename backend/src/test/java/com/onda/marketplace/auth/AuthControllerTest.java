@@ -214,7 +214,7 @@ class AuthControllerTest {
         mvc.perform(post("/api/v1/auth/switch-role")
                         .with(csrf()).with(user(java.util.UUID.randomUUID().toString()))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"papel\":\"ROLE_PROVIDER\"}"))
+                        .content("{\"papel\":\"ROLE_PROVIDER\",\"refreshToken\":\"antigo\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("ROLE_NOT_AVAILABLE"));
     }

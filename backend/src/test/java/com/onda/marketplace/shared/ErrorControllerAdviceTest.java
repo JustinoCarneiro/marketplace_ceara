@@ -105,6 +105,25 @@ class ErrorControllerAdviceTest {
                 .andExpect(jsonPath("$.code").value("EMAIL_IN_USE"))
                 .andExpect(jsonPath("$.message").isString());
     }
+
+    // ---- 422 corrida por CPF (achado da revisão cruzada, 2026-10-05) -------
+
+    @Test
+    void corridaPorCpf_traduzParaCpfAlreadyRegistered_naoDevolve500() throws Exception {
+        mvc.perform(get("/api/v1/stub/violacao-cpf"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.code").value("CPF_ALREADY_REGISTERED"))
+                .andExpect(jsonPath("$.message").isString());
+    }
+
+    @Test
+    void outraViolacaoDeIntegridade_naoEhConfundidaComCpf_naoTraduz() {
+        // uma restrição qualquer, diferente da do CPF: não pode virar CPF_ALREADY_REGISTERED por engano
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                mvc.perform(get("/api/v1/stub/violacao-outra")))
+                .hasRootCauseInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
 }
 
 // Fora da classe de teste para que @WebMvcTest consiga carregar como controller
@@ -125,5 +144,17 @@ class StubController {
     @GetMapping("/too-many")
     void tooMany() {
         throw new TooManyAttemptsException(840);
+    }
+
+    @GetMapping("/violacao-cpf")
+    void violacaoCpf() {
+        throw new org.springframework.dao.DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"users_cpf_hash_key\"");
+    }
+
+    @GetMapping("/violacao-outra")
+    void violacaoOutra() {
+        throw new org.springframework.dao.DataIntegrityViolationException(
+                "duplicate key value violates unique constraint \"outra_restricao_qualquer\"");
     }
 }
