@@ -136,6 +136,7 @@ class ProposalServiceTest {
 
         prestadorCom(propAlvo.getPrestadorId(), ProviderStatus.VERIFICADO);
         when(proposalRepository.findById(propAlvo.getId())).thenReturn(Optional.of(propAlvo));
+        pedidoTravado(sr, propAlvo);
         when(proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA))
                 .thenReturn(List.of(propAlvo, propOutra));
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -156,6 +157,7 @@ class ProposalServiceTest {
         var propAlvo = proposal(sr, ProposalStatus.ATIVA);
         prestadorCom(propAlvo.getPrestadorId(), status);
         when(proposalRepository.findById(propAlvo.getId())).thenReturn(Optional.of(propAlvo));
+        pedidoTravado(sr, propAlvo);
 
         assertThatThrownBy(() -> service.accept(propAlvo.getId(), CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
@@ -177,6 +179,7 @@ class ProposalServiceTest {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
 
         UUID alheio = UUID.randomUUID();
         assertThatThrownBy(() -> service.accept(prop.getId(), alheio))
@@ -197,6 +200,7 @@ class ProposalServiceTest {
         setClienteId(sr, prestadorId);
         var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, null, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
 
         assertThatThrownBy(() -> service.accept(prop.getId(), prestadorId))
                 .isInstanceOf(BusinessException.class)
@@ -204,13 +208,69 @@ class ProposalServiceTest {
         verify(proposalRepository, never()).save(any());
     }
 
+
+    // ── Revisão cruzada, 2ª rodada: o aceite e a recusa travam o pedido ANTES de qualquer outra leitura dele.
+
+    @Test
+    void accept_pedidoQueNaoEstaProposto_recusa_eNaoGrava() {
+        // antes accept() não conferia o estado do pedido: o save sobrescrevia qualquer outro (um CANCELADO já reembolsado
+        // voltava a ACEITO)
+        var sr = serviceRequest(ServiceRequestStatus.CANCELADO);
+        var prop = proposal(sr, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
+
+        assertThatThrownBy(() -> service.accept(prop.getId(), CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION")
+                .hasMessageContaining("PROPOSTO");
+        verify(requestRepository, never()).save(any());
+        verify(proposalRepository, never()).save(any());
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+    }
+
+    @Test
+    void acceptEReject_travamOPedidoAntesDeCarregarAProposta_aTravaEAPrimeiraLeitura() {
+        // sobre uma entidade já carregada o Hibernate devolve a instância com o estado antigo (medido no Postgres): se a proposta
+        // (que traz o pedido) fosse carregada antes, a trava não releria nada. A ordem é a garantia.
+        var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var prop = proposal(sr, ProposalStatus.ATIVA);
+        prestadorCom(prop.getPrestadorId(), ProviderStatus.VERIFICADO);
+        when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
+        when(proposalRepository.findByServiceRequestIdAndStatus(sr.getId(), ProposalStatus.ATIVA)).thenReturn(List.of(prop));
+        when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.accept(prop.getId(), CLIENTE_ID);
+
+        var ordem = inOrder(proposalRepository, requestRepository);
+        ordem.verify(proposalRepository).findServiceRequestIdById(prop.getId());
+        ordem.verify(requestRepository).findByIdComTrava(sr.getId());
+        ordem.verify(proposalRepository).findById(prop.getId());
+        verify(requestRepository, never()).findById(any());
+
+        // e o mesmo na recusa
+        var sr2 = serviceRequest(ServiceRequestStatus.PROPOSTO);
+        var prop2 = proposal(sr2, ProposalStatus.ATIVA);
+        when(proposalRepository.findById(prop2.getId())).thenReturn(Optional.of(prop2));
+        pedidoTravado(sr2, prop2);
+        when(proposalRepository.findByServiceRequestIdAndStatus(sr2.getId(), ProposalStatus.ATIVA)).thenReturn(List.of());
+
+        service.reject(prop2.getId(), CLIENTE_ID);
+
+        var ordem2 = inOrder(proposalRepository, requestRepository);
+        ordem2.verify(proposalRepository).findServiceRequestIdById(prop2.getId());
+        ordem2.verify(requestRepository).findByIdComTrava(sr2.getId());
+        ordem2.verify(proposalRepository).findById(prop2.getId());
+    }
+
     @Test
     void reject_marcaComoRecusada() {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of());
 
         ProposalDto dto = service.reject(prop.getId(), CLIENTE_ID);
@@ -225,8 +285,8 @@ class ProposalServiceTest {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of());
 
         service.reject(prop.getId(), CLIENTE_ID);
@@ -241,8 +301,8 @@ class ProposalServiceTest {
         var recusada = proposal(sr, ProposalStatus.ATIVA);
         var outra = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(recusada.getId())).thenReturn(Optional.of(recusada));
+        pedidoTravado(sr, recusada);
         when(proposalRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ATIVA))).thenReturn(List.of(outra));
 
         service.reject(recusada.getId(), CLIENTE_ID);
@@ -259,6 +319,7 @@ class ProposalServiceTest {
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         var prop = proposal(sr, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
+        pedidoTravado(sr, prop);
 
         UUID alheio = UUID.randomUUID();
         assertThatThrownBy(() -> service.reject(prop.getId(), alheio))
@@ -280,9 +341,16 @@ class ProposalServiceTest {
                 .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
     }
 
+    /** O pedido da proposta travado como PRIMEIRA leitura (revisão cruzada, 2ª rodada): o id sai de uma consulta escalar. */
+    private void pedidoTravado(ServiceRequest sr, Proposal p) {
+        when(proposalRepository.findServiceRequestIdById(p.getId())).thenReturn(Optional.of(sr.getId()));
+        when(requestRepository.findByIdComTrava(sr.getId())).thenReturn(Optional.of(sr));
+    }
+
     // helpers
     private ServiceRequest serviceRequest(ServiceRequestStatus status) {
         var sr = new ServiceRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(sr, "id", UUID.randomUUID());   // o id é gerado só ao persistir
         sr.setStatus(status);
         sr.setCategoria("ELETRICISTA");
         setClienteId(sr, CLIENTE_ID);

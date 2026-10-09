@@ -51,10 +51,19 @@ public class ServiceExecutionService {
         this.verificationGuard     = verificationGuard;
     }
 
+    /*
+     * Revisão cruzada, 2ª rodada — start, confirmCompletion e openDispute (e a mediação do admin) liam o pedido sem trava e
+     * regravavam a entidade inteira. Entre a leitura e o save, um cancel() (UPDATE guardado) podia commitar CANCELADO e enfileirar
+     * PAYMENT_REFUNDED; o save sobrescrevia com CONCLUIDO e, relendo a transação ainda RETIDA, enfileirava também PAYMENT_RELEASED:
+     * o outbox ficava com reembolso E repasse da mesma transação. Agora o pedido é lido com trava como PRIMEIRA leitura dele
+     * (sobre uma entidade já carregada o Hibernate devolve a instância com o estado antigo): o cancel() espera o commit e
+     * reavalia o WHERE; quem chega depois de um cancel() lê CANCELADO e recusa.
+     */
+
     /** ACEITO → EM_ANDAMENTO. Verifica que o prestador autenticado é o dono da proposta aceita. */
     @Transactional
     public void start(UUID srId, UUID prestadorId) {
-        ServiceRequest sr = srRepository.findById(srId)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.ACEITO) {
@@ -91,7 +100,9 @@ public class ServiceExecutionService {
     /** EM_ANDAMENTO → CONCLUIDO. Escrita atômica: status + OutboxEvent(PAYMENT_RELEASED). */
     @Transactional
     public void confirmCompletion(UUID srId, UUID clienteId) {
-        ServiceRequest sr = srRepository.findByIdAndCliente_Id(srId, clienteId)
+        // pedido de outro cliente: mesma resposta de "não existe" (não confirma a existência do pedido alheio)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
+                .filter(r -> r.getCliente().getId().equals(clienteId))
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.EM_ANDAMENTO) {
@@ -113,7 +124,7 @@ public class ServiceExecutionService {
     /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte que participa do pedido pode abrir disputa. */
     @Transactional
     public void openDispute(UUID srId, UUID userId, String motivo, String detalhes) {
-        ServiceRequest sr = srRepository.findById(srId)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         // Sem isto, qualquer usuário autenticado congelava o escrow de pedido alheio —

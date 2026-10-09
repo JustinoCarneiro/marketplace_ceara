@@ -17,6 +17,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     Optional<Transaction> findByServiceRequestIdAndIdempotencyKey(UUID serviceRequestId,
                                                                   String idempotencyKey);
     Optional<Transaction> findByGatewayTransactionId(String gatewayTransactionId);
+
+    /** O pedido da transação pelo id do gateway, sem carregar a entidade (para travar o pedido antes de ler a transação). */
+    @Query("SELECT t.serviceRequestId FROM Transaction t WHERE t.gatewayTransactionId = :id")
+    Optional<UUID> findServiceRequestIdByGatewayTransactionId(@Param("id") String gatewayTransactionId);
     Optional<Transaction> findByServiceRequestId(UUID serviceRequestId);
 
     // Reconciliação financeira (US27)

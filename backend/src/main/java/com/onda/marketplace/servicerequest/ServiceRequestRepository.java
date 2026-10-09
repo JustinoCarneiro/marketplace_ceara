@@ -124,12 +124,18 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     int cancelarSemAndamento(@Param("ids") Collection<UUID> ids, @Param("limite") Instant limite, @Param("agora") Instant agora);
 
     /**
-     * Dentre {@code ids}, quais estão HOJE em {@code status} — lido DEPOIS do {@code cancelarSemAndamento} acima, na
-     * MESMA transação (visibilidade das próprias escritas): são exatamente os que esta chamada acabou de cancelar,
-     * nunca os que escaparam da corrida. É o que decide quais propostas de fato precisam ser encerradas.
+     * Dentre {@code ids}, quais foram cancelados POR ESTA expiração — lido DEPOIS do {@code cancelarSemAndamento} acima, na
+     * MESMA transação (visibilidade das próprias escritas). {@code agora} é o mesmo instante que o UPDATE gravou em
+     * {@code updated_at}: um pedido que o cliente cancelou entre a consulta e o UPDATE também está CANCELADO, mas com o
+     * {@code updated_at} do cancelamento dele — sem este filtro o job o contava como expirado (e a métrica "cancelados por
+     * falta de andamento" atribuía uma ação do usuário ao job). É o que decide quais propostas de fato precisam ser encerradas.
      */
-    @Query("SELECT s.id FROM ServiceRequest s WHERE s.id IN :ids AND s.status = :status")
-    List<UUID> idsComStatus(@Param("ids") Collection<UUID> ids, @Param("status") ServiceRequestStatus status);
+    @Query("""
+           SELECT s.id FROM ServiceRequest s
+            WHERE s.id IN :ids AND s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO
+              AND s.updatedAt = :agora
+           """)
+    List<UUID> idsCanceladosEm(@Param("ids") Collection<UUID> ids, @Param("agora") Instant agora);
 
     /**
      * O mesmo princípio do {@code cancelarSemAndamento} acima, para o cancelamento pelo cliente/prestador

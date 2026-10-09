@@ -50,7 +50,7 @@ class MediationServiceTest {
     void resolver_concluir_moveParaConcluido_e_criaOutboxReleased() {
         var sr = sr(ServiceRequestStatus.EM_DISPUTA);
         var tx = transaction(TransactionStatus.RETIDO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -69,7 +69,7 @@ class MediationServiceTest {
     void resolver_reembolsar_moveParaCancelado_e_criaOutboxRefunded() {
         var sr = sr(ServiceRequestStatus.EM_DISPUTA);
         var tx = transaction(TransactionStatus.RETIDO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -87,7 +87,7 @@ class MediationServiceTest {
     void resolver_registraDecisaoDeAuditoria() {
         var sr = sr(ServiceRequestStatus.EM_DISPUTA);
         var tx = transaction(TransactionStatus.RETIDO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -105,7 +105,7 @@ class MediationServiceTest {
     @Test
     void resolver_naoEstaEmDisputa_lancaException() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.resolver(SR_ID, ADMIN_ID,
                 new ResolveDisputeRequest(MediationDecision.CONCLUIR, "x")))

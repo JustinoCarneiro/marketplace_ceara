@@ -131,6 +131,31 @@ nunca desfaz a exclusão, o log só leva a classe da falha. O app **não promete
   de um SOS e o texto de uma denúncia continuam. Corrigido: o texto agora promete só o que é verdade (nome/e-mail
   saem; alguns registros ficam, por exigência legal, sem o nome).
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09) — o mesmo lost update, em outros escritores
+A correção da 1ª rodada travou só `verifyIdentity`. A auto-revisão (dez ângulos independentes, cada achado conferido no código)
+mostrou que **todo escritor que carrega `User`/`ProviderProfile` e grava a entidade inteira de volta** desfaz a anonimização se a
+exclusão commitar no meio — o `UPDATE` do Hibernate não é por coluna e não há `@Version`/`@DynamicUpdate`:
+- **`UserAdminService.suspender/reativar`**: lia o usuário sem trava. O `save` revertia nome, e-mail e `excluido_em` (PII de volta)
+  e `reativar` podia reabrir a conta excluída. Agora lê com `findByIdComTrava`.
+- **`ModerationService.moderar`**: lia o perfil sem trava (e a guarda `contaExcluida()` era uma leitura sem trava, que só pegava
+  a exclusão já commitada). Agora trava o **usuário** primeiro — a mesma trava que a exclusão toma, e ela anonimiza o perfil junto.
+  O método `ProviderProfile.contaExcluida()` ficou sem uso e saiu.
+- **`ProviderService.atualizarChavePix`**: mesma coisa, e pior: o `save` trazia de volta bio, CPF cifrado e status, com a chave Pix
+  nova junto. Trava o usuário primeiro; conta excluída responde `PROVIDER_NOT_FOUND`.
+- **`ReviewService.atualizarNotaMedia`**: a avaliação é de OUTRO usuário (o cliente do pedido), então a corrida é a mais provável das
+  quatro. Virou `ProviderProfileRepository.atualizarNotaMedia`, um `UPDATE` só da coluna (nota é histórico e fica), sem carregar o perfil.
+
+**A trava só vale como PRIMEIRA leitura da linha.** Medido contra o Postgres real: `findByIdComTrava` sobre uma entidade que a
+sessão já carregou devolve a MESMA instância com o estado antigo (o banco já tinha outro `nome`, a instância não). Reler "sob a
+trava" não relê nada. Por isso cada correção toma a trava antes de qualquer outra leitura da entidade, e os testes unitários
+conferem a ordem (`inOrder`). Prova no E2E, passos 36–39 (exclusão em voo segura a trava; o escritor concorrente espera e recusa).
+A mutação (trava trocada por leitura simples) derruba os três primeiros.
+
+**Limite aceito, não corrigido:** `PasswordResetService.redefinir` lê o usuário por e-mail sem trava e regrava a entidade. A corrida
+com a exclusão exige o código de redefinição do próprio e-mail do dono e uma exclusão simultânea dele — o resultado seria o dono
+desfazendo a própria exclusão. Corrigir pede trava por e-mail antes da primeira leitura e mexe em ~8 testes por uma janela de
+milissegundos; fica registrado aqui.
+
 ## Efeito nos testes
 Unitário (`AccountDeletionServiceTest`, `AccountControllerTest`, `AccountDeletedMailListenerTest`,
 `UserAnonimizacaoTest`, `ProviderProfileAnonimizacaoTest`, `JwtAuthFilterTest`, admin) prova as regras; mock

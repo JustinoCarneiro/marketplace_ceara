@@ -29,6 +29,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -65,7 +66,9 @@ class AccountDeletionServiceTest {
         // unitário — isso só o E2E contra o Postgres prova (mesmo motivo do @Lock: ver E2EFluxoPrincipalTest).
         var passwordAuthenticator = new PasswordAuthenticator(userRepository, passwordEncoder, new PasswordAttempts(5, 900));
         service = new AccountDeletionService(userRepository, profileRepository, exclusao,
-                passwordEncoder, passwordAuthenticator, eventos);
+                passwordEncoder, passwordAuthenticator, eventos,
+                new org.springframework.transaction.support.TransactionTemplate(
+                        mock(org.springframework.transaction.PlatformTransactionManager.class)));
     }
 
     // ---------- apoio ----------
@@ -223,10 +226,14 @@ class AccountDeletionServiceTest {
         assertThat(tx.noRollbackFor())
                 .containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
 
-        // excluir() em si não precisa mais do noRollbackFor: por esta altura, nada ainda foi escrito na transação dela
+        // Revisão cruzada (2ª rodada): excluir() NÃO pode ser @Transactional. A anotação abre a conexão da transação externa
+        // já na entrada e a segura ociosa enquanto autenticarPorId (REQUIRES_NEW) usa uma segunda: com várias exclusões
+        // simultâneas o pool esgota (o mesmo defeito que AuthService.login teve). A parte atômica roda num TransactionTemplate.
         var excluir = AccountDeletionService.class.getMethod("excluir", UUID.class, String.class);
-        var txExcluir = excluir.getAnnotation(org.springframework.transaction.annotation.Transactional.class);
-        assertThat(txExcluir).isNotNull();
+        assertThat(excluir.getAnnotation(org.springframework.transaction.annotation.Transactional.class))
+                .as("excluir() não tem transação externa").isNull();
+        assertThat(AccountDeletionService.class.getAnnotation(org.springframework.transaction.annotation.Transactional.class))
+                .as("a classe também não é @Transactional").isNull();
     }
 
     @Test

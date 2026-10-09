@@ -66,13 +66,13 @@ class ServiceRequestExpirationServiceTest {
     void encerraAsPropostasEOsPedidos_cravandoOInstante_edizQuantosCancelou() {
         List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID());
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.idsComStatus(ids, ServiceRequestStatus.CANCELADO)).thenReturn(ids);
+        when(requestRepository.idsCanceladosEm(ids, AGORA)).thenReturn(ids);
 
         int cancelados = service().expirar(AGORA);
 
         assertThat(cancelados).isEqualTo(2);
         // o UPDATE roda ANTES (decide quem foi cancelado de verdade); encerrarAtivasDosPedidos só sobre o
-        // resultado dele (idsComStatus), nunca sobre a lista antiga da consulta — ver o teste da corrida abaixo
+        // resultado dele (idsCanceladosEm), nunca sobre a lista antiga da consulta — ver o teste da corrida abaixo
         verify(requestRepository).cancelarSemAndamento(eq(ids), any(), eq(AGORA));   // o UPDATE em lote não roda o @PreUpdate
         verify(proposalRepository).encerrarAtivasDosPedidos(ids);
     }
@@ -86,7 +86,7 @@ class ServiceRequestExpirationServiceTest {
         List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID(), escapou);
         List<UUID> cancelados = List.of(ids.get(0), ids.get(1));   // só estes dois; "escapou" ficou de fora
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.idsComStatus(ids, ServiceRequestStatus.CANCELADO)).thenReturn(cancelados);
+        when(requestRepository.idsCanceladosEm(ids, AGORA)).thenReturn(cancelados);
 
         assertThat(service().expirar(AGORA)).isEqualTo(2);
 
@@ -99,7 +99,7 @@ class ServiceRequestExpirationServiceTest {
         List<UUID> ids = new ArrayList<>();
         for (int i = 0; i < 1200; i++) ids.add(UUID.randomUUID());
         when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
-        when(requestRepository.idsComStatus(anyCollection(), any())).thenAnswer(i -> i.getArgument(0));
+        when(requestRepository.idsCanceladosEm(anyCollection(), any())).thenAnswer(i -> i.getArgument(0));
 
         service().expirar(AGORA);
 

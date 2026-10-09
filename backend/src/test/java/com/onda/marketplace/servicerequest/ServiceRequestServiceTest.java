@@ -218,28 +218,46 @@ class ServiceRequestServiceTest {
     void publicar_statusPendente_atualizaDescricaoEMantemPendente() {
         UUID requestId = UUID.randomUUID();
         UUID clienteId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
         sr.setCategoria("ELETRICISTA");
         sr.setDescricao("sugestão da IA");
         sr.setStatus(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findByIdAndCliente_Id(requestId, clienteId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         ServiceRequestDto dto = service.publicar(requestId, clienteId, new PublishRequest("descrição final editada"));
 
         assertThat(dto.descricao()).isEqualTo("descrição final editada");
         assertThat(dto.status()).isEqualTo("PENDENTE");
+        verify(requestRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
+    }
+
+    @Test
+    void publicar_pedidoDeOutroCliente_respondeComoSeNaoExistisse_eNaoGrava() {
+        UUID requestId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", UUID.randomUUID());
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        sr.setStatus(ServiceRequestStatus.PENDENTE);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() -> service.publicar(requestId, UUID.randomUUID(), new PublishRequest("x")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
+        verify(requestRepository, never()).save(any());
     }
 
     @Test
     void publicar_statusJaAceito_lancaInvalidTransition() {
         UUID requestId = UUID.randomUUID();
         UUID clienteId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
         sr.setStatus(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(requestId, clienteId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.publicar(requestId, clienteId, new PublishRequest("x")))
                 .isInstanceOf(BusinessException.class);

@@ -11,6 +11,10 @@ import java.util.UUID;
 
 public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
     List<Proposal> findByServiceRequestId(UUID serviceRequestId);
+
+    /** O id do pedido da proposta, sem carregar nenhuma entidade (para travar o pedido como primeira leitura dele). */
+    @Query("SELECT p.serviceRequest.id FROM Proposal p WHERE p.id = :id")
+    java.util.Optional<UUID> findServiceRequestIdById(@Param("id") UUID id);
     List<Proposal> findByServiceRequestIdAndStatus(UUID serviceRequestId, ProposalStatus status);
 
     // Serviços efetivamente contratados do prestador — perfil público no app (mobile)
