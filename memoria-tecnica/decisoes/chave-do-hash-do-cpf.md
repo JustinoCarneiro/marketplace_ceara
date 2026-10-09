@@ -85,6 +85,19 @@ e a subida recusa se sobrar conta mais antiga.
   (2) mesmo assim — hashes novos saíam com a versão errada. Corrigido nos dois compose (`prod`, `homolog`) e
   documentado em `.env.prod.example`.
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
+- **A âncora do `CpfHashKeyCheck` só existe para prestador.** O hash do cliente não se prova (não há CPF em claro para recalcular), então,
+  numa 1ª subida de versão sem nenhum prestador decifrável naquela versão, a chave digitada errada era gravada como referência sem nada que
+  a desminta — e esse é o estado normal de um piloto com poucos prestadores. Agora, nesse caso, a subida segue, mas com um `WARN` que diz
+  quantas contas estão naquela versão e qual variável conferir à mão. **Decisão de operação em aberto:** trocar o aviso por uma recusa
+  (exigir uma confirmação explícita da chave quando há contas sem âncora) seria mais seguro e mais atritoso — e poderia derrubar um deploy
+  que hoje sobe; não foi feito sem decisão do dono.
+- Comparação do hash do CPF e do verificador em tempo constante (`MessageDigest.isEqual`), como o segredo do webhook já fazia, e
+  normalização do CPF por um lugar só (`Cpf.soDigitos`). `CpfHashKeyCheck` roda como `ApplicationRunner`, depois de o servidor já aceitar
+  conexões: é uma característica do Spring Boot, a janela é de milissegundos, e o pior caso exige uma rotação mal configurada.
+- Eficiência, sem ação (piloto pequeno): as duas contagens por versão rodam em toda subida sobre `users.cpf_hash_versao`, que não tem índice,
+  e `comHashNaVersao` não tem `LIMIT`. Vale um `EXISTS`/índice quando a tabela crescer.
+
 ## Efeito nos testes
 Unitários: `CpfHashServiceTest`, `CpfHashKeyCheckTest` (reescrito: verificador por versão, cruzamento com e sem âncora,
 chave trocada por baixo, rollback), `AuthServiceTest` (confirmação com hash de chave antiga, `CPF_MISMATCH`),

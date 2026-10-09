@@ -75,7 +75,7 @@ class ServiceExecutionServiceTest {
     void start_aceitoPrestadorCorretoEDinheiroRetido_moveParaEmAndamento() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID))
@@ -89,6 +89,7 @@ class ServiceExecutionServiceTest {
         // o cálculo nunca teria dado real pra nenhum atendimento.
         assertThat(sr.getIniciadoEm()).isNotNull();
         verify(srRepository).save(sr);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
     }
 
     @Test
@@ -97,7 +98,7 @@ class ServiceExecutionServiceTest {
         // pedido chegaria a CONCLUIDO mandando liberar valor que nunca foi cobrado.
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID))
@@ -118,7 +119,7 @@ class ServiceExecutionServiceTest {
         // pagamento, o erro seria PAYMENT_NOT_RETAINED — o teste fixa a ordem.
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(status);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
 
@@ -135,7 +136,7 @@ class ServiceExecutionServiceTest {
     void start_semTransacaoNenhuma_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
@@ -148,7 +149,7 @@ class ServiceExecutionServiceTest {
     @Test
     void start_statusNaoAceito_lancaException() {
         var sr = sr(ServiceRequestStatus.PENDENTE);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.start(SR_ID, PRESTADOR_ID))
                 .isInstanceOf(BusinessException.class)
@@ -158,7 +159,7 @@ class ServiceExecutionServiceTest {
     @Test
     void start_prestadorErrado_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(UUID.randomUUID()))); // outro prestador
 
@@ -173,8 +174,8 @@ class ServiceExecutionServiceTest {
     void confirmCompletion_pagamentoPendente_naoEmiteRepasse() {
         // Rede de segurança: mesmo que o pedido chegue aqui sem escrow (dado legado,
         // caminho fora da API), nada de mandar o gateway repassar dinheiro não cobrado.
-        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID))
                 .thenReturn(Optional.of(transaction(TransactionStatus.PENDENTE)));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -187,9 +188,9 @@ class ServiceExecutionServiceTest {
 
     @Test
     void confirmCompletion_emAndamento_moveParaConcluido_e_criaOutbox() {
-        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
         var tx = transaction(TransactionStatus.RETIDO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -201,12 +202,27 @@ class ServiceExecutionServiceTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_RELEASED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
+    }
+
+
+    @Test
+    void confirmCompletion_pedidoDeOutroCliente_respondeComoSeNaoExistisse_eNaoGrava() {
+        // o dono é conferido DEPOIS de travar o pedido; outro cliente recebe a mesma resposta de "não existe"
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() -> service.confirmCompletion(SR_ID, UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
+        verify(srRepository, never()).save(any());
+        verifyNoInteractions(outboxRepository);
     }
 
     @Test
     void confirmCompletion_statusInvalido_lancaException() {
-        var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        var sr = srDoCliente(ServiceRequestStatus.ACEITO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.confirmCompletion(SR_ID, CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
@@ -218,7 +234,7 @@ class ServiceExecutionServiceTest {
     @Test
     void openDispute_emAndamento_moveParaEmDisputa_e_criaAlertaDisputa() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(notificationService.criarAlerta(any(), any())).thenReturn(null);
@@ -230,6 +246,7 @@ class ServiceExecutionServiceTest {
         assertThat(sr.getDetalhesDisputa()).isEqualTo("detalhes do ocorrido");
         verify(srRepository).save(sr);
         verify(notificationService).criarAlerta("DISPUTA", SR_ID);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
     }
 
     @Test
@@ -237,7 +254,7 @@ class ServiceExecutionServiceTest {
         // Antes, "qualquer parte autenticada" era literal: nenhuma checagem de
         // participação existia, então qualquer conta congelava o escrow alheio.
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, "motivo", "detalhes"))
@@ -249,7 +266,7 @@ class ServiceExecutionServiceTest {
     @Test
     void openDispute_statusInvalido_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
 
         assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, null, null))
@@ -394,6 +411,16 @@ class ServiceExecutionServiceTest {
         var sr = new ServiceRequest();
         sr.setStatus(status);
         sr.setCategoria("ELETRICISTA");
+        return sr;
+    }
+
+    /** Pedido do CLIENTE_ID — confirmCompletion confere o dono depois de travar o pedido. */
+    private ServiceRequest srDoCliente(ServiceRequestStatus status) {
+        var sr = sr(status);
+        var cliente = com.onda.marketplace.auth.User.builder().nome("Cliente").email("c@x.com").senhaHash("$2a$x")
+                .role(com.onda.marketplace.auth.UserRole.ROLE_CLIENT).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", CLIENTE_ID);
+        sr.setCliente(cliente);
         return sr;
     }
 

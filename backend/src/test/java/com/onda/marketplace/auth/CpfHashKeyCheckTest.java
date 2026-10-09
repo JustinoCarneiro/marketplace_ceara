@@ -215,6 +215,61 @@ class CpfHashKeyCheckTest {
     }
 
     @Test
+    void primeiraSubidaSemAncora_comContasNaVersao_sobeMasAvisaQueAChaveNaoFoiProvada() {
+        // Revisão cruzada (2ª rodada): só prestador tem o CPF cifrado; o hash do cliente não se prova. Com contas na versão e nenhum
+        // prestador decifrável, uma chave digitada errada seria gravada como referência sem nada que a desminta — pelo menos o
+        // operador é avisado, em vez de a subida parecer limpa.
+        var cpfHashService = new CpfHashService(ATUAL, 2);
+        var check = check(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(7L);
+
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(CpfHashKeyCheck.class);
+        logger.addAppender(logs);
+        try {
+            assertThatCode(check::verificar).doesNotThrowAnyException();
+        } finally {
+            logger.detachAppender(logs);
+        }
+
+        org.assertj.core.api.Assertions.assertThat(logs.list)
+                .anySatisfy(e -> {
+                    org.assertj.core.api.Assertions.assertThat(e.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                    org.assertj.core.api.Assertions.assertThat(e.getFormattedMessage())
+                            .contains("7 conta(s)").contains("versão 2").contains("CPF_HASH_KEY");
+                });
+        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
+    }
+
+    @Test
+    void primeiraSubidaSemAncora_semNenhumaContaNaVersao_naoAvisa() {
+        // instalação nova: nada a provar, nada a avisar
+        var check = check(new CpfHashService(ATUAL, 2));
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(0L);
+
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(CpfHashKeyCheck.class);
+        logger.addAppender(logs);
+        try {
+            assertThatCode(check::verificar).doesNotThrowAnyException();
+        } finally {
+            logger.detachAppender(logs);
+        }
+
+        org.assertj.core.api.Assertions.assertThat(logs.list).noneMatch(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN);
+    }
+
+    @Test
     void contaComVersaoMaiorQueAConfigurada_recusaSubir_indicioDeRollback() {
         var check = check(new CpfHashService(ATUAL, 2));
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);

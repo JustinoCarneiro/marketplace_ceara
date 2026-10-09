@@ -1,8 +1,11 @@
 package com.onda.marketplace.auth;
 
+import com.onda.marketplace.shared.Cpf;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -98,16 +101,21 @@ public class CpfHashService {
             return false;
         }
         if (versaoGravada == versaoAtual) {
-            return hashGravado.equals(hash(cpf));
+            return iguais(hashGravado, hash(cpf));
         }
         if (versaoGravada == versaoAtual - 1 && chaveAnterior != null) {
-            return hashGravado.equals(calcular(chaveAnterior, cpf));
+            return iguais(hashGravado, calcular(chaveAnterior, cpf));
         }
         return false;
     }
 
+    /** Comparação em tempo constante (como PaymentController.constantTimeEquals no segredo do webhook): hash de CPF é dado de antifraude. */
+    private static boolean iguais(String a, String b) {
+        return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static String calcular(byte[] chave, String cpf) {
-        String normalized = cpf.replaceAll("[^0-9]", "");
+        String normalized = Cpf.soDigitos(cpf);
         try {
             Mac mac = Mac.getInstance(ALGORITHM);
             mac.init(new SecretKeySpec(chave, ALGORITHM));

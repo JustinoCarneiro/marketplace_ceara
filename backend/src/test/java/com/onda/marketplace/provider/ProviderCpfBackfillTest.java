@@ -155,6 +155,7 @@ class ProviderCpfBackfillTest {
         var r = backfill.preencher();
 
         assertThat(r.ilegiveis()).isEqualTo(1);
+        assertThat(r.idsIlegiveis()).containsExactly(ruim);   // 2ª rodada: o id sai no log para alguém investigar (nunca o CPF)
         assertThat(r.vinculados()).isEqualTo(1);   // um registro ruim não derruba o resto
     }
 

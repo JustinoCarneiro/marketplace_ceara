@@ -27,6 +27,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     long countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(int versao);
 
+    /** Contas com hash EXATAMENTE nesta versão (o aviso de CpfHashKeyCheck quando não há âncora para provar a chave). */
+    long countByCpfHashIsNotNullAndCpfHashVersao(int versao);
+
     /** Filtro de autenticação: o token só vale enquanto a conta está ativa (não suspensa, não excluída). */
     boolean existsByIdAndAtivoTrue(UUID id);
 

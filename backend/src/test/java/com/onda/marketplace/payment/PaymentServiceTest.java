@@ -239,10 +239,22 @@ class PaymentServiceTest {
                 .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
     }
 
+    /** O pedido da transação travado como 1ª leitura (revisão cruzada, 2ª rodada): o id sai de uma consulta escalar. */
+    private void pedidoTravado(String gatewayId, UUID srId, ServiceRequestStatus status) {
+        when(transactionRepository.findServiceRequestIdByGatewayTransactionId(gatewayId)).thenReturn(Optional.of(srId));
+        when(requestRepository.findByIdComTrava(srId)).thenReturn(Optional.of(serviceRequest(status)));
+    }
+
+    private Transaction transacao(UUID srId, String chave) {
+        return new Transaction(srId, BigDecimal.valueOf(200), BigDecimal.valueOf(30), BigDecimal.valueOf(0.15),
+                PaymentMethod.PIX, chave);
+    }
+
     @Test
     void confirmPayment_statusPago_atualizaParaRetido() {
-        var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-4");
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-4");
+        pedidoTravado("gw-123", srId, ServiceRequestStatus.ACEITO);
         when(transactionRepository.findByGatewayTransactionId("gw-123")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -257,11 +269,10 @@ class PaymentServiceTest {
         // estava a caminho (cobrança enfileirada antes do cancelamento). Sem isto, o dinheiro ficaria retido pra
         // sempre: cancel() não encontrou transação RETIDA na hora (ela ainda nem existia) e não criou reembolso.
         var srId = UUID.randomUUID();
-        var tx = new Transaction(srId, BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-cancelado");
+        var tx = transacao(srId, "idem-cancelado");
+        pedidoTravado("gw-cancelado", srId, ServiceRequestStatus.CANCELADO);
         when(transactionRepository.findByGatewayTransactionId("gw-cancelado")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(requestRepository.findById(srId)).thenReturn(Optional.of(serviceRequest(ServiceRequestStatus.CANCELADO)));
 
         service.confirmPayment("gw-cancelado", "PAGO");
 
@@ -272,13 +283,75 @@ class PaymentServiceTest {
     }
 
     @Test
+    void confirmPayment_reentregaDoWebhookDepoisDaReconciliacao_eNoOp_naoEstouraNemReembolsaDeNovo() {
+        // 2ª rodada: a reconciliação deixa a transação REEMBOLSADA. O gateway reentrega o MESMO "PAGO" (é normal): reter()
+        // só era no-op para RETIDO, então a reentrega estourava INVALID_PAYMENT_TRANSITION (422 ao gateway, que reentrega
+        // para sempre). Agora confirmação de transação que já não está PENDENTE é no-op.
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-reentrega");
+        tx.reter();
+        tx.reembolsar();
+        pedidoTravado("gw-reentrega", srId, ServiceRequestStatus.CANCELADO);
+        when(transactionRepository.findByGatewayTransactionId("gw-reentrega")).thenReturn(Optional.of(tx));
+
+        assertThatCode(() -> service.confirmPayment("gw-reentrega", "PAGO")).doesNotThrowAnyException();
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.REEMBOLSADO);
+        verifyNoInteractions(outboxRepository);
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmPayment_transacaoJaRetidaEPedidoCancelado_naoEnfileiraUmSegundoReembolso() {
+        // 2ª rodada: cancel() viu a transação RETIDA e JÁ enfileirou o PAYMENT_REFUNDED. Uma reentrega do "PAGO" com a
+        // transação ainda RETIDA (o outbox não processou) não pode enfileirar outro: dois reembolsos ao gateway.
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-ja-retida");
+        tx.reter();
+        pedidoTravado("gw-ja-retida", srId, ServiceRequestStatus.CANCELADO);
+        when(transactionRepository.findByGatewayTransactionId("gw-ja-retida")).thenReturn(Optional.of(tx));
+
+        service.confirmPayment("gw-ja-retida", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    void confirmPayment_travaOPedidoAntesDeLerATransacao_aTravaEAPrimeiraLeitura() {
+        // a transação só é carregada DEPOIS da trava do pedido: o estado lido é o de agora (uma entrega duplicada simultânea
+        // espera a primeira e vê RETIDO/REEMBOLSADO, em vez de as duas verem PENDENTE e enfileirarem dois reembolsos)
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-ordem");
+        pedidoTravado("gw-ordem", srId, ServiceRequestStatus.ACEITO);
+        when(transactionRepository.findByGatewayTransactionId("gw-ordem")).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.confirmPayment("gw-ordem", "PAGO");
+
+        var ordem = inOrder(transactionRepository, requestRepository);
+        ordem.verify(transactionRepository).findServiceRequestIdByGatewayTransactionId("gw-ordem");
+        ordem.verify(requestRepository).findByIdComTrava(srId);
+        ordem.verify(transactionRepository).findByGatewayTransactionId("gw-ordem");
+        verify(requestRepository, never()).findById(any());
+    }
+
+    @Test
+    void confirmPayment_transacaoDesconhecida_naoFazNada() {
+        when(transactionRepository.findServiceRequestIdByGatewayTransactionId("gw-x")).thenReturn(Optional.empty());
+
+        service.confirmPayment("gw-x", "PAGO");
+
+        verifyNoInteractions(requestRepository, outboxRepository);
+    }
+
+    @Test
     void confirmPayment_pedidoAindaAtivo_retemNormalmente_semReembolso() {
         var srId = UUID.randomUUID();
-        var tx = new Transaction(srId, BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-ativo");
+        var tx = transacao(srId, "idem-ativo");
+        pedidoTravado("gw-ativo", srId, ServiceRequestStatus.ACEITO);
         when(transactionRepository.findByGatewayTransactionId("gw-ativo")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(requestRepository.findById(srId)).thenReturn(Optional.of(serviceRequest(ServiceRequestStatus.ACEITO)));
 
         service.confirmPayment("gw-ativo", "PAGO");
 
@@ -288,14 +361,15 @@ class PaymentServiceTest {
 
     @Test
     void confirmPayment_statusRejeitado_mantemPendente() {
-        var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-5");
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-5");
+        pedidoTravado("gw-456", srId, ServiceRequestStatus.ACEITO);
         when(transactionRepository.findByGatewayTransactionId("gw-456")).thenReturn(Optional.of(tx));
-        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.confirmPayment("gw-456", "REJEITADO");
 
         assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.PENDENTE);
+        verify(transactionRepository, never()).save(any());
     }
 
     // helpers

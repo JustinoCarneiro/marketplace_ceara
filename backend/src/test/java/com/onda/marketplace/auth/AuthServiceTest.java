@@ -245,6 +245,11 @@ class AuthServiceTest {
         assertThat(tx.noRollbackFor()).containsExactlyInAnyOrder(PasswordMismatchException.class, TooManyAttemptsException.class);
     }
 
+    /** O consumo atômico do refresh (UPDATE com WHERE revogado = false): 1 = este chamador o consumiu. Os tokens do teste não têm id. */
+    private void refreshConsumivel() {
+        when(refreshTokenRepository.revogarSeAindaValido(any())).thenReturn(1);
+    }
+
     @Test
     void refresh_contaSuspensa_naoRenovaASessao() {
         var token = new RefreshToken(usuarioSuspenso(), "hash", java.time.Instant.now().plusSeconds(3600));
@@ -255,6 +260,7 @@ class AuthServiceTest {
                 .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
 
         assertThat(token.isRevogado()).as("o token não é rotacionado nem reaproveitado").isFalse();
+        verify(refreshTokenRepository, never()).revogarSeAindaValido(any());
         verify(jwtService, never()).generateAccessToken(any(), any());
     }
 
@@ -321,13 +327,14 @@ class AuthServiceTest {
         User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
         var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_PROVIDER);
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        refreshConsumivel();
         sessaoPossivel();
 
         var resposta = authService.refresh(new RefreshRequest("qualquer"));
 
         verify(jwtService).generateAccessToken(duda, UserRole.ROLE_PROVIDER);
         assertThat(resposta.role()).isEqualTo("ROLE_PROVIDER");
-        assertThat(token.isRevogado()).isTrue();
+        verify(refreshTokenRepository).revogarSeAindaValido(any());   // o token é consumido (rotacionado) no banco
     }
 
     @Test
@@ -335,6 +342,7 @@ class AuthServiceTest {
         User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
         var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600));   // papel null
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        refreshConsumivel();
         sessaoPossivel();
 
         authService.refresh(new RefreshRequest("qualquer"));
@@ -347,6 +355,7 @@ class AuthServiceTest {
         User soCliente = User.builder().nome("Ana").email("ana@x.com").senhaHash("$2a$hash").role(UserRole.ROLE_CLIENT).build();
         var token = new RefreshToken(soCliente, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_PROVIDER);
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        refreshConsumivel();
         sessaoPossivel();
 
         authService.refresh(new RefreshRequest("qualquer"));
@@ -360,6 +369,7 @@ class AuthServiceTest {
         var anterior = new RefreshToken(duda, "x", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_PROVIDER);
         when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
         when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(anterior));
+        refreshConsumivel();
         sessaoPossivel();
 
         var resposta = authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-anterior"));
@@ -367,7 +377,58 @@ class AuthServiceTest {
         verify(jwtService).generateAccessToken(duda, UserRole.ROLE_CLIENT);
         assertThat(resposta.role()).isEqualTo("ROLE_CLIENT");
         assertThat(resposta.papeis()).containsExactly("ROLE_CLIENT", "ROLE_PROVIDER");
-        assertThat(anterior.isRevogado()).as("a sessão anterior não fica valendo no papel velho").isTrue();
+        verify(refreshTokenRepository).revogarSeAindaValido(any());   // a sessão anterior não fica valendo no papel velho
+    }
+
+
+    // ── Revisão cruzada, 2ª rodada: o refresh é consumido de forma ATÔMICA e por um caminho só.
+
+    @Test
+    void refresh_duasChamadasComOMesmoToken_soUmaConsome_aOutraRecusaSemEmitirSessao() {
+        // antes: leitura + revoke() + save() — as duas chamadas passavam em isValid() antes de qualquer uma revogar e cada uma
+        // emitia uma sessão de 30 dias. Agora o UPDATE (WHERE revogado = false) afeta a linha só para uma delas.
+        User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
+        var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_CLIENT);
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        when(refreshTokenRepository.revogarSeAindaValido(any())).thenReturn(1).thenReturn(0);
+        sessaoPossivel();
+
+        authService.refresh(new RefreshRequest("o-mesmo-token"));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("o-mesmo-token")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(jwtService, times(1)).generateAccessToken(any(), any());   // uma sessão só saiu desse token
+    }
+
+    @Test
+    void switchRole_contaSuspensa_recusa_comoORefreshFaz() {
+        // consumirRefreshDaConta e refresh() eram duas implementações; só a segunda conferia a conta ativa
+        User duda = contaComDoisPapeis(UserRole.ROLE_PROVIDER);
+        duda.suspender();
+        var anterior = new RefreshToken(duda, "x", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_PROVIDER);
+        when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(anterior));
+
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-anterior")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(refreshTokenRepository, never()).revogarSeAindaValido(any());
+        verify(jwtService, never()).generateAccessToken(any(), any());
+    }
+
+    @Test
+    void switchRole_refreshConsumidoPorOutraChamadaNoMeio_recusaSemEmitirNada() {
+        User duda = contaComDoisPapeis(UserRole.ROLE_PROVIDER);
+        var anterior = new RefreshToken(duda, "x", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_PROVIDER);
+        when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(anterior));
+        when(refreshTokenRepository.revogarSeAindaValido(any())).thenReturn(0);   // perdeu a corrida
+
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_CLIENT", "refresh-anterior")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(jwtService, never()).generateAccessToken(any(), any());
     }
 
     @Test

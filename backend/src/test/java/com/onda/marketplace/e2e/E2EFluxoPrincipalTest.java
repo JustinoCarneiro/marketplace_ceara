@@ -2506,4 +2506,435 @@ class E2EFluxoPrincipalTest {
                 contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid", caio.id().toString()), equalTo(0));
         assertThat(papeisDe(caio.id()), contains("ROLE_CLIENT"));
     }
+
+    // ─── Revisão cruzada, 2ª rodada: quem grava a entidade inteira não pode desfazer a anonimização ───
+    //
+    // suspender/reativar, moderar, chave Pix e nota média liam a linha sem trava e a regravam inteira. Uma exclusão de conta
+    // que commitasse nesse intervalo era desfeita (lost update: o UPDATE não é por coluna). A trava só vale como PRIMEIRA
+    // leitura da linha — sobre uma entidade já carregada o Hibernate devolve a instância antiga.
+
+    @Autowired com.onda.marketplace.provider.ProviderProfileRepository perfilPrestadorRepository;
+
+    /** "Exclusão em voo": já com a trava do usuário e a anonimização feita, parada ANTES do commit (molde dos passos 33/42). */
+    private java.util.concurrent.Future<?> exclusaoEmVoo(java.util.concurrent.ExecutorService pool, UUID userId, String emailAnonimo,
+                                                         boolean comPerfil, java.util.concurrent.CountDownLatch travaObtida,
+                                                         java.util.concurrent.CountDownLatch liberar) {
+        return pool.submit(() -> transacao.executeWithoutResult(status -> {
+            User u = userRepository.findByIdComTrava(userId).orElseThrow();
+            u.anonimizar(emailAnonimo, passwordEncoder.encode(UUID.randomUUID().toString()), false);
+            if (comPerfil) {
+                perfilPrestadorRepository.findByUserId(userId).ifPresent(p -> {
+                    p.anonimizar();
+                    perfilPrestadorRepository.save(p);
+                });
+            }
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+    }
+
+    @Test @Order(57)
+    @DisplayName("57 · Admin suspende/reativa durante uma exclusão em voo: espera, recusa (ACCOUNT_DELETED) e NÃO desfaz a anonimização")
+    void admin_suspenderDuranteExclusaoEmVoo_naoDesfazAAnonimizacao() throws Exception {
+        var gil = cadastrarCliente("Gil Corrida Admin", "gil.corrida.admin@onda.test");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, gil.id(), "removido-gil-admin@excluido.invalid", false, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var suspensao = pool.submit(() -> given().header("Authorization", "Bearer " + tokenAdmin())
+                .when().post("/api/v1/admin/users/{id}/suspend", gil.id()).then().extract());
+        Thread.sleep(800);
+        assertThat("o admin deveria estar ESPERANDO a trava da exclusão em voo", suspensao.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = suspensao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("ACCOUNT_DELETED"));
+        var u = conta(gil.id());
+        assertThat("o nome anonimizado não pode voltar ao original", u.get("nome"), equalTo("Usuário removido"));
+        assertThat("o e-mail anonimizado não pode voltar ao original", u.get("email"), not(equalTo(gil.email())));
+        assertThat("excluido_em continua preenchido", u.get("excluido_em"), notNullValue());
+        assertThat("ativo continua false", u.get("ativo"), equalTo(false));
+    }
+
+    @Test @Order(58)
+    @DisplayName("58 · Moderar o prestador durante uma exclusão em voo: espera, recusa (ACCOUNT_DELETED) e o perfil continua anonimizado")
+    void admin_moderarDuranteExclusaoEmVoo_naoDesfazAAnonimizacaoDoPerfil() throws Exception {
+        var iris = cadastrarPrestador("Iris Corrida Moderacao", "iris.corrida.moderacao@onda.test", "325.342.440-51");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, iris.id(), "removido-iris-mod@excluido.invalid", true, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var moderacao = pool.submit(() -> given().contentType(ContentType.JSON).header("Authorization", "Bearer " + tokenAdmin())
+                .body("{\"action\":\"APROVAR\"}")
+                .when().post("/api/v1/admin/providers/{id}/moderate", iris.id()).then().extract());
+        Thread.sleep(800);
+        assertThat("a moderação deveria estar ESPERANDO a trava da exclusão em voo", moderacao.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = moderacao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("ACCOUNT_DELETED"));
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, status_verificacao FROM providers_profile WHERE user_id = ?::uuid", iris.id().toString());
+        assertThat("o perfil continua SUSPENSO, não vira VERIFICADO", perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+        assertThat("a bio apagada não volta", perfil.get("bio"), nullValue());
+        assertThat("o CPF cifrado apagado não volta", perfil.get("cpf_cifrado"), nullValue());
+    }
+
+    @Test @Order(59)
+    @DisplayName("59 · Cadastrar chave Pix durante a exclusão em voo: espera, recusa (PROVIDER_NOT_FOUND) e nada do perfil volta")
+    void prestador_chavePixDuranteExclusaoEmVoo_naoRessuscitaOPerfil() throws Exception {
+        var jonas = cadastrarPrestador("Jonas Corrida Pix", "jonas.corrida.pix@onda.test", "701.974.216-52");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, jonas.id(), "removido-jonas-pix@excluido.invalid", true, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var pix = pool.submit(() -> given().contentType(ContentType.JSON).header("Authorization", "Bearer " + jonas.token())
+                .body("{\"chavePix\":\"jonas.pix@pix.com\"}")
+                .when().put("/api/v1/providers/me/chave-pix").then().extract());
+        Thread.sleep(800);
+        assertThat("o cadastro da chave deveria estar ESPERANDO a trava da exclusão em voo", pix.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = pix.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("PROVIDER_NOT_FOUND"));
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, chave_pix_cifrada, status_verificacao FROM providers_profile WHERE user_id = ?::uuid", jonas.id().toString());
+        assertThat("a chave Pix nova não é gravada na conta excluída", perfil.get("chave_pix_cifrada"), nullValue());
+        assertThat("a bio apagada não volta", perfil.get("bio"), nullValue());
+        assertThat("o CPF cifrado apagado não volta", perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+    }
+
+    @Test @Order(60)
+    @DisplayName("60 · A nota média é gravada por UPDATE só da coluna: uma anonimização commitada antes não é desfeita pelo perfil velho em memória")
+    void notaMedia_updateSoDaColuna_naoDesfazAnonimizacaoCommitadaNoMeio() throws Exception {
+        var kaue = cadastrarPrestador("Kaue Nota Media", "kaue.nota.media@onda.test", "497.736.187-30");
+        transacao.executeWithoutResult(status -> {
+            var emMemoria = perfilPrestadorRepository.findByUserId(kaue.id()).orElseThrow();   // perfil "velho" na sessão
+            assertThat(emMemoria.getBio(), notNullValue());
+            // outra transação anonimiza e commita (thread própria = transação própria)
+            var t = new Thread(() -> transacao.executeWithoutResult(s2 -> {
+                User u = userRepository.findByIdComTrava(kaue.id()).orElseThrow();
+                u.anonimizar("removido-kaue-nota@excluido.invalid", passwordEncoder.encode(UUID.randomUUID().toString()), false);
+                perfilPrestadorRepository.findByUserId(kaue.id()).ifPresent(p -> { p.anonimizar(); perfilPrestadorRepository.save(p); });
+            }));
+            t.start();
+            try { t.join(); } catch (InterruptedException e) { throw new RuntimeException(e); }
+            perfilPrestadorRepository.atualizarNotaMedia(kaue.id(), new BigDecimal("4.5"), Instant.now());
+        });
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, status_verificacao, nota_media FROM providers_profile WHERE user_id = ?::uuid", kaue.id().toString());
+        assertThat("a nota é gravada (é do histórico)", (BigDecimal) perfil.get("nota_media"), comparesEqualTo(new BigDecimal("4.5")));
+        assertThat("a anonimização do perfil não é desfeita", perfil.get("bio"), nullValue());
+        assertThat(perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+    }
+
+    @Test @Order(61)
+    @DisplayName("61 · 20 exclusões SIMULTÂNEAS (contas diferentes) terminam todas em 204 — a transação externa não segura conexão ociosa e o pool não esgota")
+    void exclusaoDeConta_vinteSimultaneas_naoEsgotamOPool() throws Exception {
+        // Revisão cruzada (2ª rodada): excluir() era @Transactional e chamava autenticarPorId (REQUIRES_NEW) logo na 1ª linha. O
+        // Spring abre a conexão da transação externa na entrada e a segura ociosa; com mais requisições que conexões (o pool é 10),
+        // todas seguram a externa e nenhuma consegue a interna — esperam o timeout do pool (30 s) e viram 500. Foi o defeito do login.
+        int quantas = 20;
+        var contas = new java.util.ArrayList<Conta>();
+        for (int i = 0; i < quantas; i++) contas.add(cadastrarCliente("Pool " + i, "pool.exclusao." + i + "@onda.test"));
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(quantas);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> respostas = new java.util.ArrayList<>();
+        for (var c : contas) {
+            respostas.add(pool.submit(() -> {
+                largada.await();
+                return excluirConta(c.token(), SENHA_PADRAO).statusCode();
+            }));
+        }
+        largada.countDown();
+        List<Integer> codigos = new java.util.ArrayList<>();
+        for (var r : respostas) codigos.add(r.get(20, java.util.concurrent.TimeUnit.SECONDS));   // < o timeout de 30 s do pool
+        pool.shutdown();
+
+        assertThat(codigos, everyItem(equalTo(204)));
+        for (var c : contas) assertThat(conta(c.id()).get("excluido_em"), notNullValue());
+    }
+
+    // ─── 2ª rodada de revisão cruzada (#22): escritores de ServiceRequest.status sem trava ───
+    //
+    // start/confirmCompletion/openDispute/accept/reject/mediação liam o pedido sem trava e regravavam a entidade inteira. Um
+    // cancel() (UPDATE guardado) que commitasse no meio era sobrescrito. Os passos 51-53 seguram o "outro lado" em voo, já com a
+    // trava de linha, e disparam a chamada real: ela espera, relê o estado de agora e recusa.
+
+    @Autowired com.onda.marketplace.payment.OutboxEventRepository outboxEventosRepo;
+
+    @Test @Order(62)
+    @DisplayName("62 · Confirmar a conclusão durante um cancelamento em voo: espera e recusa — o outbox não fica com reembolso E repasse")
+    void confirmarConclusao_duranteCancelamentoEmVoo_naoGeraRepasseJuntoComOReembolso() throws Exception {
+        var lia = cadastrarCliente("Lia Conclusao", "lia.conclusao@onda.test");
+        var teo = cadastrarPrestador("Teo Conclusao", "teo.conclusao@onda.test", "312.382.710-06");
+        UUID pedido = pedidoDe(lia, "Pedido em andamento, Rua M 10", "EM_ANDAMENTO");
+        proposta(pedido, teo.id(), ProposalStatus.ACEITA);
+        pagamento(pedido, TransactionStatus.RETIDO);
+        UUID txId = transactionRepository.findByServiceRequestId(pedido).orElseThrow().getId();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "cancelamento em voo": o UPDATE guardado já tomou a linha do pedido e o reembolso já foi enfileirado, sem commitar
+        var cancelamento = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            int linhas = serviceRequestRepository.cancelarSeEmEstadoCancelavel(pedido,
+                    java.util.Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO), Instant.now());
+            assertThat(linhas, equalTo(1));
+            outboxEventosRepo.save(new com.onda.marketplace.payment.OutboxEvent("transaction", txId, "PAYMENT_REFUNDED",
+                    "{\"transactionId\":\"%s\",\"serviceRequestId\":\"%s\"}".formatted(txId, pedido)));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "o cancelamento em voo deveria ter a linha");
+
+        var conclusao = pool.submit(() -> given().header("Authorization", "Bearer " + lia.token())
+                .when().post("/api/v1/service-requests/{id}/confirm-completion", pedido).then().extract());
+        Thread.sleep(800);
+        assertThat("a confirmação deveria estar ESPERANDO a trava", conclusao.isDone(), is(false));
+
+        liberar.countDown();
+        cancelamento.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = conclusao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("INVALID_STATE_TRANSITION"));
+        assertThat("o cancelamento não é sobrescrito por CONCLUIDO", statusDoPedido(pedido), equalTo("CANCELADO"));
+        assertThat("um reembolso na fila", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED'", txId.toString()), equalTo(1));
+        assertThat("e NENHUM repasse da mesma transação", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_RELEASED'", txId.toString()), equalTo(0));
+    }
+
+    @Test @Order(63)
+    @DisplayName("63 · Aceitar durante uma proposta nova em voo: espera, encerra a proposta nova também — não sobra ATIVA órfã em pedido ACEITO")
+    void aceitar_duranteCriacaoDeProposta_encerraAPropostaNova() throws Exception {
+        var rui = cadastrarCliente("Rui Aceite", "rui.aceite@onda.test");
+        var ana = cadastrarPrestador("Ana Aceite", "ana.aceite@onda.test", "319.770.277-84");
+        var bia = cadastrarPrestador("Bia Aceite", "bia.aceite@onda.test", "273.261.802-02");
+        moderarPrestador(ana.id().toString(), "APROVAR");
+        UUID pedido = pedidoDe(rui, "Pedido com proposta, Rua N 20", "PROPOSTO");
+        proposta(pedido, ana.id(), ProposalStatus.ATIVA);
+        UUID propostaDaAna = proposalRepository.findByServiceRequestIdAndStatus(pedido, ProposalStatus.ATIVA).get(0).getId();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "proposta nova em voo": já com a trava do pedido e a proposta da Bia gravada, sem commitar (é o que create() faz)
+        var criacao = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
+            proposalRepository.save(new Proposal(sr, bia.id(), new BigDecimal("180.00"), 1, null, ProposalStatus.ATIVA));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a criação em voo deveria ter a trava");
+
+        var aceite = pool.submit(() -> given().header("Authorization", "Bearer " + rui.token())
+                .when().put("/api/v1/proposals/{id}/accept", propostaDaAna).then().extract());
+        Thread.sleep(800);
+        assertThat("o aceite deveria estar ESPERANDO a trava", aceite.isDone(), is(false));
+
+        liberar.countDown();
+        criacao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = aceite.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(200));
+        assertThat(statusDoPedido(pedido), equalTo("ACEITO"));
+        assertThat(texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid", pedido.toString(), ana.id().toString()), equalTo("ACEITA"));
+        assertThat("a proposta que chegou durante o aceite é encerrada, não fica ATIVA num pedido ACEITO",
+                texto("SELECT status FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid", pedido.toString(), bia.id().toString()), equalTo("ENCERRADA"));
+    }
+
+    @Test @Order(64)
+    @DisplayName("64 · Recusar a proposta durante um cancelamento em voo: espera e recusa — o pedido cancelado não volta a PENDENTE")
+    void recusar_duranteCancelamentoEmVoo_naoRessuscitaOPedidoCancelado() throws Exception {
+        var edu = cadastrarCliente("Edu Recusa", "edu.recusa.cancel@onda.test");
+        var gus = cadastrarPrestador("Gus Recusa", "gus.recusa.cancel@onda.test", "797.737.863-90");
+        UUID pedido = pedidoDe(edu, "Pedido com uma proposta, Rua O 30", "PROPOSTO");
+        proposta(pedido, gus.id(), ProposalStatus.ATIVA);
+        UUID propostaDoGus = proposalRepository.findByServiceRequestIdAndStatus(pedido, ProposalStatus.ATIVA).get(0).getId();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var cancelamento = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            int linhas = serviceRequestRepository.cancelarSeEmEstadoCancelavel(pedido,
+                    java.util.Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO), Instant.now());
+            assertThat(linhas, equalTo(1));
+            proposalRepository.encerrarAtivasDosPedidos(List.of(pedido));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "o cancelamento em voo deveria ter a linha");
+
+        var recusa = pool.submit(() -> given().header("Authorization", "Bearer " + edu.token())
+                .when().put("/api/v1/proposals/{id}/reject", propostaDoGus).then().extract());
+        Thread.sleep(800);
+        assertThat("a recusa deveria estar ESPERANDO a trava", recusa.isDone(), is(false));
+
+        liberar.countDown();
+        cancelamento.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = recusa.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("PROPOSAL_NOT_ACTIVE"));
+        assertThat("o pedido continua CANCELADO — a reabertura não o devolve à fila", statusDoPedido(pedido), equalTo("CANCELADO"));
+    }
+
+    @Test @Order(65)
+    @DisplayName("65 · Expiração: pedido que o cliente cancelou entre a consulta e o UPDATE do job não é contado nem tem proposta encerrada por ele")
+    void expiracao_soAtribuiAoJobOQueOUpdateDeFatoCancelou() {
+        var ivo = cadastrarCliente("Ivo Expira", "ivo.expira@onda.test");
+        UUID a = pedidoDe(ivo, "Velho A, Rua P 40", "PROPOSTO");
+        UUID b = pedidoDe(ivo, "Velho B, Rua P 40", "PROPOSTO");
+        for (UUID id : List.of(a, b)) {
+            jdbc.update("UPDATE service_requests SET updated_at = now() - interval '20 days' WHERE id = ?::uuid", id.toString());
+        }
+        Instant agora = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        Instant limite = agora.minus(java.time.Duration.ofDays(15));
+
+        var resultado = transacao.execute(st -> {
+            // o cliente cancelou B depois da consulta do job: CANCELADO com o updated_at DELE, não o do job
+            serviceRequestRepository.cancelarSeEmEstadoCancelavel(b,
+                    java.util.Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO), agora.minusSeconds(30));
+            int atingidos = serviceRequestRepository.cancelarSemAndamento(List.of(a, b), limite, agora);
+            return java.util.Map.of("atingidos", atingidos, "doJob", serviceRequestRepository.idsCanceladosEm(List.of(a, b), agora));
+        });
+
+        assertThat("o UPDATE só afetou o A", resultado.get("atingidos"), equalTo(1));
+        assertThat("só o A é do job; o B estar CANCELADO não o torna expirado", resultado.get("doJob"), equalTo(List.of(a)));
+    }
+
+    @Autowired com.onda.marketplace.payment.PaymentService pagamentoService;
+
+    @Test @Order(66)
+    @DisplayName("66 · Confirmação do pagamento durante um cancelamento em voo: espera, vê o pedido CANCELADO e devolve na hora (1 reembolso)")
+    void confirmarPagamento_duranteCancelamentoEmVoo_reconciliaEDevolveUmaVez() throws Exception {
+        var mia = cadastrarCliente("Mia Pagamento", "mia.pagamento@onda.test");
+        UUID pedido = pedidoDe(mia, "Pedido aceito, Rua Q 50", "ACEITO");
+        pagamento(pedido, TransactionStatus.PENDENTE);
+        var tx = transactionRepository.findByServiceRequestId(pedido).orElseThrow();
+        tx.setGatewayTransactionId("gw-e2e-55");
+        transactionRepository.save(tx);
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // cancel() em voo: viu a transação PENDENTE (nada a reembolsar), cancelou e ainda não commitou
+        var cancelamento = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            int linhas = serviceRequestRepository.cancelarSeEmEstadoCancelavel(pedido,
+                    java.util.Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO), Instant.now());
+            assertThat(linhas, equalTo(1));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "o cancelamento em voo deveria ter a linha");
+
+        var confirmacao = pool.submit(() -> pagamentoService.confirmPayment("gw-e2e-55", "PAGO"));
+        Thread.sleep(800);
+        assertThat("a confirmação deveria estar ESPERANDO a trava do pedido", confirmacao.isDone(), is(false));
+
+        liberar.countDown();
+        cancelamento.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        confirmacao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat("o pedido cancelado não fica com o dinheiro retido: reconciliado como reembolsado",
+                texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", tx.getId().toString()), equalTo("REEMBOLSADO"));
+        assertThat("um reembolso na fila", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED'", tx.getId().toString()), equalTo(1));
+
+        // e a reentrega do MESMO webhook é no-op (antes estourava INVALID_PAYMENT_TRANSITION e o gateway reentregava para sempre)
+        pagamentoService.confirmPayment("gw-e2e-55", "PAGO");
+        assertThat("a reentrega não enfileira outro reembolso", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED'", tx.getId().toString()), equalTo(1));
+    }
+
+    // ─── 2ª rodada de revisão cruzada (#23) ───
+
+    @Autowired com.onda.marketplace.auth.RefreshTokenRepository refreshTokensRepo;
+
+    @Test @Order(67)
+    @DisplayName("67 · O mesmo refresh em duas trocas de papel: só UMA consome — a outra espera, recusa e nenhuma sessão extra é emitida")
+    void refresh_duasTrocasComOMesmoToken_soUmaConsome() throws Exception {
+        // Antes: leitura + revoke() + save() — as duas passavam em isValid() antes de qualquer uma revogar e cada uma emitia uma sessão
+        // de 30 dias. Agora o UPDATE (WHERE revogado = false) afeta a linha só para uma delas.
+        var lara = cadastrarPrestador("Lara Refresh", "lara.refresh@onda.test", "786.688.446-36");
+        UUID tokenId = jdbc.queryForObject(
+                "SELECT id FROM refresh_tokens WHERE user_id = ?::uuid AND revogado = false ORDER BY created_at DESC LIMIT 1",
+                UUID.class, lara.id().toString());
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a outra chamada, em voo": já consumiu o token (a linha está presa pela transação dela), sem commitar
+        var outraChamada = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            assertThat(refreshTokensRepo.revogarSeAindaValido(tokenId), equalTo(1));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a outra chamada deveria ter a linha do token");
+
+        var troca = pool.submit(() -> trocarPapel(lara, "ROLE_CLIENT"));
+        Thread.sleep(800);
+        assertThat("a troca deveria estar ESPERANDO a linha do token", troca.isDone(), is(false));
+
+        liberar.countDown();
+        outraChamada.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = troca.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        resposta.then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        assertThat("nenhuma sessão nova nasceu desse token (a outra chamada o consumiu primeiro)",
+                contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid AND revogado = false", lara.id().toString()), equalTo(0));
+    }
+
+    @Test @Order(68)
+    @DisplayName("68 · Perfil com CPF não conciliado some da busca; o suporte concilia (CONCILIAR_CPF) e ele volta")
+    void cpfNaoConciliado_somaDaBusca_eOSuporteConcilia() {
+        double lat = -3.7319, lng = -38.5267;
+        var ari = cadastrarPrestador("Ari Duplicata Busca", "ari.duplicata.busca@onda.test", "254.931.161-20");
+        var bel = cadastrarPrestador("Bel Conciliada Busca", "bel.conciliada.busca@onda.test", "574.715.559-80");
+        moderarPrestador(ari.id().toString(), "APROVAR");
+        moderarPrestador(bel.id().toString(), "APROVAR");
+        for (var c : List.of(ari, bel)) {
+            jdbc.update("UPDATE providers_profile SET categoria = 'eletrica', localizacao = ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography WHERE user_id = ?::uuid",
+                    lng, lat, c.id().toString());
+        }
+        jdbc.update("UPDATE providers_profile SET cpf_conciliado = false WHERE user_id = ?::uuid", ari.id().toString());   // o backfill marcou
+        var cliente = cadastrarCliente("Cliente Busca Conciliada", "cliente.busca.conciliada@onda.test");
+
+        List<String> antes = given().header("Authorization", "Bearer " + cliente.token())
+                .queryParam("lat", lat).queryParam("lng", lng).queryParam("raio", 50000).queryParam("categoria", "eletrica").queryParam("limite", 50)
+                .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
+        assertThat("a duplicata não aparece (o guard já a impede de operar: listá-la levaria o cliente a um beco)", antes, not(hasItem(ari.id().toString())));
+        assertThat("a conciliada aparece", antes, hasItem(bel.id().toString()));
+
+        // o suporte decide a duplicata — antes só um UPDATE manual no banco desfazia a marca
+        given().contentType(ContentType.JSON).header("Authorization", "Bearer " + tokenAdmin())
+                .body("{\"action\":\"CONCILIAR_CPF\"}")
+                .when().post("/api/v1/admin/providers/{id}/moderate", ari.id()).then().statusCode(200);
+        assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid AND cpf_conciliado = true", ari.id().toString()), equalTo(1));
+
+        List<String> depois = given().header("Authorization", "Bearer " + cliente.token())
+                .queryParam("lat", lat).queryParam("lng", lng).queryParam("raio", 50000).queryParam("categoria", "eletrica").queryParam("limite", 50)
+                .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
+        assertThat("conciliado, volta à busca", depois, hasItem(ari.id().toString()));
+    }
 }

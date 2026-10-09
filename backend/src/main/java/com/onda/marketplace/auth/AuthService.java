@@ -153,15 +153,7 @@ public class AuthService {
 
     @Transactional
     public AuthResponse refresh(RefreshRequest req) {
-        String hash = sha256(req.refreshToken());
-        RefreshToken stored = refreshTokenRepository.findByTokenHash(hash)
-                .orElseThrow(() -> new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado."));
-        if (!stored.isValid() || !stored.getUser().isAtivo()) {
-            // conta suspensa (US26) não renova a sessão — mesma resposta de token inválido
-            throw new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado.");
-        }
-        stored.revoke();
-        refreshTokenRepository.save(stored);
+        RefreshToken stored = consumirRefresh(req.refreshToken(), null);
         User user = stored.getUser();
         // renovar mantém o contexto da sessão (quem trocou para prestador continua prestador); se a conta perdeu o papel
         // desde então, volta ao principal
@@ -201,19 +193,38 @@ public class AuthService {
     }
 
     /**
-     * Valida que {@code refreshToken} é desta conta e ainda vale, e o revoga — usado por {@code switchRole} e
+     * Valida que {@code refreshToken} é desta conta e ainda vale, e o consome — usado por {@code switchRole} e
      * {@code ProviderService.tornarPrestador} (become-provider) antes de emitir uma sessão nova a partir de um
      * access token só.
      */
     public void consumirRefreshDaConta(String refreshToken, UUID userId) {
-        RefreshToken anterior = refreshTokenRepository.findByTokenHash(sha256(refreshToken))
-                .filter(rt -> rt.getUser().getId().equals(userId))
-                .orElseThrow(() -> new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado."));
-        if (!anterior.isValid()) {
-            throw new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado.");
+        consumirRefresh(refreshToken, userId);
+    }
+
+    /**
+     * Único caminho que consome um refresh token (renovação, troca de papel e become-provider): existe, é do dono esperado
+     * (quando informado), não expirou, não foi revogado, a conta está ativa — e é REVOGADO de forma atômica. Antes eram duas
+     * implementações: a de {@code refresh()} conferia a conta ativa e a de {@code consumirRefreshDaConta} não, e nenhuma consumia
+     * atomicamente (duas chamadas simultâneas com o mesmo token passavam as duas, e cada uma emitia uma sessão de 30 dias).
+     *
+     * @param donoEsperado quem deve ser o dono do token; {@code null} na renovação, em que o token é a única credencial
+     */
+    private RefreshToken consumirRefresh(String refreshToken, UUID donoEsperado) {
+        RefreshToken stored = refreshTokenRepository.findByTokenHash(sha256(refreshToken))
+                .filter(rt -> donoEsperado == null || rt.getUser().getId().equals(donoEsperado))
+                .orElseThrow(AuthService::refreshInvalido);
+        if (!stored.isValid() || !stored.getUser().isAtivo()) {
+            // conta suspensa (US26) não renova a sessão — mesma resposta de token inválido
+            throw refreshInvalido();
         }
-        anterior.revoke();
-        refreshTokenRepository.save(anterior);
+        if (refreshTokenRepository.revogarSeAindaValido(stored.getId()) == 0) {
+            throw refreshInvalido();   // outro pedido com o mesmo token o consumiu entre a leitura e esta escrita
+        }
+        return stored;
+    }
+
+    private static BusinessException refreshInvalido() {
+        return new BusinessException("INVALID_REFRESH_TOKEN", "Token inválido ou expirado.");
     }
 
     /**

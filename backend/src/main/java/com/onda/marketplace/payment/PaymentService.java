@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -89,21 +90,36 @@ public class PaymentService {
      * reembolso nenhum. Sem esta checagem, o dinheiro ficaria retido para sempre num pedido já CANCELADO. Este é
      * o evento confirmado que dirige o estado financeiro (princípio do CLAUDE.md), então é AQUI que a
      * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
+     *
+     * <p>2ª rodada (auto-revisão, 2026-10-09), duas correções na própria reconciliação:
+     * <ul>
+     *   <li><b>Só reconcilia na transição PENDENTE → RETIDO</b> (a 1ª confirmação). Reentrega do webhook — comum — achava a
+     *       transação REEMBOLSADA e estourava {@code INVALID_PAYMENT_TRANSITION} (422 ao gateway, que reentrega para
+     *       sempre); e, com a transação ainda RETIDA por um {@code cancel()} que já enfileirou o reembolso, a reconciliação
+     *       enfileiraria um SEGUNDO {@code PAYMENT_REFUNDED}. Confirmação de transação que já não está PENDENTE é no-op.</li>
+     *   <li><b>O pedido é travado antes de a transação ser lida.</b> Serializa com {@code cancel()} (que não via a transação
+     *       RETIDA se a confirmação ainda não tivesse commitado e deixava o dinheiro retido num pedido cancelado) e com uma
+     *       entrega duplicada simultânea do mesmo webhook (as duas veriam PENDENTE e enfileirariam dois reembolsos). A
+     *       transação só é carregada depois da trava, então o estado que se lê é o de agora.</li>
+     * </ul>
      */
     @Transactional
     public void confirmPayment(String gatewayTransactionId, String status) {
+        Optional<UUID> srId = transactionRepository.findServiceRequestIdByGatewayTransactionId(gatewayTransactionId);
+        if (srId.isEmpty()) {
+            return;
+        }
+        ServiceRequest sr = requestRepository.findByIdComTrava(srId.get()).orElse(null);
         transactionRepository.findByGatewayTransactionId(gatewayTransactionId).ifPresent(tx -> {
-            if ("PAGO".equalsIgnoreCase(status)) {
-                tx.reter();
-                boolean pedidoJaCancelado = requestRepository.findById(tx.getServiceRequestId())
-                        .map(sr -> sr.getStatus() == ServiceRequestStatus.CANCELADO)
-                        .orElse(false);
-                if (pedidoJaCancelado) {
-                    tx.reembolsar();
-                    outboxRepository.save(outboxEventReembolso(tx));
-                }
-            }
             // REJEITADO: mantém PENDENTE para retry idempotente pelo OutboxProcessor
+            if (!"PAGO".equalsIgnoreCase(status) || tx.getStatusPagamento() != TransactionStatus.PENDENTE) {
+                return;
+            }
+            tx.reter();
+            if (sr != null && sr.getStatus() == ServiceRequestStatus.CANCELADO) {
+                tx.reembolsar();
+                outboxRepository.save(outboxEventReembolso(tx));
+            }
             transactionRepository.save(tx);
         });
     }

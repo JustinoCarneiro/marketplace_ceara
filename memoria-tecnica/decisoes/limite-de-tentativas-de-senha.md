@@ -61,6 +61,20 @@ próximo erro recomeça do zero. Configurável: `marketplace.password-attempts.m
   `memoria-tecnica/decisoes/vps-deploy-marketplace-ceara.md` (se existir) ou a configuração de ambiente da demo —
   sem canal de recuperação, quem é bloqueado nesse ambiente só tem a saída de esperar os 15 minutos.
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
+- **`AccountDeletionService.excluir()` repetia o defeito de pool que o `login()` teve.** Era `@Transactional` e chamava
+  `autenticarPorId` (`REQUIRES_NEW`) na primeira linha: a transação externa abre a conexão na entrada e a segura ociosa enquanto a
+  interna usa uma segunda. Com mais exclusões simultâneas que conexões (o pool padrão é 10), todas seguram a externa, nenhuma
+  consegue a interna e esperam os 30 s do timeout. Corrigido como no login: `excluir()` não é transacional; a parte atômica
+  (limpeza + anonimização) roda num `TransactionTemplate` aberto só depois da confirmação da senha. Prova: E2E passo 46 (20 exclusões
+  simultâneas, todas 204 em menos de 20 s); com o `@Transactional` de volta o passo estoura o tempo. O teste de reflexão agora trava o
+  contrário do que travava: `excluir()` **não** pode ter `@Transactional`.
+- **O perfil E2E rodava com `open-in-view` LIGADO; a produção tem `false`.** A correção acima mostrou o porquê de isso importar: sem
+  transação externa, o `REQUIRES_NEW` reaproveita a sessão do Hibernate da requisição (open-in-view) e deixa o `User` carregado nela; a
+  leitura com trava seguinte devolve essa instância com o estado antigo — o teste do toque duplo mandou 2 e-mails. Em produção cada
+  transação tem a sua sessão e isso não acontece. `application-e2e.yml` agora declara `open-in-view: false`, igual à produção (a suíte
+  inteira continuou verde, sem `LazyInitializationException` novo). Um teste com configuração diferente da produção prova a coisa errada.
+
 ## Efeito nos testes
 `UserTentativasDeSenhaTest`, `PasswordAttemptsTest`, `PasswordAuthenticatorTest` (novo), `AuthServiceTest`,
 `AccountDeletionServiceTest`, `PasswordResetServiceTest`, `ErrorControllerAdviceTest` e o E2E (passos 35–38 e 40–41; o

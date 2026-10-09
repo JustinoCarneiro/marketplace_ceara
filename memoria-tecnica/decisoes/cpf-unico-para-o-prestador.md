@@ -64,6 +64,17 @@ passou a ter chave própria e versionada: [[chave-do-hash-do-cpf]].
   o resultado mais próximo, o filtro o removia e não trazia o 2º. Corrigido excluindo na própria consulta nativa
   (`WHERE pp.user_id <> :quemBusca`), antes do `LIMIT`. Prova no E2E, passo 55.
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
+- **A marca `cpf_conciliado = false` era permanente e não tirava o perfil da busca.** O guard barrava proposta e aceite, mas o prestador
+  duplicado continuava aparecendo para o cliente como VERIFICADO — e o cliente caía num `PROVIDER_NOT_VERIFIED` sem entender —, e só um
+  `UPDATE` manual no banco desfazia a marca. Agora a busca (`findNearby`) filtra `cpf_conciliado = TRUE` e há a ação de moderação
+  `CONCILIAR_CPF` (`POST /admin/providers/{id}/moderate`) para o suporte decidir a duplicata. **Pendência:** o painel ainda não tem o botão; a
+  ação existe na API. E2E 68.
+- **Prestador com CPF cifrado que não decifra nunca é conferido.** O backfill o ignora em toda subida (não tem como saber se o CPF dele colide
+  com o de um cliente), então a marca de duplicata nunca é posta para ele — e só a CONTAGEM saía no log. Agora os ids saem em `WARN` (nunca o
+  CPF). Não foi bloqueado de operar: o seed da demo grava um placeholder que não decifra, e bloquear por ausência de hash quebraria a demo.
+  Quem não decifra continua fora da unicidade até alguém conferir à mão.
+
 ## Efeito nos testes
 `CpfTest`, `ProviderServiceTest`, `AuthServiceTest`, `ProviderCpfBackfillTest`, `ProviderVerificationGuardTest` (novo: CPF
 não conciliado), `DiscoveryServiceTest` (exclusão na consulta, não depois), `ErrorControllerAdviceTest` (corrida por CPF) e

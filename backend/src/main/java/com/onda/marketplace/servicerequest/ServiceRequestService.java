@@ -222,7 +222,12 @@ public class ServiceRequestService {
     /** Confirma a descrição final (o cliente pode ter editado a sugestão da IA). */
     @Transactional
     public ServiceRequestDto publicar(UUID requestId, UUID clienteId, PublishRequest req) {
-        ServiceRequest sr = carregarDoCliente(requestId, clienteId);
+        // Com trava, como PRIMEIRA leitura do pedido (revisão cruzada, 2ª rodada): o save abaixo regrava a entidade inteira. Sem a
+        // trava, uma proposta que chegasse no meio (PENDENTE → PROPOSTO) era desfeita pelo status antigo, e o pedido ficava
+        // PENDENTE com uma proposta ATIVA escondida. Pedido de outro cliente: mesma resposta de "não existe".
+        ServiceRequest sr = requestRepository.findByIdComTrava(requestId)
+                .filter(r -> r.getCliente().getId().equals(clienteId))
+                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.PENDENTE) {
             throw new BusinessException("INVALID_TRANSITION",

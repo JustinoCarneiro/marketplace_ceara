@@ -101,6 +101,22 @@ _Os três padrões abaixo (prestador reprovado ainda contrata; "clientes ativos"
   `become-provider` e da exclusão de conta), serializando as duas. Prova determinística no E2E, passo 54 (molde dos
   passos 33/42).
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
+- **Refresh consumido de forma ATÔMICA, por um caminho só.** `consumirRefreshDaConta` (switch-role e become-provider) lia o token, conferia
+  `isValid()` e o revogava com `save()`: duas chamadas simultâneas com o mesmo token passavam as duas em `isValid()` antes de qualquer uma
+  revogar, e cada uma emitia uma sessão de 30 dias. Além disso, ele não conferia a conta ativa (o `refresh()` conferia) — as duas eram
+  implementações separadas. Agora há um só `consumirRefresh` (existe, é do dono esperado quando informado, não expirou, não foi revogado,
+  conta ativa) que consome com `UPDATE ... WHERE revogado = false` e recusa se 0 linhas foram afetadas; `refresh()`, `switchRole` e
+  `tornarPrestador` passam por ele (o `refresh()` tinha o mesmo double-spend). Prova: E2E 67 (a linha do token presa por outra
+  chamada em voo; a troca espera, recusa e nenhuma sessão extra nasce); a mutação (voltar ao `revoke()` + `save()`) reproduz o 200.
+- **Limites aceitos, não corrigidos:** (1) se o servidor revoga o refresh e a resposta se perde no caminho (timeout, conexão caída), o
+  app fica com o refresh antigo, já revogado, e o próximo `/auth/refresh` falha — o usuário é deslogado depois de uma troca que na
+  verdade deu certo; é custo da troca revogar-antes-de-emitir, sem idempotência no cliente. (2) `switchRole` lê o usuário sem trava, o que
+  hoje é inofensivo (não grava nada por essa referência); se uma mudança futura passar a gravar o `User` ali, vale a regra do
+  [[exclusao-de-conta-por-anonimizacao]]: trava como primeira leitura. (3) `User.papeis` é `EAGER` (cada carga de `User` custa uma
+  consulta a mais em `user_papeis`, inclusive login e listagem do admin); trocar por `LAZY` exige `JOIN FETCH` nas consultas que
+  usam os papéis e quebraria o `emitirSessao` sobre um `User` já destacado.
+
 ## Efeito nos testes
 Unitários: `UserPapeisTest`, `AuthServiceTest` (sessão, contexto, `switchRole`, CPF), `ProviderServiceTest` (cadastro com os
 dois papéis, `tornarPrestador`), `ProposalServiceTest`, `ServiceRequestServiceTest`, `DiscoveryServiceTest`,

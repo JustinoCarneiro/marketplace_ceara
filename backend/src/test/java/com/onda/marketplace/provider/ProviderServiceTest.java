@@ -182,6 +182,7 @@ class ProviderServiceTest {
     private void comRefreshValido(User user) {
         when(refreshTokenRepository.findByTokenHash(any()))
                 .thenReturn(Optional.of(new RefreshToken(user, "hash", java.time.Instant.now().plusSeconds(3600), user.getRole())));
+        when(refreshTokenRepository.revogarSeAindaValido(any())).thenReturn(1);   // consumo atômico: este chamador o consumiu
     }
 
     @Test
@@ -283,10 +284,18 @@ class ProviderServiceTest {
         verify(userRepository, never()).findById(any());
     }
 
+    /** Dono vivo do perfil: a trava do usuário é a PRIMEIRA leitura de atualizarChavePix (revisão cruzada, 2ª rodada). */
+    private void donoVivo(java.util.UUID userId) {
+        when(userRepository.findByIdComTrava(userId)).thenReturn(java.util.Optional.of(
+                com.onda.marketplace.auth.User.builder().nome("Prestador").email("p@pix.test").senhaHash("$2a$x")
+                        .role(com.onda.marketplace.auth.UserRole.ROLE_PROVIDER).build()));
+    }
+
     @Test
     void atualizarChavePix_cifraAntesDeSalvar_naoGuardaEmClaro() {
         var userId = java.util.UUID.randomUUID();
         var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        donoVivo(userId);
         when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -309,6 +318,7 @@ class ProviderServiceTest {
     @Test
     void atualizarChavePix_perfilInexistente_404() {
         var userId = java.util.UUID.randomUUID();
+        donoVivo(userId);
         when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "chave"))
@@ -320,6 +330,7 @@ class ProviderServiceTest {
     void atualizarChavePix_chaveMalFormada_ehRejeitadaESemSalvar() {
         var userId = java.util.UUID.randomUUID();
         var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        donoVivo(userId);
         when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
 
         assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "minha chave qualquer"))
@@ -334,6 +345,7 @@ class ProviderServiceTest {
     void atualizarChavePix_guardaAChaveNormalizada_noMesmoFormatoQueORepasseVaiUsar() {
         var userId = java.util.UUID.randomUUID();
         var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        donoVivo(userId);
         when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -341,6 +353,38 @@ class ProviderServiceTest {
 
         var decifrador = new CpfEncryptor("01234567890123456789012345678901");
         assertThat(decifrador.decrypt(perfil.getChavePixCifrada())).isEqualTo("11144477735");
+    }
+
+    @Test
+    void atualizarChavePix_contaExcluida_naoGrava_eNaoLePerfil() {
+        // exclusão que commitou antes de a trava ser obtida: o perfil já está anonimizado, nada se grava nele
+        var userId = java.util.UUID.randomUUID();
+        var excluido = com.onda.marketplace.auth.User.builder().nome("Prestador").email("x@pix.test").senhaHash("$2a$x")
+                .role(com.onda.marketplace.auth.UserRole.ROLE_PROVIDER).build();
+        excluido.anonimizar("removido-pix@excluido.invalid", "hash-inutilizavel", false);
+        when(userRepository.findByIdComTrava(userId)).thenReturn(java.util.Optional.of(excluido));
+
+        assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "prestador@pix.com"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PROVIDER_NOT_FOUND");
+        verifyNoInteractions(profileRepository);
+    }
+
+    @Test
+    void atualizarChavePix_travaOUsuarioAntesDeLerOPerfil_aTravaEAPrimeiraLeitura() {
+        // a trava só vale como primeira leitura (o Hibernate devolve a instância antiga se já carregada): ordem importa
+        var userId = java.util.UUID.randomUUID();
+        var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
+        donoVivo(userId);
+        when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
+        when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        providerService.atualizarChavePix(userId, "prestador@pix.com");
+
+        var ordem = inOrder(userRepository, profileRepository);
+        ordem.verify(userRepository).findByIdComTrava(userId);
+        ordem.verify(profileRepository).findByUserId(userId);
+        verify(userRepository, never()).findById(any());
     }
 
     @Test

@@ -3,11 +3,16 @@ package com.onda.marketplace.auth;
 import com.onda.marketplace.provider.CpfEncryptor;
 import com.onda.marketplace.provider.ProviderCpfBackfill;
 import com.onda.marketplace.provider.ProviderProfileRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * Recusa subir se houver conta com hash de CPF de uma versão de chave que a configuração não sabe mais calcular, OU se
@@ -32,6 +37,11 @@ import org.springframework.stereotype.Component;
 @Order(1)
 @SuppressWarnings("null")
 public class CpfHashKeyCheck implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(CpfHashKeyCheck.class);
+
+    /** O que o cruzamento contra uma conta real concluiu sobre a chave de uma versão. */
+    private enum Cruzamento { CONFERE, NAO_CONFERE, SEM_ANCORA }
 
     private final UserRepository                    userRepository;
     private final CpfHashService                     cpfHashService;
@@ -89,7 +99,8 @@ public class CpfHashKeyCheck implements ApplicationRunner {
     private void conferirOuRegistrarVerificador(int versao, String verificadorCalculado, String variavel) {
         var gravado = verificacaoRepository.findById(versao);
         if (gravado.isPresent()) {
-            if (!gravado.get().getVerificador().equals(verificadorCalculado)) {
+            if (!MessageDigest.isEqual(gravado.get().getVerificador().getBytes(StandardCharsets.UTF_8),
+                    verificadorCalculado.getBytes(StandardCharsets.UTF_8))) {
                 throw new IllegalStateException(
                         "A chave do hash do CPF da versão " + versao + " não é mais a mesma que calculou os hashes já "
                                 + "gravados nessa versão — confira " + variavel + ".");
@@ -97,17 +108,27 @@ public class CpfHashKeyCheck implements ApplicationRunner {
             return;
         }
         // 1ª subida desta versão: antes de confiar na chave, cruza contra uma conta cujo CPF decifrado já prova o hash
-        if (!cruzamentoConfereOuNaoHaOQueCruzar(versao)) {
+        Cruzamento cruzamento = cruzar(versao);
+        if (cruzamento == Cruzamento.NAO_CONFERE) {
             throw new IllegalStateException(
                     variavel + " não corresponde ao que os hashes já gravados na versão " + versao + " esperam.");
+        }
+        if (cruzamento == Cruzamento.SEM_ANCORA) {
+            // Só prestador tem o CPF cifrado; o hash do cliente não se prova (não há CPF em claro para recalcular). Sem nenhum
+            // prestador decifrável nessa versão, uma chave digitada errada seria gravada como referência sem que nada a desminta.
+            long contas = userRepository.countByCpfHashIsNotNullAndCpfHashVersao(versao);
+            if (contas > 0) {
+                log.warn("{} conta(s) têm o hash do CPF na versão {}, mas nenhum prestador com CPF decifrável permite PROVAR que {} é a "
+                        + "chave certa. O verificador gravado agora vira a referência: confira à mão o valor de {} — se estiver errado, "
+                        + "a unicidade do CPF deixa de enxergar essas contas.", contas, versao, variavel, variavel);
+            }
         }
         verificacaoRepository.save(new CpfHashKeyVerificacao(versao, verificadorCalculado));
     }
 
-    /** {@code true}: a chave da versão bate com uma âncora real, OU não existe âncora decifrável (nada para cruzar). */
-    private boolean cruzamentoConfereOuNaoHaOQueCruzar(int versao) {
+    private Cruzamento cruzar(int versao) {
         if (!cruzamentoAtivo) {
-            return true;
+            return Cruzamento.CONFERE;   // onde providers_profile não existe não há o que cruzar, e nada a avisar
         }
         for (ProviderCpfBackfill.PerfilSemHash perfil : profileRepository.comHashNaVersao(versao)) {
             String cpfDecifrado;
@@ -120,8 +141,9 @@ public class CpfHashKeyCheck implements ApplicationRunner {
             if (user == null) {
                 continue;
             }
-            return cpfHashService.confere(cpfDecifrado, user.getCpfHash(), user.getCpfHashVersao());
+            return cpfHashService.confere(cpfDecifrado, user.getCpfHash(), user.getCpfHashVersao())
+                    ? Cruzamento.CONFERE : Cruzamento.NAO_CONFERE;
         }
-        return true;   // nenhuma âncora decifrável: confia na 1ª subida desta versão (trust-on-first-use)
+        return Cruzamento.SEM_ANCORA;   // nenhuma âncora decifrável: confia na 1ª subida desta versão (trust-on-first-use)
     }
 }

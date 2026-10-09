@@ -53,6 +53,7 @@ public class RefreshToken {
 
     public void revoke() { this.revogado = true; }
 
+    public UUID    getId()         { return id; }
     public User    getUser()       { return user; }
     public UserRole getPapel()     { return papel; }
     public String  getTokenHash()  { return tokenHash; }

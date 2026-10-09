@@ -2,9 +2,12 @@ package com.onda.marketplace.provider;
 
 import com.onda.marketplace.discovery.NearbyProviderView;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +38,16 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
            """)
     List<ProviderCpfBackfill.PerfilSemHash> comHashNaVersao(@Param("versao") int versao);
 
+    /**
+     * Nota média por UPDATE direto, sem carregar o perfil (revisão cruzada, 2ª rodada): a avaliação é de OUTRO usuário e
+     * rodava {@code findByUserId} + {@code save}, que regrava a linha inteira. Se o prestador excluísse a conta nesse
+     * intervalo, o save desfazia a anonimização (bio, CPF cifrado, chave Pix e status voltavam). O UPDATE só toca a nota.
+     * {@code agora}: o UPDATE em lote não roda o {@code @PreUpdate}.
+     */
+    @Modifying
+    @Query("UPDATE ProviderProfile p SET p.notaMedia = :media, p.updatedAt = :agora WHERE p.user.id = :userId")
+    int atualizarNotaMedia(@Param("userId") UUID userId, @Param("media") BigDecimal media, @Param("agora") Instant agora);
+
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);
 
@@ -56,6 +69,9 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
     // (DiscoveryService), já com o LIMIT aplicado — com limite=1, se ele fosse o 1º resultado, o filtro
     // de depois o removia e não trazia o 2º: a busca voltava vazia havendo outro prestador próximo.
     // Excluído AQUI, antes do LIMIT, o lugar dele na lista vai para quem vem depois.
+    //
+    // 2ª rodada: perfil com cpf_conciliado = false (duplicata legada de CPF) não aparece: o guard de verificação já o impede de
+    // propor/aceitar, e listá-lo só levaria o cliente a um beco (vê um prestador VERIFICADO e recebe PROVIDER_NOT_VERIFIED).
     @Query(nativeQuery = true, value = """
             SELECT pp.user_id             AS id,
                    u.nome,
@@ -71,6 +87,7 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
               AND pp.status_verificacao = 'VERIFICADO'
               AND pp.localizacao IS NOT NULL
               AND pp.user_id <> :quemBusca
+              AND pp.cpf_conciliado = TRUE
               AND (:categoria IS NULL OR pp.categoria = :categoria)
               AND ST_DWithin(pp.localizacao,
                       ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,

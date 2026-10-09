@@ -10,6 +10,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate       # Flyway cuida do schema
+    # Igual à produção (application.yml principal): sem isto o E2E rodava com open-in-view LIGADO — uma sessão do Hibernate
+    # compartilhada pela requisição inteira, em que uma entidade carregada numa transação (ex.: o REQUIRES_NEW da senha) volta
+    # com o estado antigo na seguinte e a trava de linha não relê nada. Teste com configuração diferente da produção mente.
+    open-in-view: false
   flyway:
     enabled: true
 

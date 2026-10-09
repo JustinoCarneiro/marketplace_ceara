@@ -86,6 +86,34 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   endereçado aqui (não é o achado do Codex, é um risco adjacente, de menor probabilidade: a janela é bem mais estreita
   e o pior caso é uma proposta `ATIVA` sobrando num pedido `ACEITO`, não dinheiro perdido).
 
+## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
+A correção da 1ª rodada fechou só o `cancel()` (UPDATE guardado). Dez ângulos independentes, cada achado conferido no código, mostraram
+que ela cobria um dos nove escritores de `ServiceRequest.status` — e que a minha correção de reabertura tinha um defeito próprio.
+- **Medição que decide o desenho:** `findByIdComTrava` sobre uma entidade que a sessão já carregou devolve a MESMA instância com o
+  estado ANTIGO (testado contra o Postgres real). Reler "sob a trava" não relê nada; a trava só vale como PRIMEIRA leitura do pedido
+  na transação. A `reabrirSeNaoHaPropostaAtiva` da 1ª rodada relia o pedido depois de a checagem de posse já tê-lo carregado, então o
+  status conferido podia ser o de antes — um pedido cancelado no meio voltava a `PENDENTE` (E2E 53 reproduz; a mutação o confirma).
+- **Escritores corrigidos** (todos leem o pedido com trava, como primeira leitura): `accept`, `reject`/reabertura (o id do pedido sai
+  de uma consulta escalar, para não carregar a proposta — e com ela o pedido — antes da trava), `start`, `confirmCompletion`,
+  `openDispute`, `MediationService.resolver` e `ServiceRequestService.publicar`. Cada um regravava a entidade inteira: um `cancel()`
+  que commitasse no meio era sobrescrito. O caso de dinheiro: `confirmCompletion` sobre um `cancel()` em voo deixava o outbox com
+  `PAYMENT_REFUNDED` **e** `PAYMENT_RELEASED` da mesma transação (E2E 51).
+- **`accept()` ganhou a checagem de estado** que nunca teve (exige `PROPOSTO`) e serializa com `create()`: uma proposta nova que
+  chegasse entre a consulta das `ATIVA` e o aceite ficava órfã num pedido `ACEITO`, e um segundo `accept()` a aceitava também (E2E 52).
+- **`confirmPayment` (reconciliação da 1ª rodada) tinha dois defeitos meus:** (1) reentrega do webhook — comum — achava a transação
+  `REEMBOLSADA` e estourava `INVALID_PAYMENT_TRANSITION` (422 ao gateway, que reentrega para sempre); (2) com a transação `RETIDA` por
+  um `cancel()` que já enfileirou o reembolso, a reconciliação enfileiraria um SEGUNDO `PAYMENT_REFUNDED`. Agora só reconcilia na
+  transição `PENDENTE → RETIDO`; qualquer outra confirmação é no-op. Também trava o pedido antes de ler a transação, o que fecha a
+  janela em que `cancel()` e a confirmação commitam em paralelo (o `cancel()` não via a transação ainda `PENDENTE`) e serializa
+  entregas duplicadas simultâneas (E2E 55).
+- **Expiração:** `idsComStatus(lote, CANCELADO)` contava como expirado um pedido que o cliente cancelou entre a consulta e o `UPDATE`
+  do job. Agora `idsCanceladosEm(lote, agora)` só devolve o que ESTE `UPDATE` gravou (mesmo `updated_at`, em microssegundos). E2E 54.
+
+**Limites aceitos, não corrigidos:** `PaymentService.initiate`/`criar` lê o pedido sem trava; um cancelamento que commite entre a
+leitura e o commit deixa uma transação `PENDENTE` num pedido `CANCELADO`, que a reconciliação acima devolve quando o gateway confirmar
+(cobrança e devolução em vez de recusa na origem). `AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador` segue sem trava
+explícita: é um `UPDATE` guardado e o MVCC do Postgres já o serializa com quem segura a linha.
+
 ## Efeito nos testes
 `ProposalServiceTest`, `ServiceExecutionServiceTest`, `PaymentServiceTest`, `ServiceRequestExpirationServiceTest`,
 `AccountDeletionServiceTest` e o E2E (passo 30 ajustado; passos 39–41 e 45 novos; passo 41 ganhou um bloco extra provando

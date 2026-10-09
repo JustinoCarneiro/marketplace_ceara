@@ -8,7 +8,7 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -39,19 +39,22 @@ public class AccountDeletionService {
     private final PasswordEncoder           passwordEncoder;
     private final PasswordAuthenticator     passwordAuthenticator;
     private final ApplicationEventPublisher eventos;
+    private final TransactionTemplate       transacao;
 
     public AccountDeletionService(UserRepository userRepository,
                                   ProviderProfileRepository profileRepository,
                                   AccountDeletionRepository exclusao,
                                   PasswordEncoder passwordEncoder,
                                   PasswordAuthenticator passwordAuthenticator,
-                                  ApplicationEventPublisher eventos) {
+                                  ApplicationEventPublisher eventos,
+                                  TransactionTemplate transacao) {
         this.userRepository    = userRepository;
         this.profileRepository = profileRepository;
         this.exclusao          = exclusao;
         this.passwordEncoder   = passwordEncoder;
         this.passwordAuthenticator = passwordAuthenticator;
         this.eventos           = eventos;
+        this.transacao         = transacao;
     }
 
     /**
@@ -62,11 +65,19 @@ public class AccountDeletionService {
      * recusa por pendência tem que desfazer tudo o mais). Separado, o acerto persiste mesmo quando a exclusão é
      * recusada por outro motivo depois. A linha é lida com trava DE NOVO aqui: a primeira trava (dentro de
      * {@code autenticarPorId}) já foi liberada quando aquela transação commitou.
+     *
+     * <p>Este método NÃO é {@code @Transactional} (revisão cruzada, 2ª rodada): com a anotação, o Spring abre a conexão da
+     * transação externa já na entrada e a segura ociosa enquanto {@code autenticarPorId} ({@code REQUIRES_NEW}) usa uma
+     * segunda — com várias exclusões simultâneas o pool esgota. É o mesmo defeito que {@code AuthService.login} teve.
+     * A parte que precisa de atomicidade (limpeza + anonimização) roda em {@link #excluirNumaTransacao} via
+     * {@code TransactionTemplate}, aberta só depois da confirmação da senha.
      */
-    @Transactional
     public void excluir(UUID userId, String senha) {
         passwordAuthenticator.autenticarPorId(userId, senha);
+        transacao.executeWithoutResult(status -> excluirNumaTransacao(userId));
+    }
 
+    private void excluirNumaTransacao(UUID userId) {
         // Com trava: o toque duplo no botão não roda a limpeza (nem manda o e-mail) duas vezes — e cobre também
         // uma exclusão concorrente que tenha terminado no intervalo entre esta trava e a de autenticarPorId.
         User user = userRepository.findByIdComTrava(userId)

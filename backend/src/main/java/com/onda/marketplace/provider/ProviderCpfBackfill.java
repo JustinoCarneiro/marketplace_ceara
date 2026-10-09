@@ -39,7 +39,10 @@ public class ProviderCpfBackfill implements ApplicationRunner {
         String getCpfCifrado();
     }
 
-    public record Resultado(int vinculados, List<UUID> duplicados, int ilegiveis) {}
+    /** {@code idsIlegiveis}: só os ids (o CPF nunca vai para o log); {@link #ilegiveis()} é a contagem. */
+    public record Resultado(int vinculados, List<UUID> duplicados, List<UUID> idsIlegiveis) {
+        public int ilegiveis() { return idsIlegiveis.size(); }
+    }
 
     private enum Desfecho { VINCULADO, DUPLICADO, JA_TINHA }
 
@@ -82,18 +85,23 @@ public class ProviderCpfBackfill implements ApplicationRunner {
                     r.vinculados(), r.ilegiveis(), r.duplicados().size(),
                     r.duplicados().isEmpty() ? "" : "— mesmo CPF em mais de uma conta, decidir à mão (ids): " + r.duplicados());
         }
+        if (r.ilegiveis() > 0) {
+            // Achado da revisão cruzada (2ª rodada): o CPF cifrado desses prestadores não decifra, então nem a unicidade nem a checagem de
+            // duplicata os alcançam — e isso se repete em toda subida. Antes só a contagem saía no log; sem os ids ninguém sabia quem investigar.
+            log.warn("Prestadores cujo CPF cifrado NÃO decifra (a unicidade do CPF não os alcança; conferir à mão; ids): {}", r.idsIlegiveis());
+        }
     }
 
     public Resultado preencher() {
         int vinculados = 0;
-        int ilegiveis = 0;
+        List<UUID> idsIlegiveis = new ArrayList<>();
         List<UUID> duplicados = new ArrayList<>();
         for (PerfilSemHash perfil : profileRepository.semHashDoCpf(cpfHashService.versaoAtual())) {
             String cpf;
             try {
                 cpf = Cpf.soDigitos(cpfEncryptor.decrypt(perfil.getCpfCifrado()));
             } catch (RuntimeException e) {
-                ilegiveis++;   // não decifra (chave trocada, placeholder do seed): nada a fazer por aqui
+                idsIlegiveis.add(perfil.getUserId());   // não decifra (chave trocada, placeholder do seed): nada a fazer por aqui
                 continue;
             }
             switch (vincular(perfil.getUserId(), cpf)) {
@@ -105,7 +113,7 @@ public class ProviderCpfBackfill implements ApplicationRunner {
                 case JA_TINHA  -> { /* ganhou o hash no meio do caminho: nada a refazer */ }
             }
         }
-        return new Resultado(vinculados, duplicados, ilegiveis);
+        return new Resultado(vinculados, duplicados, idsIlegiveis);
     }
 
     private Desfecho vincular(UUID userId, String cpf) {
