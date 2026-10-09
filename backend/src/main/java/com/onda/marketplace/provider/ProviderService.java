@@ -95,6 +95,13 @@ public class ProviderService {
         if (chavePixClaro == null || chavePixClaro.isBlank()) {
             throw new BusinessException("PIX_KEY_REQUIRED", "Informe a chave Pix.");
         }
+        // Trava do usuário como PRIMEIRA leitura (revisão cruzada, 2ª rodada): é a trava da exclusão de conta, que
+        // anonimiza o perfil. Sem ela, uma exclusão que commitasse entre a leitura do perfil e o save era desfeita —
+        // o save grava a linha inteira, e bio, CPF cifrado e status voltavam, com a chave Pix nova junto.
+        userRepository.findByIdComTrava(userId)
+                .filter(u -> !u.isExcluido())
+                .orElseThrow(() -> new BusinessException(
+                        "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));
         ProviderProfile perfil = profileRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(
                         "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));

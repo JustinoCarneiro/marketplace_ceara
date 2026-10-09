@@ -37,7 +37,7 @@ class UserAdminServiceTest {
     void suspender_usuarioComum_desativaESalva() {
         UUID id = UUID.randomUUID();
         User u = user("Cliente", "c@x.com", UserRole.ROLE_CLIENT);
-        when(userRepository.findById(id)).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.of(u));
 
         service.suspender(id);
 
@@ -46,9 +46,23 @@ class UserAdminServiceTest {
     }
 
     @Test
+    void suspenderEReativar_leemOUsuarioComTrava_nuncaComLeituraSimples() {
+        // Revisão cruzada (2ª rodada): a leitura sem trava deixava a exclusão de conta ser desfeita pelo save do admin
+        UUID id = UUID.randomUUID();
+        User u = user("Cliente", "c@x.com", UserRole.ROLE_CLIENT);
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.of(u));
+
+        service.suspender(id);
+        service.reativar(id);
+
+        verify(userRepository, times(2)).findByIdComTrava(id);
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
     void suspender_admin_lancaException_eNaoSalva() {
         UUID id = UUID.randomUUID();
-        when(userRepository.findById(id))
+        when(userRepository.findByIdComTrava(id))
                 .thenReturn(Optional.of(user("Admin", "a@x.com", UserRole.ROLE_ADMIN)));
 
         assertThatThrownBy(() -> service.suspender(id))
@@ -62,7 +76,7 @@ class UserAdminServiceTest {
         UUID id = UUID.randomUUID();
         User u = user("Cliente", "c@x.com", UserRole.ROLE_CLIENT);
         u.suspender();
-        when(userRepository.findById(id)).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.of(u));
 
         service.reativar(id);
 
@@ -73,7 +87,7 @@ class UserAdminServiceTest {
     @Test
     void suspender_usuarioInexistente_lancaException() {
         UUID id = UUID.randomUUID();
-        when(userRepository.findById(id)).thenReturn(Optional.empty());
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.suspender(id))
                 .isInstanceOf(BusinessException.class)
@@ -89,7 +103,7 @@ class UserAdminServiceTest {
     @Test
     void suspender_contaExcluida_recusa_eNaoSalva() {
         UUID id = UUID.randomUUID();
-        when(userRepository.findById(id)).thenReturn(Optional.of(excluido()));
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.of(excluido()));
 
         assertThatThrownBy(() -> service.suspender(id))
                 .isInstanceOf(BusinessException.class)
@@ -102,7 +116,7 @@ class UserAdminServiceTest {
         // User.reativar() lança IllegalStateException para conta excluída; sem o guard aqui o admin veria um 500
         UUID id = UUID.randomUUID();
         User u = excluido();
-        when(userRepository.findById(id)).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(id)).thenReturn(Optional.of(u));
 
         assertThatThrownBy(() -> service.reativar(id))
                 .isInstanceOf(BusinessException.class)

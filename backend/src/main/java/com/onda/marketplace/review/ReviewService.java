@@ -139,9 +139,6 @@ public class ReviewService {
 
     private void atualizarNotaMedia(UUID prestadorId) {
         double media = reviewRepository.calcularMediaNota(prestadorId, ReviewType.CLIENTE_AVALIA_PRESTADOR);
-        providerProfileRepository.findByUserId(prestadorId).ifPresent(profile -> {
-            profile.setNotaMedia(BigDecimal.valueOf(media));
-            providerProfileRepository.save(profile);
-        });
+        providerProfileRepository.atualizarNotaMedia(prestadorId, BigDecimal.valueOf(media), Instant.now());
     }
 }

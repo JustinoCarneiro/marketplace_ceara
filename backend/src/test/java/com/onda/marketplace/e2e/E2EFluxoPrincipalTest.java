@@ -1843,4 +1843,169 @@ class E2EFluxoPrincipalTest {
         assertThat("o acerto de senha não pode ser desfeito pela recusa de negócio (conta suspensa) que vem depois",
                 tentativas(greg.id()).get("senha_falhas"), equalTo(0));
     }
+
+    // ─── Revisão cruzada, 2ª rodada: quem grava a entidade inteira não pode desfazer a anonimização ───
+    //
+    // suspender/reativar, moderar, chave Pix e nota média liam a linha sem trava e a regravam inteira. Uma exclusão de conta
+    // que commitasse nesse intervalo era desfeita (lost update: o UPDATE não é por coluna). A trava só vale como PRIMEIRA
+    // leitura da linha — sobre uma entidade já carregada o Hibernate devolve a instância antiga.
+
+    @Autowired com.onda.marketplace.provider.ProviderProfileRepository perfilPrestadorRepository;
+
+    /** "Exclusão em voo": já com a trava do usuário e a anonimização feita, parada ANTES do commit (molde dos passos 33/42). */
+    private java.util.concurrent.Future<?> exclusaoEmVoo(java.util.concurrent.ExecutorService pool, UUID userId, String emailAnonimo,
+                                                         boolean comPerfil, java.util.concurrent.CountDownLatch travaObtida,
+                                                         java.util.concurrent.CountDownLatch liberar) {
+        return pool.submit(() -> transacao.executeWithoutResult(status -> {
+            User u = userRepository.findByIdComTrava(userId).orElseThrow();
+            u.anonimizar(emailAnonimo, passwordEncoder.encode(UUID.randomUUID().toString()), false);
+            if (comPerfil) {
+                perfilPrestadorRepository.findByUserId(userId).ifPresent(p -> {
+                    p.anonimizar();
+                    perfilPrestadorRepository.save(p);
+                });
+            }
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+    }
+
+    @Test @Order(42)
+    @DisplayName("42 · Admin suspende/reativa durante uma exclusão em voo: espera, recusa (ACCOUNT_DELETED) e NÃO desfaz a anonimização")
+    void admin_suspenderDuranteExclusaoEmVoo_naoDesfazAAnonimizacao() throws Exception {
+        var gil = cadastrarCliente("Gil Corrida Admin", "gil.corrida.admin@onda.test");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, gil.id(), "removido-gil-admin@excluido.invalid", false, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var suspensao = pool.submit(() -> given().header("Authorization", "Bearer " + tokenAdmin())
+                .when().post("/api/v1/admin/users/{id}/suspend", gil.id()).then().extract());
+        Thread.sleep(800);
+        assertThat("o admin deveria estar ESPERANDO a trava da exclusão em voo", suspensao.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = suspensao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("ACCOUNT_DELETED"));
+        var u = conta(gil.id());
+        assertThat("o nome anonimizado não pode voltar ao original", u.get("nome"), equalTo("Usuário removido"));
+        assertThat("o e-mail anonimizado não pode voltar ao original", u.get("email"), not(equalTo(gil.email())));
+        assertThat("excluido_em continua preenchido", u.get("excluido_em"), notNullValue());
+        assertThat("ativo continua false", u.get("ativo"), equalTo(false));
+    }
+
+    @Test @Order(43)
+    @DisplayName("43 · Moderar o prestador durante uma exclusão em voo: espera, recusa (ACCOUNT_DELETED) e o perfil continua anonimizado")
+    void admin_moderarDuranteExclusaoEmVoo_naoDesfazAAnonimizacaoDoPerfil() throws Exception {
+        var iris = cadastrarPrestador("Iris Corrida Moderacao", "iris.corrida.moderacao@onda.test", "325.342.440-51");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, iris.id(), "removido-iris-mod@excluido.invalid", true, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var moderacao = pool.submit(() -> given().contentType(ContentType.JSON).header("Authorization", "Bearer " + tokenAdmin())
+                .body("{\"action\":\"APROVAR\"}")
+                .when().post("/api/v1/admin/providers/{id}/moderate", iris.id()).then().extract());
+        Thread.sleep(800);
+        assertThat("a moderação deveria estar ESPERANDO a trava da exclusão em voo", moderacao.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = moderacao.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("ACCOUNT_DELETED"));
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, status_verificacao FROM providers_profile WHERE user_id = ?::uuid", iris.id().toString());
+        assertThat("o perfil continua SUSPENSO, não vira VERIFICADO", perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+        assertThat("a bio apagada não volta", perfil.get("bio"), nullValue());
+        assertThat("o CPF cifrado apagado não volta", perfil.get("cpf_cifrado"), nullValue());
+    }
+
+    @Test @Order(44)
+    @DisplayName("44 · Cadastrar chave Pix durante a exclusão em voo: espera, recusa (PROVIDER_NOT_FOUND) e nada do perfil volta")
+    void prestador_chavePixDuranteExclusaoEmVoo_naoRessuscitaOPerfil() throws Exception {
+        var jonas = cadastrarPrestador("Jonas Corrida Pix", "jonas.corrida.pix@onda.test", "701.974.216-52");
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var exclusao = exclusaoEmVoo(pool, jonas.id(), "removido-jonas-pix@excluido.invalid", true, travaObtida, liberar);
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão em voo deveria ter a trava");
+
+        var pix = pool.submit(() -> given().contentType(ContentType.JSON).header("Authorization", "Bearer " + jonas.token())
+                .body("{\"chavePix\":\"jonas.pix@pix.com\"}")
+                .when().put("/api/v1/providers/me/chave-pix").then().extract());
+        Thread.sleep(800);
+        assertThat("o cadastro da chave deveria estar ESPERANDO a trava da exclusão em voo", pix.isDone(), is(false));
+
+        liberar.countDown();
+        exclusao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        var resposta = pix.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(resposta.statusCode(), equalTo(422));
+        assertThat(resposta.path("code"), equalTo("PROVIDER_NOT_FOUND"));
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, chave_pix_cifrada, status_verificacao FROM providers_profile WHERE user_id = ?::uuid", jonas.id().toString());
+        assertThat("a chave Pix nova não é gravada na conta excluída", perfil.get("chave_pix_cifrada"), nullValue());
+        assertThat("a bio apagada não volta", perfil.get("bio"), nullValue());
+        assertThat("o CPF cifrado apagado não volta", perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+    }
+
+    @Test @Order(45)
+    @DisplayName("45 · A nota média é gravada por UPDATE só da coluna: uma anonimização commitada antes não é desfeita pelo perfil velho em memória")
+    void notaMedia_updateSoDaColuna_naoDesfazAnonimizacaoCommitadaNoMeio() throws Exception {
+        var kaue = cadastrarPrestador("Kaue Nota Media", "kaue.nota.media@onda.test", "497.736.187-30");
+        transacao.executeWithoutResult(status -> {
+            var emMemoria = perfilPrestadorRepository.findByUserId(kaue.id()).orElseThrow();   // perfil "velho" na sessão
+            assertThat(emMemoria.getBio(), notNullValue());
+            // outra transação anonimiza e commita (thread própria = transação própria)
+            var t = new Thread(() -> transacao.executeWithoutResult(s2 -> {
+                User u = userRepository.findByIdComTrava(kaue.id()).orElseThrow();
+                u.anonimizar("removido-kaue-nota@excluido.invalid", passwordEncoder.encode(UUID.randomUUID().toString()), false);
+                perfilPrestadorRepository.findByUserId(kaue.id()).ifPresent(p -> { p.anonimizar(); perfilPrestadorRepository.save(p); });
+            }));
+            t.start();
+            try { t.join(); } catch (InterruptedException e) { throw new RuntimeException(e); }
+            perfilPrestadorRepository.atualizarNotaMedia(kaue.id(), new BigDecimal("4.5"), Instant.now());
+        });
+        var perfil = jdbc.queryForMap("SELECT bio, cpf_cifrado, status_verificacao, nota_media FROM providers_profile WHERE user_id = ?::uuid", kaue.id().toString());
+        assertThat("a nota é gravada (é do histórico)", (BigDecimal) perfil.get("nota_media"), comparesEqualTo(new BigDecimal("4.5")));
+        assertThat("a anonimização do perfil não é desfeita", perfil.get("bio"), nullValue());
+        assertThat(perfil.get("cpf_cifrado"), nullValue());
+        assertThat(perfil.get("status_verificacao"), equalTo("SUSPENSO"));
+    }
+
+    @Test @Order(46)
+    @DisplayName("46 · 20 exclusões SIMULTÂNEAS (contas diferentes) terminam todas em 204 — a transação externa não segura conexão ociosa e o pool não esgota")
+    void exclusaoDeConta_vinteSimultaneas_naoEsgotamOPool() throws Exception {
+        // Revisão cruzada (2ª rodada): excluir() era @Transactional e chamava autenticarPorId (REQUIRES_NEW) logo na 1ª linha. O
+        // Spring abre a conexão da transação externa na entrada e a segura ociosa; com mais requisições que conexões (o pool é 10),
+        // todas seguram a externa e nenhuma consegue a interna — esperam o timeout do pool (30 s) e viram 500. Foi o defeito do login.
+        int quantas = 20;
+        var contas = new java.util.ArrayList<Conta>();
+        for (int i = 0; i < quantas; i++) contas.add(cadastrarCliente("Pool " + i, "pool.exclusao." + i + "@onda.test"));
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(quantas);
+        var largada = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> respostas = new java.util.ArrayList<>();
+        for (var c : contas) {
+            respostas.add(pool.submit(() -> {
+                largada.await();
+                return excluirConta(c.token(), SENHA_PADRAO).statusCode();
+            }));
+        }
+        largada.countDown();
+        List<Integer> codigos = new java.util.ArrayList<>();
+        for (var r : respostas) codigos.add(r.get(20, java.util.concurrent.TimeUnit.SECONDS));   // < o timeout de 30 s do pool
+        pool.shutdown();
+
+        assertThat(codigos, everyItem(equalTo(204)));
+        for (var c : contas) assertThat(conta(c.id()).get("excluido_em"), notNullValue());
+    }
 }

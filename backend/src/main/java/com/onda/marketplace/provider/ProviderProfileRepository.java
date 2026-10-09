@@ -2,9 +2,12 @@ package com.onda.marketplace.provider;
 
 import com.onda.marketplace.discovery.NearbyProviderView;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +15,16 @@ import java.util.UUID;
 public interface ProviderProfileRepository extends JpaRepository<ProviderProfile, UUID> {
 
     Optional<ProviderProfile> findByUserId(UUID userId);
+
+    /**
+     * Nota média por UPDATE direto, sem carregar o perfil (revisão cruzada, 2ª rodada): a avaliação é de OUTRO usuário e
+     * rodava {@code findByUserId} + {@code save}, que regrava a linha inteira. Se o prestador excluísse a conta nesse
+     * intervalo, o save desfazia a anonimização (bio, CPF cifrado, chave Pix e status voltavam). O UPDATE só toca a nota.
+     * {@code agora}: o UPDATE em lote não roda o {@code @PreUpdate}.
+     */
+    @Modifying
+    @Query("UPDATE ProviderProfile p SET p.notaMedia = :media, p.updatedAt = :agora WHERE p.user.id = :userId")
+    int atualizarNotaMedia(@Param("userId") UUID userId, @Param("media") BigDecimal media, @Param("agora") Instant agora);
 
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);

@@ -82,9 +82,6 @@ public class ProviderProfile {
 
     public void setNotaMedia(BigDecimal v) { this.notaMedia = v; }
 
-    /** A conta dona deste perfil foi excluída (US36): não há mais a quem aprovar, reprovar ou suspender. */
-    public boolean contaExcluida() { return user != null && user.isExcluido(); }
-
     public void aprovar()   { this.statusVerificacao = ProviderStatus.VERIFICADO; }
     public void reprovar()  { this.statusVerificacao = ProviderStatus.REPROVADO; }
     public void suspender() { this.statusVerificacao = ProviderStatus.SUSPENSO; }
