@@ -54,6 +54,9 @@ services:
       CPF_HASH_KEY: ${CPF_HASH_KEY}
       CPF_HASH_KEY_VERSION: ${CPF_HASH_KEY_VERSION:-2}
       CPF_HASH_KEY_PREVIOUS: ${CPF_HASH_KEY_PREVIOUS:-}
+      # Só numa 1ª subida em banco que já tem contas com CPF confirmado e nenhum prestador decifrável para provar a chave
+      # (a aplicação recusa subir e diz isso). Ligue UMA vez depois de conferir o valor de CPF_HASH_KEY; retire em seguida.
+      CPF_HASH_KEY_CONFIRMED: ${CPF_HASH_KEY_CONFIRMED:-false}
       MARKETPLACE_WEBHOOK_SECRET: ${MARKETPLACE_WEBHOOK_SECRET}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS}

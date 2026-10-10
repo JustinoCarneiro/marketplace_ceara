@@ -2937,4 +2937,67 @@ class E2EFluxoPrincipalTest {
                 .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
         assertThat("conciliado, volta à busca", depois, hasItem(ari.id().toString()));
     }
+
+    @Autowired com.onda.marketplace.auth.CpfHashKeyVerificacaoRepository verificacaoChaveRepo;
+    static final String CPF_SEM_ANCORA = "987.654.321-00";
+    static final String CPF_ANCORA     = "321.654.987-91";
+
+    @Test @Order(69)
+    @DisplayName("69 · Chave do hash sem verificador gravado: sem âncora e com contas o CpfHashKeyCheck recusa (só a confirmação do operador libera); âncora que confere sobe; âncora que contradiz recusa mesmo confirmada")
+    void cpfHashChave_semVerificador_ancoraDecide_eConfirmacaoSoCobreOCasoSemAncora() {
+        // Decisão do dono (2026-10-09): antes era só um WARN, e a subida gravava como referência uma chave que ninguém provou.
+        // O bean do contexto e2e tem o cruzamento DESLIGADO (cpf-backfill.enabled=false vem do application.yml de teste, por causa do
+        // H2); por isso as instâncias abaixo são montadas à mão, com o cruzamento ligado. É a primeira vez que a consulta da âncora
+        // (comHashNaVersao) roda contra o Postgres real.
+        var antiga = new com.onda.marketplace.auth.CpfHashService(CHAVE_HASH_ANTIGA, 1);
+        var outraChave = new com.onda.marketplace.auth.CpfHashService("outra-chave-completamente-diferente-32ch", 1);
+        int versaoAnterior = cpfHashService.versaoAtual() - 1;
+        var recusando = new com.onda.marketplace.auth.CpfHashKeyCheck(userRepository, cpfHashService, profileRepository,
+                cpfEncryptor, verificacaoChaveRepo, true, false);
+        var confirmado = new com.onda.marketplace.auth.CpfHashKeyCheck(userRepository, cpfHashService, profileRepository,
+                cpfEncryptor, verificacaoChaveRepo, true, true);
+
+        var gui = cadastrarCliente("Gui Sem Ancora", "gui.sem.ancora@onda.test");
+        UUID ancora = legado("ancora.cpf@onda.test", cpfEncryptor.encrypt(CPF_ANCORA));   // prestador legado, ainda sem hash
+        jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = ? WHERE id = ?::uuid",
+                antiga.hash(CPF_SEM_ANCORA), versaoAnterior, gui.id().toString());
+        try {
+            // 1) a versão anterior nunca teve o verificador gravado (banco recém-migrado para a V26) e a única conta nela é de cliente:
+            //    o hash dele não se prova, porque não há CPF em claro para recalcular → recusa, e NÃO grava nada como referência
+            verificacaoChaveRepo.deleteById(versaoAnterior);
+            assertThat("precondição: nenhum prestador com hash na versão anterior para servir de âncora",
+                    contar("SELECT count(*) FROM users u JOIN providers_profile p ON p.user_id = u.id "
+                            + "WHERE u.cpf_hash IS NOT NULL AND u.cpf_hash_versao = ?", versaoAnterior), equalTo(0));
+            var recusa = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.run(null));
+            assertThat(recusa.getMessage(), allOf(containsString("1 conta(s)"), containsString("CPF_HASH_KEY_PREVIOUS"),
+                    containsString("CPF_HASH_KEY_CONFIRMED")));
+            assertThat("recusar não pode gravar o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
+            // o operador conferiu a chave e confirma: sobe, e o verificador passa a ser a referência
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> confirmado.run(null));
+            assertThat(verificacaoChaveRepo.existsById(versaoAnterior), is(true));
+            // a partir daí a variável é dispensável: o verificador gravado é conferido normalmente
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.run(null));
+
+            // 2) agora há um prestador com CPF decifrável na versão anterior: a âncora PROVA a chave, e a subida não pede confirmação
+            verificacaoChaveRepo.deleteById(versaoAnterior);
+            jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = ? WHERE id = ?::uuid",
+                    antiga.hash(CPF_ANCORA), versaoAnterior, ancora.toString());
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.run(null));
+            assertThat(verificacaoChaveRepo.existsById(versaoAnterior), is(true));
+
+            // 3) a mesma âncora, mas o hash dela foi calculado com OUTRA chave: contradiz a configurada → recusa, e a confirmação do
+            //    operador NÃO vence uma contradição (só cobre o "não há como provar")
+            verificacaoChaveRepo.deleteById(versaoAnterior);
+            jdbc.update("UPDATE users SET cpf_hash = ? WHERE id = ?::uuid", outraChave.hash(CPF_ANCORA), ancora.toString());
+            var contradicao = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.run(null));
+            assertThat(contradicao.getMessage(), containsString("CPF_HASH_KEY_PREVIOUS"));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> confirmado.run(null));
+            assertThat("contradição não grava o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
+        } finally {
+            // volta ao padrão de conta sem CPF confirmado (cpf_hash_versao é NOT NULL DEFAULT 1) e devolve o verificador da subida
+            jdbc.update("UPDATE users SET cpf_hash = NULL, cpf_hash_versao = 1 WHERE id IN (?::uuid, ?::uuid)",
+                    gui.id().toString(), ancora.toString());
+            recusando.run(null);   // sem conta na versão anterior: grava o verificador (confiança na 1ª subida), como no arranque
+        }
+    }
 }

@@ -58,6 +58,10 @@ cpf:
   # Rotação: a chave que acabou de sair (versão = hash-key-version - 1). Em banco que já tinha contas com CPF confirmado,
   # é o valor antigo de CPF_ENCRYPTION_KEY — a aplicação recusa subir se faltar (ver CpfHashKeyCheck).
   hash-key-previous: ${CPF_HASH_KEY_PREVIOUS:}
+  # Confirmação do operador (padrão: desligada). Na 1ª subida de uma versão de chave que já tem contas mas nenhum prestador com CPF
+  # decifrável para PROVAR a chave, o CpfHashKeyCheck RECUSA subir. Com true, aceita uma vez e grava a chave como referência —
+  # só depois de conferir o valor à mão. Retire a variável na subida seguinte.
+  hash-key-confirmed: ${CPF_HASH_KEY_CONFIRMED:false}
 
 # M12: destinatário dos alertas operacionais
 notification:

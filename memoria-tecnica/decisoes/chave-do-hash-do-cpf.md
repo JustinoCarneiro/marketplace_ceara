@@ -45,6 +45,11 @@ Antes do deploy, no ambiente (Coolify/compose), **sem** apagar nada:
 3. deploy: V24/V25 rodam, o backfill regrava os prestadores; os clientes migram no próximo pagamento;
 4. quando `SELECT count(*) FROM users WHERE cpf_hash IS NOT NULL AND cpf_hash_versao < 2` der 0, **retire**
    `CPF_HASH_KEY_PREVIOUS`. Enquanto houver conta na versão 1, a variável precisa existir.
+5. **Primeira subida com a checagem de âncora (decisão do dono, 2026-10-09):** se o banco já tem contas com CPF confirmado numa versão
+   (a 1, na migração da separação) e **nenhum prestador com CPF decifrável** nela, a aplicação **recusa subir** e diz qual chave não pôde
+   ser provada — o hash de um cliente não se prova (não há CPF em claro para recalcular). Confira o valor da variável apontada
+   (`CPF_HASH_KEY_PREVIOUS` na migração = o valor antigo de `CPF_ENCRYPTION_KEY`) e suba **uma vez** com `CPF_HASH_KEY_CONFIRMED=true`;
+   na subida seguinte retire a variável. Banco sem nenhuma conta com CPF confirmado (instalação nova) não é afetado.
 
 Banco sem nenhuma conta com CPF confirmado (instalação nova) não precisa de `CPF_HASH_KEY_PREVIOUS`.
 
@@ -89,14 +94,30 @@ e a subida recusa se sobrar conta mais antiga.
 - **A âncora do `CpfHashKeyCheck` só existe para prestador.** O hash do cliente não se prova (não há CPF em claro para recalcular), então,
   numa 1ª subida de versão sem nenhum prestador decifrável naquela versão, a chave digitada errada era gravada como referência sem nada que
   a desminta — e esse é o estado normal de um piloto com poucos prestadores. Agora, nesse caso, a subida segue, mas com um `WARN` que diz
-  quantas contas estão naquela versão e qual variável conferir à mão. **Decisão de operação em aberto:** trocar o aviso por uma recusa
-  (exigir uma confirmação explícita da chave quando há contas sem âncora) seria mais seguro e mais atritoso — e poderia derrubar um deploy
-  que hoje sobe; não foi feito sem decisão do dono.
+  quantas contas estão naquela versão e qual variável conferir à mão. **Decidido pelo dono em 2026-10-09:** o aviso virou recusa
+  (exigir uma confirmação explícita da chave quando há contas sem âncora) — ver a seção seguinte.
 - Comparação do hash do CPF e do verificador em tempo constante (`MessageDigest.isEqual`), como o segredo do webhook já fazia, e
   normalização do CPF por um lugar só (`Cpf.soDigitos`). `CpfHashKeyCheck` roda como `ApplicationRunner`, depois de o servidor já aceitar
   conexões: é uma característica do Spring Boot, a janela é de milissegundos, e o pior caso exige uma rotação mal configurada.
 - Eficiência, sem ação (piloto pequeno): as duas contagens por versão rodam em toda subida sobre `users.cpf_hash_versao`, que não tem índice,
   e `comHashNaVersao` não tem `LIMIT`. Vale um `EXISTS`/índice quando a tabela crescer.
+
+## 3ª rodada — decisão do dono (2026-10-09): sem âncora e com contas, a subida é recusada
+- **O que mudou:** na 1ª subida de uma versão (sem verificador gravado) que já tem contas com hash mas nenhum prestador com CPF
+  decifrável para provar a chave, o `CpfHashKeyCheck` lança `IllegalStateException` **antes** de gravar o verificador (nada vira
+  referência) em vez de só avisar. Sem conta na versão (instalação nova, rotação recém-feita) a subida segue sem pedir nada.
+- **A saída do operador:** `CPF_HASH_KEY_CONFIRMED=true` (propriedade `cpf.hash-key-confirmed`, repassada nos dois compose) aceita o caso
+  UMA vez e grava o verificador; na subida seguinte ele já vale e a variável sai. Deixada ligada, a aplicação avisa a cada subida: ela
+  aceitaria em silêncio a 1ª subida sem prova de uma versão futura (uma rotação, um banco restaurado sem a tabela de verificadores).
+- **O que a confirmação NÃO cobre:** uma contradição. Âncora que não confere e verificador já gravado que difere continuam recusando mesmo
+  com a variável ligada — ela só afrouxa o "não há como provar", nunca o "a prova diz que está errado".
+- **Efeito na implantação:** a 1ª subida de um banco com clientes que já confirmaram o CPF na versão 1 e nenhum prestador decifrável nela
+  passa a exigir a confirmação (passo 5 de "Implantação"). É a troca consciente de "sobe com aviso" por "não sobe até alguém conferir a chave".
+- **Lacuna de teste achada no caminho:** o `application.yml` de teste liga `cpf-backfill.enabled=false` (por causa do H2) e o perfil `e2e`
+  herdava isso, então o bean do E2E **nunca** fazia o cruzamento com âncora: a consulta `comHashNaVersao` só tinha rodado contra mocks.
+  O passo 69 monta as instâncias à mão com o cruzamento ligado e cobre, no Postgres real, as três situações (sem âncora, âncora que
+  confere, âncora que contradiz).
+- Continua valendo o limite de que o check roda como `ApplicationRunner`, depois de o servidor já aceitar conexões (janela de milissegundos).
 
 ## Efeito nos testes
 Unitários: `CpfHashServiceTest`, `CpfHashKeyCheckTest` (reescrito: verificador por versão, cruzamento com e sem âncora,
@@ -104,6 +125,9 @@ chave trocada por baixo, rollback), `AuthServiceTest` (confirmação com hash de
 `ProviderCpfBackfillTest` (regravação por versão, duplicata ignorando a própria conta), `PaymentServiceTest`. E2E: passo 53
 (rotação ponta a ponta contra o Postgres real, com `hash-key-previous` configurado no perfil `e2e` — prova também o
 verificador e a recusa de versão desconhecida) e a validação de schema do Hibernate sobre `cpf_hash_versao`.
+Rodada 3: `CpfHashKeyCheckTest` (recusa sem âncora, confirmação do operador, e os limites da confirmação: contradição e verificador
+gravado) e E2E passo 69 (as três situações de âncora contra o Postgres real; mutação — recusa trocada por aviso, confirmação vencendo a
+contradição — derruba os dois).
 
 ## Ligado a
 - [[cpf-unico-para-o-prestador]], [[conta-unica-com-papeis]];

@@ -49,7 +49,26 @@ class CpfHashKeyCheckTest {
     }
 
     private CpfHashKeyCheck check(CpfHashService cpfHashService) {
-        return new CpfHashKeyCheck(userRepository, cpfHashService, profileRepository, cpfEncryptor, verificacaoRepository, true);
+        return new CpfHashKeyCheck(userRepository, cpfHashService, profileRepository, cpfEncryptor, verificacaoRepository, true, false);
+    }
+
+    /** Com {@code CPF_HASH_KEY_CONFIRMED=true}: o operador afirma que a chave é a certa para a 1ª subida sem âncora. */
+    private CpfHashKeyCheck checkConfirmado(CpfHashService cpfHashService) {
+        return new CpfHashKeyCheck(userRepository, cpfHashService, profileRepository, cpfEncryptor, verificacaoRepository, true, true);
+    }
+
+    /** Roda a ação capturando o que o {@link CpfHashKeyCheck} loga, para afirmar sobre avisos. */
+    private java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> logsDurante(Runnable acao) {
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(CpfHashKeyCheck.class);
+        logger.addAppender(logs);
+        try {
+            acao.run();
+        } finally {
+            logger.detachAppender(logs);
+        }
+        return logs.list;
     }
 
     @Test
@@ -205,7 +224,7 @@ class CpfHashKeyCheckTest {
         // onde providers_profile não existe (H2 dos testes de contexto, sem coluna geográfica) a mesma flag do
         // ProviderCpfBackfill desativa o cruzamento: sem ela, a 1ª subida de uma versão sempre quebraria ali.
         var cpfHashService = new CpfHashService(ATUAL, 2);
-        var check = new CpfHashKeyCheck(userRepository, cpfHashService, profileRepository, cpfEncryptor, verificacaoRepository, false);
+        var check = new CpfHashKeyCheck(userRepository, cpfHashService, profileRepository, cpfEncryptor, verificacaoRepository, false, false);
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
         when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
@@ -214,36 +233,131 @@ class CpfHashKeyCheckTest {
         org.mockito.Mockito.verifyNoInteractions(profileRepository, cpfEncryptor);
     }
 
+    // ── Decisão do dono (2026-10-09): sem âncora e com contas, a subida é RECUSADA; só a confirmação explícita do operador a libera.
+
     @Test
-    void primeiraSubidaSemAncora_comContasNaVersao_sobeMasAvisaQueAChaveNaoFoiProvada() {
-        // Revisão cruzada (2ª rodada): só prestador tem o CPF cifrado; o hash do cliente não se prova. Com contas na versão e nenhum
-        // prestador decifrável, uma chave digitada errada seria gravada como referência sem nada que a desminta — pelo menos o
-        // operador é avisado, em vez de a subida parecer limpa.
-        var cpfHashService = new CpfHashService(ATUAL, 2);
-        var check = check(cpfHashService);
+    void primeiraSubidaSemAncora_comContasNaVersao_recusaSubir_enaoGravaOVerificador() {
+        // Só prestador tem o CPF cifrado; o hash do cliente não se prova. Com contas na versão e nenhum prestador decifrável, uma
+        // chave digitada errada seria gravada como referência sem nada que a desminta (antes: só um aviso, e a subida parecia limpa).
+        var check = check(new CpfHashService(ATUAL, 2));
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
         when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
         when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(7L);
 
-        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
-        logs.start();
-        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(CpfHashKeyCheck.class);
-        logger.addAppender(logs);
-        try {
-            assertThatCode(check::verificar).doesNotThrowAnyException();
-        } finally {
-            logger.detachAppender(logs);
-        }
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("7 conta(s)")
+                .hasMessageContaining("versão 2")
+                .hasMessageContaining("CPF_HASH_KEY")
+                .hasMessageContaining("CPF_HASH_KEY_CONFIRMED");
+        // recusar antes de gravar: nada vira "referência", e a próxima subida recomeça deste ponto
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+    }
 
-        org.assertj.core.api.Assertions.assertThat(logs.list)
+    @Test
+    void primeiraSubidaSemAncora_comContasNaVersao_eConfirmacaoDoOperador_sobeAvisaEGravaOVerificador() {
+        var cpfHashService = new CpfHashService(ATUAL, 2);
+        var check = checkConfirmado(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(7L);
+
+        var logs = logsDurante(() -> assertThatCode(check::verificar).doesNotThrowAnyException());
+
+        org.assertj.core.api.Assertions.assertThat(logs)
                 .anySatisfy(e -> {
                     org.assertj.core.api.Assertions.assertThat(e.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
                     org.assertj.core.api.Assertions.assertThat(e.getFormattedMessage())
-                            .contains("7 conta(s)").contains("versão 2").contains("CPF_HASH_KEY");
+                            .contains("7 conta(s)").contains("versão 2").contains("SEM prova").contains("CPF_HASH_KEY");
                 });
-        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
+        var captor = org.mockito.ArgumentCaptor.forClass(CpfHashKeyVerificacao.class);
+        org.mockito.Mockito.verify(verificacaoRepository).save(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVersao()).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVerificador()).isEqualTo(cpfHashService.verificadorChaveAtual());
+    }
+
+    @Test
+    void chaveAnteriorSemAncora_comContasNaVersao_recusaSubir_apontandoAVariavelDaAnterior() {
+        // o caso real da migração da separação: contas na versão 1 (clientes que confirmaram o CPF), nenhum prestador decifrável nela
+        var cpfHashService = new CpfHashService(ATUAL, 2, ANTERIOR);
+        var check = check(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(1)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2))
+                .thenReturn(Optional.of(new CpfHashKeyVerificacao(2, cpfHashService.verificadorChaveAtual())));
+        when(verificacaoRepository.findById(1)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(1)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(1)).thenReturn(3L);
+
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("3 conta(s)")
+                .hasMessageContaining("versão 1")
+                .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void confirmacaoDoOperador_naoVenceUmaContradicao_ancoraQueNaoConfereContinuaRecusando() {
+        // a confirmação só afrouxa o "não há como provar"; quando HÁ prova e ela desmente a chave, nada a libera
+        var cpfHashService = new CpfHashService(ATUAL, 2, OUTRA);
+        var check = checkConfirmado(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(1)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2))
+                .thenReturn(Optional.of(new CpfHashKeyVerificacao(2, cpfHashService.verificadorChaveAtual())));
+        when(verificacaoRepository.findById(1)).thenReturn(Optional.empty());
+
+        UUID prestadorId = UUID.randomUUID();
+        String cpf = "111.444.777-35";
+        when(profileRepository.comHashNaVersao(1)).thenReturn(List.of(perfil(prestadorId, "cifrado-qualquer")));
+        when(cpfEncryptor.decrypt("cifrado-qualquer")).thenReturn(cpf);
+        User prestador = User.builder().nome("P").email("p@test.com").senhaHash("$2a$x").role(UserRole.ROLE_PROVIDER).build();
+        prestador.vincularCpf(new CpfHashService(ANTERIOR, 1).hash(cpf), 1);   // o hash de verdade é da ANTERIOR, não da OUTRA
+        when(userRepository.findById(prestadorId)).thenReturn(Optional.of(prestador));
+
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void confirmacaoDoOperador_naoVenceUmVerificadorJaGravado_chaveTrocadaContinuaRecusando() {
+        // deixada ligada por esquecimento, a variável não pode abrir mão da conferência contra o que já foi gravado
+        var check = checkConfirmado(new CpfHashService(ATUAL, 2));
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2))
+                .thenReturn(Optional.of(new CpfHashKeyVerificacao(2, new CpfHashService(OUTRA, 2).verificadorChaveAtual())));
+
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("não é mais a mesma")
+                .hasMessageContaining("versão 2");
+    }
+
+    @Test
+    void confirmacaoLigada_lembraDeRetirarAVariavelEmTodaSubida_mesmoSemPrecisarDela() {
+        var check = checkConfirmado(new CpfHashService(ATUAL, 2));
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(0L);   // nada a provar: instalação nova
+
+        var logs = logsDurante(() -> assertThatCode(check::verificar).doesNotThrowAnyException());
+
+        org.assertj.core.api.Assertions.assertThat(logs)
+                .anySatisfy(e -> {
+                    org.assertj.core.api.Assertions.assertThat(e.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                    org.assertj.core.api.Assertions.assertThat(e.getFormattedMessage())
+                            .contains("CPF_HASH_KEY_CONFIRMED=true").contains("Retire");
+                });
     }
 
     @Test

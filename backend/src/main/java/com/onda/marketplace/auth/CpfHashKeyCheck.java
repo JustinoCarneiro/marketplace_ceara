@@ -30,6 +30,14 @@ import java.security.MessageDigest;
  * contra um CPF de verdade quando existe um, nunca às cegas), as seguintes conferem. Também recusa subir se alguma
  * conta tiver hash de uma versão MAIOR que a configurada (rollback: a aplicação não sabe recalculá-lo).
  *
+ * <p>Sem âncora (decisão do dono, 2026-10-09): só prestador tem o CPF cifrado, então o hash de um cliente não se prova. Na 1ª
+ * subida de uma versão que já tem contas mas nenhum prestador decifrável, uma chave digitada errada seria gravada como
+ * referência sem nada que a desminta — e a unicidade do CPF deixaria de enxergar essas contas. Antes era só um aviso; agora a
+ * subida é RECUSADA, a menos que o operador confirme a chave explicitamente com {@code CPF_HASH_KEY_CONFIRMED=true} (uma vez:
+ * depois o verificador gravado passa a valer e a variável deve sair). A confirmação só vale para o caso "sem âncora" — nunca
+ * vence uma contradição (âncora que não confere, verificador já gravado que difere). Sem nenhuma conta na versão (instalação
+ * nova, rotação recém-feita) não há o que proteger e a subida segue sem pedir nada.
+ *
  * <p>Subir e deixar o problema escondido é pior que não subir; num deploy em rolagem a versão anterior continua no ar.
  * Roda antes do {@code ProviderCpfBackfill}.
  */
@@ -51,17 +59,22 @@ public class CpfHashKeyCheck implements ApplicationRunner {
     /** Mesma flag do {@code ProviderCpfBackfill}: onde {@code providers_profile} (coluna geográfica) não existe — o H2
      *  dos testes de contexto —, não há como cruzar contra uma âncora real; trata como "nenhuma âncora" sem consultar. */
     private final boolean                            cruzamentoAtivo;
+    /** {@code CPF_HASH_KEY_CONFIRMED}: o operador afirma que a chave configurada é a que calculou os hashes já gravados, para a
+     *  1ª subida de uma versão sem âncora. Só afrouxa o caso "sem âncora" — ver o Javadoc da classe. */
+    private final boolean                            chaveConfirmada;
 
     public CpfHashKeyCheck(UserRepository userRepository, CpfHashService cpfHashService,
                             ProviderProfileRepository profileRepository, CpfEncryptor cpfEncryptor,
                             CpfHashKeyVerificacaoRepository verificacaoRepository,
-                            @Value("${marketplace.cpf-backfill.enabled:true}") boolean cruzamentoAtivo) {
+                            @Value("${marketplace.cpf-backfill.enabled:true}") boolean cruzamentoAtivo,
+                            @Value("${cpf.hash-key-confirmed:false}") boolean chaveConfirmada) {
         this.userRepository        = userRepository;
         this.cpfHashService        = cpfHashService;
         this.profileRepository     = profileRepository;
         this.cpfEncryptor          = cpfEncryptor;
         this.verificacaoRepository = verificacaoRepository;
         this.cruzamentoAtivo       = cruzamentoAtivo;
+        this.chaveConfirmada       = chaveConfirmada;
     }
 
     @Override
@@ -71,6 +84,12 @@ public class CpfHashKeyCheck implements ApplicationRunner {
 
     /** Separado de {@link #run} para o teste chamar sem montar argumentos. */
     void verificar() {
+        if (chaveConfirmada) {
+            // Deixada ligada, a confirmação aceitaria em silêncio a 1ª subida de uma versão futura sem âncora (uma rotação, um banco
+            // restaurado sem a tabela de verificadores). Por isso o lembrete a cada subida, e não só quando ela é usada.
+            log.warn("CPF_HASH_KEY_CONFIRMED=true: a recusa de subida sem prova da chave do hash do CPF está DESLIGADA. "
+                    + "Retire a variável depois da primeira subida.");
+        }
         int versaoAtual = cpfHashService.versaoAtual();
         // com a chave anterior configurada, a versão logo abaixo da atual ainda se reconhece; mais antiga que isso, não
         int menorVersaoReconhecida = cpfHashService.temChaveAnterior() ? versaoAtual - 1 : versaoAtual;
@@ -118,9 +137,18 @@ public class CpfHashKeyCheck implements ApplicationRunner {
             // prestador decifrável nessa versão, uma chave digitada errada seria gravada como referência sem que nada a desminta.
             long contas = userRepository.countByCpfHashIsNotNullAndCpfHashVersao(versao);
             if (contas > 0) {
-                log.warn("{} conta(s) têm o hash do CPF na versão {}, mas nenhum prestador com CPF decifrável permite PROVAR que {} é a "
-                        + "chave certa. O verificador gravado agora vira a referência: confira à mão o valor de {} — se estiver errado, "
-                        + "a unicidade do CPF deixa de enxergar essas contas.", contas, versao, variavel, variavel);
+                if (!chaveConfirmada) {
+                    // Recusa ANTES de gravar: nada fica registrado como referência, e a próxima subida (com a chave corrigida ou
+                    // confirmada) recomeça deste ponto.
+                    throw new IllegalStateException(
+                            contas + " conta(s) têm o hash do CPF na versão " + versao + ", mas nenhum prestador com CPF decifrável "
+                                    + "permite PROVAR que " + variavel + " é a chave certa — gravá-la agora como referência fixaria um "
+                                    + "valor que ninguém conferiu, e a unicidade do CPF deixaria de enxergar essas contas se estiver "
+                                    + "errado. Confira o valor de " + variavel + " (tem de ser exatamente o que calculou esses hashes) "
+                                    + "e, só se tiver certeza, suba UMA vez com CPF_HASH_KEY_CONFIRMED=true; depois retire a variável.");
+                }
+                log.warn("{} conta(s) na versão {} aceitas SEM prova de que {} é a chave certa (CPF_HASH_KEY_CONFIRMED=true). "
+                        + "O verificador gravado agora vira a referência.", contas, versao, variavel);
             }
         }
         verificacaoRepository.save(new CpfHashKeyVerificacao(versao, verificadorCalculado));
