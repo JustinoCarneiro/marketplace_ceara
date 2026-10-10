@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -75,6 +76,24 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     boolean prestadorTemRepasseAReceber(@Param("userId") UUID userId);
 
     // ---------- o que sai ----------
+
+    /**
+     * Trava (em ordem de id) os pedidos PROPOSTO em que este prestador tem proposta ativa, num comando PRÓPRIO que roda ANTES de
+     * {@link #reabrirPedidosSoComPropostaDoPrestador}. Achado da rodada 3 (E2E 69): o {@code NOT EXISTS} do UPDATE em lote usa o snapshot do
+     * início do comando, e em READ COMMITTED quem espera uma linha só TRAVADA (a {@code create()} de uma proposta nova não a atualiza quando o
+     * pedido já está PROPOSTO) não reavalia o WHERE. Resultado: a proposta nova de outro prestador, commitada durante a espera, não era vista e o
+     * pedido voltava a PENDENTE com uma proposta ATIVA escondida (o ADR dizia que o MVCC protegia isso; não protege). Com as linhas já travadas
+     * por este comando, o UPDATE seguinte é um comando novo, com snapshot novo, e enxerga tudo o que foi commitado.
+     */
+    @Query(value = """
+            SELECT s.id FROM service_requests s
+             WHERE s.status = 'PROPOSTO'
+               AND EXISTS (SELECT 1 FROM proposals p WHERE p.service_request_id = s.id
+                              AND p.prestador_id = :userId AND p.status = 'ATIVA')
+             ORDER BY s.id
+               FOR NO KEY UPDATE OF s
+            """, nativeQuery = true)
+    List<UUID> travarPedidosPropostosDoPrestador(@Param("userId") UUID userId);
 
     /**
      * Pedidos PROPOSTO em que a ÚNICA proposta ativa é deste prestador voltam à fila (PENDENTE): sem isso ficariam presos

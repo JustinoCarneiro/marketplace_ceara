@@ -75,12 +75,16 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   determinística no E2E, passo 45 (molde dos passos 33/42): a reabertura fica parada ANTES do commit, já com a trava;
   só então a proposta nova é disparada pela API real — ela espera, e ao continuar vê o `PENDENTE` já commitado, abre a
   proposta normalmente e o pedido volta a `PROPOSTO` sem perder nada.
-  **Achado relacionado, não alterado:** a reabertura da exclusão de conta do prestador
-  (`AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador`) corre o mesmo risco em teoria, mas já é um
-  `UPDATE` guardado que reconfere a condição inteira (status, proposta ativa dele, nenhuma proposta ativa de outro) na
-  própria escrita — e, como é a mesma linha do `ServiceRequest`, a trava que `create()` agora obtém já o protege por
-  tabela (o MVCC do Postgres faz QUALQUER escritor da mesma linha esperar um `SELECT ... FOR UPDATE` em voo e reler o
-  estado fresco ao continuar, não só quem pediu a trava). Nenhuma mudança de código necessária aqui.
+  **Achado relacionado — eu havia dito que não precisava de mudança, e estava ERRADO (corrigido na rodada 3, E2E 69 da branch de correção):**
+  a reabertura da exclusão de conta do prestador (`AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador`) é um `UPDATE` em lote com
+  `NOT EXISTS` (nenhuma proposta ativa de outro). Eu afirmei que o MVCC do Postgres a protegia, porque `create()` trava a linha do pedido. Não protege:
+  quem espera uma linha só TRAVADA (a `create()` não atualiza o pedido quando ele já está `PROPOSTO`) não reavalia o `WHERE`, e o `NOT EXISTS` segue com o
+  snapshot do início do comando — a proposta nova que commitou durante a espera não era vista e o pedido voltava a `PENDENTE` com uma proposta `ATIVA`
+  escondida (`accept()` exige `PROPOSTO`: o cliente não conseguia aceitá-la). Provado em Postgres real (`PENDENTE` em vez de `PROPOSTO`). Conserto: um comando
+  à parte, `travarPedidosPropostosDoPrestador` (`SELECT ... FOR NO KEY UPDATE`, em ordem de id), roda ANTES do `UPDATE`; o `UPDATE` vira um comando novo, com
+  snapshot novo, e enxerga o que commitou. (O `UPDATE` de `cancelarSemAndamento` da expiração tem o mesmo desenho, mas o pior caso é um estado CONSISTENTE —
+  pedido `CANCELADO` e a proposta de última hora `ENCERRADA` por `idsCanceladosEm` — num evento de fronteira de 15 dias; no caso `PENDENTE→PROPOSTO` o
+  `create()` atualiza a linha e o `WHERE` é reavaliado. Não alterado.)
   **Fora do escopo, por decisão de foco:** `accept()` também muda o status do pedido (`PROPOSTO → ACEITO`) e fecha as
   outras propostas ativas, sem adquirir a mesma trava — um `create()` correndo bem no meio de um `accept()` não foi
   endereçado aqui (não é o achado do Codex, é um risco adjacente, de menor probabilidade: a janela é bem mais estreita
@@ -111,8 +115,8 @@ que ela cobria um dos nove escritores de `ServiceRequest.status` — e que a min
 
 **Limites aceitos, não corrigidos:** `PaymentService.initiate`/`criar` lê o pedido sem trava; um cancelamento que commite entre a
 leitura e o commit deixa uma transação `PENDENTE` num pedido `CANCELADO`, que a reconciliação acima devolve quando o gateway confirmar
-(cobrança e devolução em vez de recusa na origem). `AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador` segue sem trava
-explícita: é um `UPDATE` guardado e o MVCC do Postgres já o serializa com quem segura a linha.
+(cobrança e devolução em vez de recusa na origem). (`AccountDeletionRepository.reabrirPedidosSoComPropostaDoPrestador` deixou de ser
+um limite: ver a correção da rodada 3 acima — o MVCC NÃO o serializava com quem só segura a linha.)
 
 ## Efeito nos testes
 `ProposalServiceTest`, `ServiceExecutionServiceTest`, `PaymentServiceTest`, `ServiceRequestExpirationServiceTest`,
