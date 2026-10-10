@@ -2937,4 +2937,46 @@ class E2EFluxoPrincipalTest {
                 .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
         assertThat("conciliado, volta à busca", depois, hasItem(ari.id().toString()));
     }
+
+    @Test @Order(69)
+    @DisplayName("69 · Exclusão do prestador com uma proposta nova de OUTRO prestador em voo: o pedido não pode voltar a PENDENTE com a proposta nova escondida")
+    void exclusaoDoPrestador_propostaNovaDeOutroEmVoo_naoDeixaPropostaAtivaEscondida() throws Exception {
+        // Achado da rodada 3. reabrirPedidosSoComPropostaDoPrestador é um UPDATE em lote com NOT EXISTS (proposta ativa de outro): o ADR dizia
+        // que a trava que create() obtém já o protegia "por tabela (MVCC)". Mas quem espera uma linha só TRAVADA (create() não a atualiza
+        // quando o pedido já está PROPOSTO) não reavalia o WHERE — o NOT EXISTS segue com o snapshot do início do comando e não vê a proposta
+        // que commitou durante a espera. Resultado: o pedido volta a PENDENTE com uma proposta ATIVA escondida (accept() exige PROPOSTO).
+        var rosa = cadastrarCliente("Rosa Exclusao Concorrente", "rosa.exclusao.concorrente@onda.test");
+        var p1 = cadastrarPrestador("Prestador Excluido", "excluido.concorrente@onda.test", "987.654.321-00");
+        var p2 = cadastrarPrestador("Prestador Novo", "novo.concorrente@onda.test", "321.654.987-91");
+        moderarPrestador(p2.id().toString(), "APROVAR");
+        UUID pedido = pedidoDe(rosa, "Pedido com a proposta do prestador que sai, Rua G 70", "PROPOSTO");
+        proposta(pedido, p1.id(), ProposalStatus.ATIVA);
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a proposta nova, em voo": travou o pedido e inseriu a proposta ATIVA do P2, sem commitar (o mesmo que ProposalService.create faz)
+        var propostaEmVoo = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
+            proposalRepository.save(new Proposal(sr, p2.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a proposta nova deveria ter a trava do pedido");
+
+        var exclusao = pool.submit(() -> excluirConta(p1.token(), SENHA_PADRAO).statusCode());
+        Thread.sleep(800);
+        assertThat("a exclusão deveria estar ESPERANDO o pedido preso pela proposta nova", exclusao.isDone(), is(false));
+
+        liberar.countDown();
+        propostaEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(exclusao.get(20, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+        pool.shutdown();
+
+        assertThat("a proposta nova do P2 está ativa", contar(
+                "SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid AND status = 'ATIVA'",
+                pedido.toString(), p2.id().toString()), equalTo(1));
+        assertThat("com uma proposta ativa, o pedido não pode estar na fila como PENDENTE (accept() exige PROPOSTO)",
+                statusDoPedido(pedido), equalTo("PROPOSTO"));
+    }
 }

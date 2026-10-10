@@ -131,6 +131,7 @@ public class AccountDeletionService {
     }
 
     private void apagarDadosVinculados(UUID userId) {
+        exclusao.travarPedidosPropostosDoPrestador(userId);   // 1º, num comando à parte: o UPDATE abaixo precisa de snapshot novo (rodada 3)
         exclusao.reabrirPedidosSoComPropostaDoPrestador(userId, Instant.now());   // antes: acha os pedidos pelas propostas dele
         exclusao.encerrarPropostasAtivasDoPrestador(userId);
         exclusao.encerrarPropostasAtivasDosPedidosDoCliente(userId);

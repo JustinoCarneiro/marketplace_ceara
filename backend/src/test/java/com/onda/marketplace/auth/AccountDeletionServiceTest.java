@@ -465,7 +465,10 @@ class AccountDeletionServiceTest {
         service.excluir(USER_ID, SENHA);
 
         // o pedido do cliente que só tinha a proposta dele volta à fila (e isso vem ANTES de encerrar a proposta)
+        // e as linhas dos pedidos são travadas num comando À PARTE, antes do UPDATE em lote (rodada 3): o UPDATE precisa de snapshot novo
+        // para enxergar uma proposta nova que commitou durante a espera da trava
         var ordem = org.mockito.Mockito.inOrder(exclusao);
+        ordem.verify(exclusao).travarPedidosPropostosDoPrestador(USER_ID);
         ordem.verify(exclusao).reabrirPedidosSoComPropostaDoPrestador(eq(USER_ID), any(Instant.class));
         ordem.verify(exclusao).encerrarPropostasAtivasDoPrestador(USER_ID);
         assertThat(perfil.getBio()).isNull();
