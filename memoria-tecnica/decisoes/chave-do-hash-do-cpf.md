@@ -97,8 +97,8 @@ e a subida recusa se sobrar conta mais antiga.
   quantas contas estão naquela versão e qual variável conferir à mão. **Decidido pelo dono em 2026-10-09:** o aviso virou recusa
   (exigir uma confirmação explícita da chave quando há contas sem âncora) — ver a seção seguinte.
 - Comparação do hash do CPF e do verificador em tempo constante (`MessageDigest.isEqual`), como o segredo do webhook já fazia, e
-  normalização do CPF por um lugar só (`Cpf.soDigitos`). `CpfHashKeyCheck` roda como `ApplicationRunner`, depois de o servidor já aceitar
-  conexões: é uma característica do Spring Boot, a janela é de milissegundos, e o pior caso exige uma rotação mal configurada.
+  normalização do CPF por um lugar só (`Cpf.soDigitos`). (~~`CpfHashKeyCheck` roda como `ApplicationRunner`, depois de o servidor já aceitar
+  conexões: "uma característica do Spring Boot, a janela é de milissegundos"~~ — **eu havia aceitado isso; era evitável, corrigido na rodada 3**, ver a seção seguinte.)
 - Eficiência, sem ação (piloto pequeno): as duas contagens por versão rodam em toda subida sobre `users.cpf_hash_versao`, que não tem índice,
   e `comHashNaVersao` não tem `LIMIT`. Vale um `EXISTS`/índice quando a tabela crescer.
 
@@ -123,7 +123,12 @@ e a subida recusa se sobrar conta mais antiga.
   `SEM_ANCORA`: com contas na versão a subida segue recusada (só `CPF_HASH_KEY_CONFIRMED` libera); sem contas (H2 dos testes de contexto) nada muda.
   Prova: unitários (recusa e confirmação com o cruzamento desligado) e fase 4 do E2E 69, que usa o bean real do contexto `e2e` (cruzamento desligado);
   restaurar o `CONFERE` derruba os dois.
-- Continua valendo o limite de que o check roda como `ApplicationRunner`, depois de o servidor já aceitar conexões (janela de milissegundos).
+- **A checagem roda ANTES de o servidor aceitar requisições (rodada 3, E2E 70):** como `ApplicationRunner` ela só executava depois de o servidor já atender —
+  no log de subida de 2026-10-10 o `DispatcherServlet` atendeu uma requisição às 20:40:31,5, antes de o runner do backfill terminar (20:40:32,7). Um cadastro
+  nessa janela, com a `CPF_HASH_KEY` errada, gravaria hash com a chave errada e a checagem recusaria subir DEPOIS, deixando esses hashes para trás (unicidade
+  furada e `CPF_MISMATCH` para essas contas). Agora é um `SmartInitializingSingleton`: roda no fim da criação dos singletons, antes de `finishRefresh` abrir a
+  porta. Prova: o E2E 70 registra, num listener de `WebServerInitializedEvent`, quantos verificadores já estavam gravados quando o servidor foi anunciado
+  (**0** com o `ApplicationRunner`, vermelho; ≥ 1 agora) e a subida do jar real com a chave errada aborta sem abrir a 8080 (ver o PR).
 
 ## Efeito nos testes
 Unitários: `CpfHashServiceTest`, `CpfHashKeyCheckTest` (reescrito: verificador por versão, cruzamento com e sem âncora,

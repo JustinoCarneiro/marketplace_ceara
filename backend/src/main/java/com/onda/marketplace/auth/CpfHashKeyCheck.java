@@ -5,10 +5,8 @@ import com.onda.marketplace.provider.ProviderCpfBackfill;
 import com.onda.marketplace.provider.ProviderProfileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -39,12 +37,16 @@ import java.security.MessageDigest;
  * nova, rotação recém-feita) não há o que proteger e a subida segue sem pedir nada.
  *
  * <p>Subir e deixar o problema escondido é pior que não subir; num deploy em rolagem a versão anterior continua no ar.
- * Roda antes do {@code ProviderCpfBackfill}.
+ *
+ * <p><b>Roda ANTES de o servidor web aceitar requisições</b> (rodada 3): como {@link SmartInitializingSingleton} ela executa no fim da criação
+ * dos singletons, antes de {@code finishRefresh} abrir a porta. Como {@code ApplicationRunner} ela só rodava DEPOIS de o servidor já atender —
+ * no log de subida de 2026-10-10 o {@code DispatcherServlet} atendeu uma requisição às 20:40:31,5, antes de o runner do backfill terminar
+ * (20:40:32,7). Um cadastro nessa janela, com a {@code CPF_HASH_KEY} errada, gravaria hash com a chave errada e a checagem recusaria subir
+ * DEPOIS, deixando esses hashes para trás (unicidade furada para essas contas). Também roda, por consequência, antes do {@code ProviderCpfBackfill}.
  */
 @Component
-@Order(1)
 @SuppressWarnings("null")
-public class CpfHashKeyCheck implements ApplicationRunner {
+public class CpfHashKeyCheck implements SmartInitializingSingleton {
 
     private static final Logger log = LoggerFactory.getLogger(CpfHashKeyCheck.class);
 
@@ -79,12 +81,12 @@ public class CpfHashKeyCheck implements ApplicationRunner {
     }
 
     @Override
-    public void run(ApplicationArguments args) {
+    public void afterSingletonsInstantiated() {
         verificar();
     }
 
-    /** Separado de {@link #run} para o teste chamar sem montar argumentos. */
-    void verificar() {
+    /** Público para os testes (E2E, em outro pacote) exercitarem a checagem com o banco real sem reiniciar o contexto. */
+    public void verificar() {
         if (chaveConfirmada) {
             // Deixada ligada, a confirmação aceitaria em silêncio a 1ª subida de uma versão futura sem âncora (uma rotação, um banco
             // restaurado sem a tabela de verificadores). Por isso o lembrete a cada subida, e não só quando ela é usada.

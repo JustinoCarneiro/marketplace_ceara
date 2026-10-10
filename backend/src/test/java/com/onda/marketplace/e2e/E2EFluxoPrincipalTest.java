@@ -2374,9 +2374,9 @@ class E2EFluxoPrincipalTest {
 
         // a subida recusa conta com hash de uma versão que a configuração não sabe mais calcular (aqui, a 0: abaixo da anterior)
         jdbc.update("UPDATE users SET cpf_hash_versao = 0 WHERE id = ?::uuid", rotac.toString());
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.run(null));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.verificar());
         jdbc.update("UPDATE users SET cpf_hash_versao = ? WHERE id = ?::uuid", cpfHashService.versaoAtual(), rotac.toString());
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> cpfHashKeyCheck.run(null));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> cpfHashKeyCheck.verificar());
     }
 
     @Test @Order(55)
@@ -2968,42 +2968,67 @@ class E2EFluxoPrincipalTest {
             assertThat("precondição: nenhum prestador com hash na versão anterior para servir de âncora",
                     contar("SELECT count(*) FROM users u JOIN providers_profile p ON p.user_id = u.id "
                             + "WHERE u.cpf_hash IS NOT NULL AND u.cpf_hash_versao = ?", versaoAnterior), equalTo(0));
-            var recusa = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.run(null));
+            var recusa = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.verificar());
             assertThat(recusa.getMessage(), allOf(containsString("1 conta(s)"), containsString("CPF_HASH_KEY_PREVIOUS"),
                     containsString("CPF_HASH_KEY_CONFIRMED")));
             assertThat("recusar não pode gravar o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
             // o operador conferiu a chave e confirma: sobe, e o verificador passa a ser a referência
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> confirmado.run(null));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> confirmado.verificar());
             assertThat(verificacaoChaveRepo.existsById(versaoAnterior), is(true));
             // a partir daí a variável é dispensável: o verificador gravado é conferido normalmente
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.run(null));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.verificar());
 
             // 2) agora há um prestador com CPF decifrável na versão anterior: a âncora PROVA a chave, e a subida não pede confirmação
             verificacaoChaveRepo.deleteById(versaoAnterior);
             jdbc.update("UPDATE users SET cpf_hash = ?, cpf_hash_versao = ? WHERE id = ?::uuid",
                     antiga.hash(CPF_ANCORA), versaoAnterior, ancora.toString());
-            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.run(null));
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> recusando.verificar());
             assertThat(verificacaoChaveRepo.existsById(versaoAnterior), is(true));
 
             // 3) a mesma âncora, mas o hash dela foi calculado com OUTRA chave: contradiz a configurada → recusa, e a confirmação do
             //    operador NÃO vence uma contradição (só cobre o "não há como provar")
             verificacaoChaveRepo.deleteById(versaoAnterior);
             jdbc.update("UPDATE users SET cpf_hash = ? WHERE id = ?::uuid", outraChave.hash(CPF_ANCORA), ancora.toString());
-            var contradicao = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.run(null));
+            var contradicao = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> recusando.verificar());
             assertThat(contradicao.getMessage(), containsString("CPF_HASH_KEY_PREVIOUS"));
-            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> confirmado.run(null));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> confirmado.verificar());
             assertThat("contradição não grava o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
 
             // 4) o bean do contexto e2e tem o cruzamento DESLIGADO (cpf-backfill.enabled=false): a recusa não pode depender dessa flag
             //    (ela só diz "não há como consultar a âncora"; sem âncora e com contas, a subida segue sendo recusada)
-            var semCruzamento = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.run(null));
+            var semCruzamento = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.verificar());
             assertThat(semCruzamento.getMessage(), containsString("CPF_HASH_KEY_CONFIRMED"));
             assertThat("recusar não grava o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
         } finally {
             // volta ao padrão de conta sem CPF confirmado (cpf_hash_versao é NOT NULL DEFAULT 1) e devolve o verificador da subida
             jdbc.update("UPDATE users SET cpf_hash = NULL, cpf_hash_versao = 1 WHERE id IN (?::uuid, ?::uuid)",
                     gui.id().toString(), ancora.toString());
-            recusando.run(null);   // sem conta na versão anterior: grava o verificador (confiança na 1ª subida), como no arranque
+            recusando.verificar();   // sem conta na versão anterior: grava o verificador (confiança na 1ª subida), como no arranque
         }
+    }
+
+    /** Registra o estado do banco no instante em que o contexto anuncia o servidor web como iniciado (ver o passo 70). */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class OrdemDeSubida {
+        static volatile Integer verificadoresQuandoOServidorSubiu;
+
+        @org.springframework.context.annotation.Bean
+        org.springframework.context.ApplicationListener<org.springframework.boot.web.context.WebServerInitializedEvent> registraOrdemDeSubida(
+                JdbcTemplate jdbcDoContexto) {
+            return evento -> verificadoresQuandoOServidorSubiu =
+                    jdbcDoContexto.queryForObject("SELECT count(*) FROM cpf_hash_key_verificacoes", Integer.class);
+        }
+    }
+
+    @Test @Order(70)
+    @DisplayName("70 · A checagem da chave do hash roda ANTES de o servidor aceitar requisições (não numa janela depois dele)")
+    void checagemDaChaveDoHash_rodaAntesDeOServidorAceitarRequisicoes() {
+        // Achado da rodada 3. Como ApplicationRunner, a checagem só rodava DEPOIS de o servidor já atender: no log de subida de 2026-10-10 o
+        // DispatcherServlet já tinha atendido uma requisição (20:40:31,5) antes de o runner do backfill terminar (20:40:32,7). Um cadastro nessa
+        // janela, com CPF_HASH_KEY errada, gravaria hash com a chave errada — e a checagem recusaria subir DEPOIS, deixando esses hashes para trás.
+        // O banco do E2E é novo: o verificador da versão atual só existe depois que o CpfHashKeyCheck rodou (confiança na 1ª subida). Se, no instante
+        // em que o servidor foi anunciado, ele ainda não existia, a checagem rodou depois.
+        assertThat("verificadores gravados quando o servidor web foi anunciado como iniciado",
+                OrdemDeSubida.verificadoresQuandoOServidorSubiu, greaterThan(0));
     }
 }
