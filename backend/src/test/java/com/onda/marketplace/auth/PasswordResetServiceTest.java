@@ -172,7 +172,7 @@ class PasswordResetServiceTest {
     void redefinir_codigoCorreto_trocaSenha_fechaCodigo_encerraSessoes_eAvisa() throws Exception {
         User user = usuario(true);
         PasswordResetCode codigo = codigoAtivo("ABCD2345");
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(user));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
         when(passwordEncoder.encode("NovaSenha@1")).thenReturn("$2a$novo");
 
@@ -188,6 +188,25 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void redefinir_leAContaComTravaComoPrimeiraLeitura_eNuncaPeloLookupSemTrava() throws Exception {
+        // Rodada 3: o save regrava a linha inteira; sem a trava, uma suspensão/exclusão que commitasse no meio era desfeita. A trava só
+        // vale como PRIMEIRA leitura da conta (sobre uma entidade já carregada o Hibernate devolve a instância antiga) — a ordem importa.
+        User user = usuario(true);
+        PasswordResetCode codigo = codigoAtivo("ABCD2345");
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(user));
+        when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
+        when(passwordEncoder.encode("NovaSenha@1")).thenReturn("$2a$novo");
+
+        service.redefinir("ana@example.com", "ABCD2345", "NovaSenha@1");
+
+        var ordem = inOrder(userRepository, codeRepository);
+        ordem.verify(userRepository).findByEmailComTrava("ana@example.com");
+        ordem.verify(codeRepository).ativosDoUsuarioComTrava(eq(USER_ID), any());
+        ordem.verify(userRepository).save(user);
+        verify(userRepository, never()).findByEmail(any());
+    }
+
+    @Test
     void redefinir_codigoCorreto_tiraOBloqueioPorTentativasDeSenha_eEhASaidaDeQuemFoiBloqueado() throws Exception {
         // Quem foi bloqueado por erros de senha (às vezes por culpa de outra pessoa) tem uma saída que não depende de
         // esperar: a recuperação pelo e-mail prova a posse da conta e zera o limite.
@@ -195,7 +214,7 @@ class PasswordResetServiceTest {
         for (int i = 0; i < 5; i++) user.registrarSenhaErrada(Instant.now(), 5, Duration.ofMinutes(15));
         assertThat(user.senhaBloqueada(Instant.now())).isTrue();
         PasswordResetCode codigo = codigoAtivo("ABCD2345");
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(user));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
         when(passwordEncoder.encode("NovaSenha@1")).thenReturn("$2a$novo");
 
@@ -208,7 +227,7 @@ class PasswordResetServiceTest {
     @Test
     void redefinir_aceitaOCodigoComoOUsuarioDigita_minusculoComHifenEOTrocadoPorZero() throws Exception {
         PasswordResetCode codigo = codigoAtivo("0BCD2345");
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(true)));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(usuario(true)));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
         when(passwordEncoder.encode(any())).thenReturn("$2a$novo");
 
@@ -222,7 +241,7 @@ class PasswordResetServiceTest {
     void redefinir_codigoErrado_contaATentativa_eNaoTrocaASenha() throws Exception {
         User user = usuario(true);
         PasswordResetCode codigo = codigoAtivo("ABCD2345");
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(user));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
 
         assertThatThrownBy(() -> service.redefinir("ana@example.com", "ZZZZ9999", "NovaSenha@1"))
@@ -241,7 +260,7 @@ class PasswordResetServiceTest {
     void redefinir_quintaTentativaErrada_fechaOCodigo_eOCertoNaoServeMais() throws Exception {
         PasswordResetCode codigo = codigoAtivo("ABCD2345");
         for (int i = 0; i < 4; i++) codigo.registrarErro(5, Instant.now());   // já errou 4 vezes
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(true)));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(usuario(true)));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(codigo));
 
         assertThatThrownBy(() -> service.redefinir("ana@example.com", "ZZZZ9999", "NovaSenha@1"))
@@ -255,7 +274,7 @@ class PasswordResetServiceTest {
     void redefinir_semCodigoAtivo_expiradoOuJaUsado_dizSoQueEInvalido() {
         // a consulta só devolve códigos abertos e dentro da validade: lista vazia cobre expirado,
         // já usado, fechado por excesso de tentativas e "nunca pediu" — sem distinguir o motivo
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(true)));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(usuario(true)));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.redefinir("ana@example.com", "ABCD2345", "NovaSenha@1"))
@@ -268,7 +287,7 @@ class PasswordResetServiceTest {
     void redefinir_codigoExpiradoQueEscapouDaConsulta_tambemEhRecusado() throws Exception {
         PasswordResetCode expirado = new PasswordResetCode(USER_ID, hmac(USER_ID, "ABCD2345"),
                 Instant.now().minus(Duration.ofMinutes(1)));
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(true)));
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(usuario(true)));
         when(codeRepository.ativosDoUsuarioComTrava(eq(USER_ID), any())).thenReturn(List.of(expirado));
 
         assertThatThrownBy(() -> service.redefinir("ana@example.com", "ABCD2345", "NovaSenha@1"))
@@ -279,8 +298,8 @@ class PasswordResetServiceTest {
 
     @Test
     void redefinir_emailDesconhecido_eContaSuspensa_respondemExatamenteIgual() {
-        when(userRepository.findByEmail("ninguem@example.com")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(usuario(false)));
+        when(userRepository.findByEmailComTrava("ninguem@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(usuario(false)));
 
         for (String email : List.of("ninguem@example.com", "ana@example.com")) {
             assertThatThrownBy(() -> service.redefinir(email, "ABCD2345", "NovaSenha@1"))
@@ -310,7 +329,8 @@ class PasswordResetServiceTest {
     void idaEVolta_oCodigoQueSaiNoEmailAbreAReDefinicao() {
         // O que solicitar() grava é aceito por redefinir() quando o usuário digita o código do e-mail.
         User user = usuario(true);
-        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmail("ana@example.com")).thenReturn(Optional.of(user));           // solicitar(): leitura simples
+        when(userRepository.findByEmailComTrava("ana@example.com")).thenReturn(Optional.of(user));   // redefinir(): com trava
         when(codeRepository.countByUserIdAndCreatedAtAfter(any(), any())).thenReturn(0L);
         when(passwordEncoder.encode(any())).thenReturn("$2a$novo");
 

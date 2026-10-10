@@ -3031,4 +3031,105 @@ class E2EFluxoPrincipalTest {
         assertThat("verificadores gravados quando o servidor web foi anunciado como iniciado",
                 OrdemDeSubida.verificadoresQuandoOServidorSubiu, greaterThan(0));
     }
+
+    @Test @Order(71)
+    @DisplayName("71 · Troca de senha com uma renovação de sessão em voo: o token que nasce com a senha antiga não pode servir depois da troca")
+    void trocaDeSenha_sessaoEmitidaEmVoo_naoSobrevive() throws Exception {
+        // Achado da rodada 3. A troca encerra as sessões com um UPDATE (revogarTodosDoUsuario) que só enxerga as linhas JÁ commitadas no
+        // instante dele. Uma renovação em voo — que consumiu o token antigo e inseriu o novo, sem commitar — faz o UPDATE esperar a linha
+        // antiga e, ao acordar, NÃO ver a linha nova: o token novo sobrevivia a uma troca de senha feita justamente para encerrar sessões.
+        // Quem tem um refresh roubado e renova em laço consegue isso de propósito; o molde abaixo força o mesmo entrelaçamento.
+        var vera = cadastrarCliente("Vera Sessao", "vera.sessao@onda.test");
+        CaixaDeEntrada.EMAILS.clear();
+        pedirCodigo(vera.email());
+        aguardarEmails(1);
+        String codigo = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+        UUID tokenId = jdbc.queryForObject(
+                "SELECT id FROM refresh_tokens WHERE user_id = ?::uuid AND revogado = false ORDER BY created_at DESC LIMIT 1",
+                UUID.class, vera.id().toString());
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a renovação, em voo": consome o token antigo e emite a sessão nova (o mesmo que AuthService.refresh faz), sem commitar
+        var renovacao = pool.submit(() -> transacao.execute(st -> {
+            assertThat(refreshTokensRepo.revogarSeAindaValido(tokenId), equalTo(1));
+            var nova = authService.emitirSessao(userRepository.findById(vera.id()).orElseThrow(), UserRole.ROLE_CLIENT);
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return nova;
+        }));
+        org.junit.jupiter.api.Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                "a renovação deveria ter consumido o token antigo e emitido o novo");
+
+        var troca = pool.submit(() -> redefinir(vera.email(), codigo, "NovaSenha@2").extract().statusCode());
+        Thread.sleep(800);
+        assertThat("a troca deveria estar ESPERANDO a linha do token antigo", troca.isDone(), is(false));
+
+        liberar.countDown();
+        var sessaoEmVoo = renovacao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(troca.get(15, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+        pool.shutdown();
+
+        // a sessão que nasceu com a senha antiga não renova
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + sessaoEmVoo.refreshToken() + "\"}")
+                .when().post("/api/v1/auth/refresh").then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        // controle positivo: quem entra com a senha nova tem uma sessão que renova normalmente
+        var depoisDaTroca = login(vera.email(), "NovaSenha@2");
+        depoisDaTroca.then().statusCode(200);
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + depoisDaTroca.path("refreshToken") + "\"}")
+                .when().post("/api/v1/auth/refresh").then().statusCode(200);
+    }
+
+    @Test @Order(72)
+    @DisplayName("72 · Troca de senha com a conta sendo suspensa ou excluída em voo: a troca não desfaz nenhuma das duas")
+    void trocaDeSenha_contaSuspensaOuExcluidaEmVoo_naoEhDesfeita() throws Exception {
+        // Achado da rodada 3. redefinir() lia o usuário SEM trava e o regravava inteiro (save): uma suspensão ou uma exclusão que commitasse
+        // entre a leitura e o save era desfeita — `ativo` voltava a true, e e-mail/nome/excluido_em voltavam ao valor antigo (a anonimização
+        // revertida: o dado pessoal volta, e a conta excluída reaparece com a senha nova). O molde: o outro lado segura a linha em voo.
+        for (String cenario : java.util.List.of("suspensao", "exclusao")) {
+            var u = cadastrarCliente("Conta " + cenario, "conta." + cenario + ".voo@onda.test");
+            CaixaDeEntrada.EMAILS.clear();
+            pedirCodigo(u.email());
+            aguardarEmails(1);
+            String codigo = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+
+            var travaObtida = new java.util.concurrent.CountDownLatch(1);
+            var liberar     = new java.util.concurrent.CountDownLatch(1);
+            var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            // "o outro lado, em voo": suspende/anonimiza com a trava da linha (como UserAdminService e AccountDeletionService), sem commitar
+            var outroLado = pool.submit(() -> transacao.executeWithoutResult(st -> {
+                User x = userRepository.findByIdComTrava(u.id()).orElseThrow();
+                if (cenario.equals("suspensao")) {
+                    x.suspender();
+                } else {
+                    x.anonimizar("removido-" + UUID.randomUUID() + "@excluido.invalid",
+                            passwordEncoder.encode(UUID.randomUUID().toString()), false);
+                }
+                userRepository.save(x);
+                travaObtida.countDown();
+                try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }));
+            org.junit.jupiter.api.Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "o outro lado deveria ter a linha da conta (" + cenario + ")");
+
+            var troca = pool.submit(() -> redefinir(u.email(), codigo, "NovaSenha@2").extract().statusCode());
+            Thread.sleep(800);
+            assertThat("a troca deveria estar ESPERANDO a linha da conta (" + cenario + ")", troca.isDone(), is(false));
+
+            liberar.countDown();
+            outroLado.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            int status = troca.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            pool.shutdown();
+
+            var linha = conta(u.id());
+            if (cenario.equals("suspensao")) {
+                assertThat("a suspensão não foi desfeita pela troca", linha.get("ativo"), equalTo(false));
+            } else {
+                assertThat("a anonimização não foi desfeita pela troca", String.valueOf(linha.get("email")), startsWith("removido-"));
+                assertThat(linha.get("excluido_em"), notNullValue());
+            }
+            assertThat("a troca enxerga a conta como ela está agora: código inválido, nada trocado (" + cenario + ")", status, equalTo(422));
+        }
+    }
 }

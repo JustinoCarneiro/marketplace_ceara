@@ -401,6 +401,74 @@ class AuthServiceTest {
         verify(jwtService, times(1)).generateAccessToken(any(), any());   // uma sessão só saiu desse token
     }
 
+    // ── Rodada 3: a sessão emitida em voo durante a troca de senha não pode sobreviver a ela (V28, impressão da senha).
+
+    @Test
+    void emitirSessao_gravaAImpressaoDaSenhaVigente_eElaMudaQuandoASenhaMuda() {
+        sessaoPossivel();
+        User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
+
+        authService.emitirSessao(duda, UserRole.ROLE_CLIENT);
+        duda.trocarSenha("$2a$outra-senha");
+        authService.emitirSessao(duda, UserRole.ROLE_CLIENT);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(2)).save(captor.capture());
+        String antes = captor.getAllValues().get(0).getSenhaFp();
+        String depois = captor.getAllValues().get(1).getSenhaFp();
+        assertThat(antes).isNotNull().hasSize(32);
+        assertThat(depois).isNotNull().hasSize(32).isNotEqualTo(antes);
+        assertThat(antes).as("nunca o hash bcrypt, só a impressão dele").doesNotContain("$2a$hash");
+    }
+
+    @Test
+    void refresh_senhaTrocadaDepoisDaEmissao_recusaSemConsumirNemEmitir() {
+        // a corrida: a troca de senha revogou os tokens que existiam, mas esta sessão foi inserida DEPOIS do UPDATE (uma renovação em voo)
+        // e continua revogado = false na tabela. Ela nasceu com a senha antiga; a impressão não bate com a atual.
+        User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
+        String impressaoAntiga = AuthService.impressaoDaSenha(duda);
+        duda.trocarSenha("$2a$senha-nova");
+        var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_CLIENT, impressaoAntiga);
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("sessao-em-voo")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+
+        verify(refreshTokenRepository, never()).revogarSeAindaValido(any());
+        verify(jwtService, never()).generateAccessToken(any(), any());
+    }
+
+    @Test
+    void refresh_impressaoQueBateComASenhaAtual_renova() {
+        User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
+        var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_CLIENT,
+                AuthService.impressaoDaSenha(duda));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+        refreshConsumivel();
+        sessaoPossivel();
+
+        authService.refresh(new RefreshRequest("sessao-normal"));
+
+        verify(refreshTokenRepository).revogarSeAindaValido(any());
+        verify(jwtService).generateAccessToken(any(), any());
+    }
+
+    @Test
+    void switchRole_comSessaoDeSenhaAntiga_recusa_aMesmaRegraVaiPeloCaminhoUnico() {
+        User duda = contaComDoisPapeis(UserRole.ROLE_CLIENT);
+        String impressaoAntiga = AuthService.impressaoDaSenha(duda);
+        duda.trocarSenha("$2a$senha-nova");
+        var token = new RefreshToken(duda, "hash", java.time.Instant.now().plusSeconds(3600), UserRole.ROLE_CLIENT, impressaoAntiga);
+        when(userRepository.findById(duda.getId())).thenReturn(Optional.of(duda));
+        when(refreshTokenRepository.findByTokenHash(any())).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.switchRole(duda.getId(), new SwitchRoleRequest("ROLE_PROVIDER", "sessao-antiga")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_REFRESH_TOKEN");
+        verify(refreshTokenRepository, never()).revogarSeAindaValido(any());
+    }
+
     @Test
     void switchRole_contaSuspensa_recusa_comoORefreshFaz() {
         // consumirRefreshDaConta e refresh() eram duas implementações; só a segunda conferia a conta ativa
