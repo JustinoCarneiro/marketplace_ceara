@@ -51,6 +51,33 @@ class ProviderAdminServiceTest {
     }
 
     @Test
+    void listar_expoOCpfConciliadoDeCadaPerfil_eDuplicataNaoSeConfundeComConciliado() {
+        // Um perfil de cada: se o mapeamento fixasse o valor (sempre true ou sempre false), um dos dois falharia. É o campo que
+        // acende o aviso "CPF em duplicidade" e o botão de conciliar no painel.
+        ProviderProfile duplicata = perfil("Duda Duplicada", false);
+        ProviderProfile conciliado = perfil("Caio Conciliado", true);
+        when(repository.findAllWithUser()).thenReturn(List.of(duplicata, conciliado));
+
+        List<ProviderAdminDto> r = service.listar(null);
+
+        assertThat(r).extracting(ProviderAdminDto::nome, ProviderAdminDto::cpfConciliado)
+                .containsExactly(tuple("Duda Duplicada", false), tuple("Caio Conciliado", true));
+    }
+
+    private static ProviderProfile perfil(String nome, boolean cpfConciliado) {
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(UUID.randomUUID());
+        when(user.getNome()).thenReturn(nome);
+        ProviderProfile p = mock(ProviderProfile.class);
+        when(p.getUser()).thenReturn(user);
+        when(p.getCategoria()).thenReturn("eletrica");
+        when(p.getStatusVerificacao()).thenReturn(ProviderStatus.VERIFICADO);
+        when(p.getNotaMedia()).thenReturn(null);
+        when(p.isCpfConciliado()).thenReturn(cpfConciliado);
+        return p;
+    }
+
+    @Test
     void listar_comFiltro_usaFindByStatusWithUser() {
         when(repository.findByStatusWithUser(ProviderStatus.EM_VERIFICACAO)).thenReturn(List.of());
 

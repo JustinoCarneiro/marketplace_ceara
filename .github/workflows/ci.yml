@@ -153,6 +153,7 @@ jobs:
           POSTGRES_PASSWORD: onda_pass
           JWT_SECRET: test-secret-key-for-e2e-tests-min-32-chars
           CPF_ENCRYPTION_KEY: test-cpf-aes256-key-32-chars-here!
+          CPF_HASH_KEY: test-cpf-hmac-key-for-ci-only-32chars
           MARKETPLACE_WEBHOOK_SECRET: test-webhook-secret
 
       - name: Aguardar health do backend
@@ -249,6 +250,7 @@ jobs:
           POSTGRES_PASSWORD: onda_pass
           JWT_SECRET: test-secret-key-for-e2e-tests-min-32-chars
           CPF_ENCRYPTION_KEY: test-cpf-aes256-key-32-chars-here!
+          CPF_HASH_KEY: test-cpf-hmac-key-for-ci-only-32chars
           MARKETPLACE_WEBHOOK_SECRET: test-webhook-secret
           # US35: sem SMTP, o e-mail de recuperação de senha é gravado nesta pasta e o teste
           # (mobile/tests/09-recuperar-senha.spec.ts) lê o código de lá. Só CI/dev — nunca em produção.

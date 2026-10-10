@@ -31,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -74,7 +75,7 @@ class ServiceExecutionServiceTest {
     void start_aceitoPrestadorCorretoEDinheiroRetido_moveParaEmAndamento() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID))
@@ -88,6 +89,7 @@ class ServiceExecutionServiceTest {
         // o cálculo nunca teria dado real pra nenhum atendimento.
         assertThat(sr.getIniciadoEm()).isNotNull();
         verify(srRepository).save(sr);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
     }
 
     @Test
@@ -96,7 +98,7 @@ class ServiceExecutionServiceTest {
         // pedido chegaria a CONCLUIDO mandando liberar valor que nunca foi cobrado.
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID))
@@ -117,7 +119,7 @@ class ServiceExecutionServiceTest {
         // pagamento, o erro seria PAYMENT_NOT_RETAINED — o teste fixa a ordem.
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(status);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
 
@@ -134,7 +136,7 @@ class ServiceExecutionServiceTest {
     void start_semTransacaoNenhuma_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
         prestadorCom(ProviderStatus.VERIFICADO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(PRESTADOR_ID)));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
@@ -147,7 +149,7 @@ class ServiceExecutionServiceTest {
     @Test
     void start_statusNaoAceito_lancaException() {
         var sr = sr(ServiceRequestStatus.PENDENTE);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.start(SR_ID, PRESTADOR_ID))
                 .isInstanceOf(BusinessException.class)
@@ -157,7 +159,7 @@ class ServiceExecutionServiceTest {
     @Test
     void start_prestadorErrado_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta(UUID.randomUUID()))); // outro prestador
 
@@ -172,8 +174,8 @@ class ServiceExecutionServiceTest {
     void confirmCompletion_pagamentoPendente_naoEmiteRepasse() {
         // Rede de segurança: mesmo que o pedido chegue aqui sem escrow (dado legado,
         // caminho fora da API), nada de mandar o gateway repassar dinheiro não cobrado.
-        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID))
                 .thenReturn(Optional.of(transaction(TransactionStatus.PENDENTE)));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -186,9 +188,9 @@ class ServiceExecutionServiceTest {
 
     @Test
     void confirmCompletion_emAndamento_moveParaConcluido_e_criaOutbox() {
-        var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
         var tx = transaction(TransactionStatus.RETIDO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -200,12 +202,27 @@ class ServiceExecutionServiceTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_RELEASED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
+    }
+
+
+    @Test
+    void confirmCompletion_pedidoDeOutroCliente_respondeComoSeNaoExistisse_eNaoGrava() {
+        // o dono é conferido DEPOIS de travar o pedido; outro cliente recebe a mesma resposta de "não existe"
+        var sr = srDoCliente(ServiceRequestStatus.EM_ANDAMENTO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() -> service.confirmCompletion(SR_ID, UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
+        verify(srRepository, never()).save(any());
+        verifyNoInteractions(outboxRepository);
     }
 
     @Test
     void confirmCompletion_statusInvalido_lancaException() {
-        var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findByIdAndCliente_Id(SR_ID, CLIENTE_ID)).thenReturn(Optional.of(sr));
+        var sr = srDoCliente(ServiceRequestStatus.ACEITO);
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.confirmCompletion(SR_ID, CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
@@ -217,7 +234,7 @@ class ServiceExecutionServiceTest {
     @Test
     void openDispute_emAndamento_moveParaEmDisputa_e_criaAlertaDisputa() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(notificationService.criarAlerta(any(), any())).thenReturn(null);
@@ -229,6 +246,7 @@ class ServiceExecutionServiceTest {
         assertThat(sr.getDetalhesDisputa()).isEqualTo("detalhes do ocorrido");
         verify(srRepository).save(sr);
         verify(notificationService).criarAlerta("DISPUTA", SR_ID);
+        verify(srRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
     }
 
     @Test
@@ -236,7 +254,7 @@ class ServiceExecutionServiceTest {
         // Antes, "qualquer parte autenticada" era literal: nenhuma checagem de
         // participação existia, então qualquer conta congelava o escrow alheio.
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, "motivo", "detalhes"))
@@ -248,7 +266,7 @@ class ServiceExecutionServiceTest {
     @Test
     void openDispute_statusInvalido_lancaException() {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.findByIdComTrava(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
 
         assertThatThrownBy(() -> service.openDispute(SR_ID, CLIENTE_ID, null, null))
@@ -264,16 +282,41 @@ class ServiceExecutionServiceTest {
         var tx = transaction(TransactionStatus.RETIDO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        // a escrita confere o estado ATUAL (não o lido no início) — ver cancel_corridaComAceiteConcorrente_naoSobrescreve
+        verify(srRepository).cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO)), any());
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_REFUNDED");
+    }
+
+    @Test
+    void cancel_corridaComAceiteConcorrente_naoSobrescreve_eLancaComOEstadoDeVerdade() {
+        // Achado da revisão cruzada (2026-10-05): cancel() lia PROPOSTO; em outra transação, o cliente aceitava a
+        // proposta (ACEITO) e iniciava o pagamento; sem reconferir o estado na escrita, o save() sobrescrevia o
+        // ACEITO com CANCELADO sem deixar rastro (nem erro, nem reembolso — a transação ainda nem existia quando
+        // cancel() checou). A escrita guardada (0 linhas afetadas) detecta a corrida; o método relê e informa o
+        // estado DE VERDADE (ACEITO), não o status PROPOSTO que tinha lido no início.
+        var sr = sr(ServiceRequestStatus.PROPOSTO);   // lido como PROPOSTO...
+        when(srRepository.findById(SR_ID))
+                .thenReturn(Optional.of(sr))                                    // ...1ª leitura
+                .thenReturn(Optional.of(sr(ServiceRequestStatus.ACEITO)));      // ...mas, na releitura, já é ACEITO
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO)), any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_STATE_TRANSITION")
+                .hasMessageContaining("ACEITO");   // o estado relido, não o PROPOSTO da 1ª leitura
+
+        verifyNoInteractions(proposalRepository, outboxRepository);
     }
 
     @Test
@@ -287,7 +330,7 @@ class ServiceExecutionServiceTest {
         assertThatThrownBy(() -> service.cancel(SR_ID, CLIENTE_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
-        verify(srRepository, never()).save(any());
+        verify(srRepository, never()).cancelarSeEmEstadoCancelavel(any(), any(), any());
         verify(outboxRepository, never()).save(any());
     }
 
@@ -296,13 +339,60 @@ class ServiceExecutionServiceTest {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.empty());
-        when(srRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.cancel(SR_ID, CLIENTE_ID);
 
-        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.CANCELADO);
+        verify(srRepository).cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any());
         verify(outboxRepository, never()).save(any());
+    }
+
+    // ── O cliente tem saída de um pedido sem prestador: PENDENTE/PROPOSTO eram impossíveis de cancelar.
+
+    @Test
+    void cancel_pendente_peloDono_cancelaSemReembolsoNemOutbox() {
+        var sr = sr(ServiceRequestStatus.PENDENTE);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID),
+                eq(Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO)), any())).thenReturn(1);
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of());
+
+        service.cancel(SR_ID, CLIENTE_ID);
+
+        verifyNoInteractions(outboxRepository);   // ainda não há dinheiro: ele só entra no aceite
+    }
+
+    @Test
+    void cancel_proposto_encerraAsPropostasAtivas_paraNaoFicaremAbertasEmPedidoCancelado() {
+        var sr = sr(ServiceRequestStatus.PROPOSTO);
+        var p1 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(100), 1, null, ProposalStatus.ATIVA);
+        var p2 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(120), 1, null, ProposalStatus.ATIVA);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
+        when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
+        when(proposalRepository.findByServiceRequestIdAndStatus(SR_ID, ProposalStatus.ATIVA)).thenReturn(List.of(p1, p2));
+
+        service.cancel(SR_ID, CLIENTE_ID);
+
+        assertThat(p1.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
+        assertThat(p2.getStatus()).isEqualTo(ProposalStatus.ENCERRADA);
+        verify(proposalRepository).save(p1);
+        verify(proposalRepository).save(p2);
+    }
+
+    @Test
+    void cancel_proposto_prestadorQueAindaNaoFoiAceitoNaoCancela() {
+        // quem só tem proposta ATIVA não participa do pedido: cancelar é do cliente dono
+        var sr = sr(ServiceRequestStatus.PROPOSTO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
+        when(srRepository.isParticipante(SR_ID, PRESTADOR_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancel(SR_ID, PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        assertThat(sr.getStatus()).isEqualTo(ServiceRequestStatus.PROPOSTO);
     }
 
     @Test
@@ -321,6 +411,16 @@ class ServiceExecutionServiceTest {
         var sr = new ServiceRequest();
         sr.setStatus(status);
         sr.setCategoria("ELETRICISTA");
+        return sr;
+    }
+
+    /** Pedido do CLIENTE_ID — confirmCompletion confere o dono depois de travar o pedido. */
+    private ServiceRequest srDoCliente(ServiceRequestStatus status) {
+        var sr = sr(status);
+        var cliente = com.onda.marketplace.auth.User.builder().nome("Cliente").email("c@x.com").senhaHash("$2a$x")
+                .role(com.onda.marketplace.auth.UserRole.ROLE_CLIENT).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", CLIENTE_ID);
+        sr.setCliente(cliente);
         return sr;
     }
 

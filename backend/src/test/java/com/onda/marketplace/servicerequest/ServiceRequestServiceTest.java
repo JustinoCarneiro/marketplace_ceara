@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -83,6 +84,54 @@ class ServiceRequestServiceTest {
         assertThat(dto.status()).isEqualTo("PENDENTE");
         assertThat(dto.aiDescricaoSugerida()).isNull();
         verify(requestRepository).save(any());
+    }
+
+    // Achado da revisão cruzada (2026-10-05): sem isto, qualquer texto — nome, telefone, endereço —
+    // entrava em categoria/bairro, campos que o admin trata como agregáveis e que sobrevivem à exclusão.
+
+    @Test
+    void create_categoriaComDigito_recusa_semConsultarNemGravarNada() {
+        var req = new CreateServiceRequestRequest("Elétrica 2", "x", -3.7, -38.5, null);
+
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), req, "idem-cat-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_CATEGORIA");
+        verifyNoInteractions(requestRepository, userRepository, aiService);
+    }
+
+    @Test
+    void create_categoriaPareceContatoOuNome_recusa() {
+        for (String ruim : new String[] {"eletrica@gmail.com", "85999990000", "José da Silva Encanador!!"}) {
+            assertThatThrownBy(() -> service.create(UUID.randomUUID(),
+                    new CreateServiceRequestRequest(ruim, null, -3.7, -38.5, null), "idem-cat-" + ruim))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("code", "INVALID_CATEGORIA");
+        }
+    }
+
+    @Test
+    void create_bairroForaDaLista_recusa_semConsultarNemGravarNada() {
+        var req = new CreateServiceRequestRequest("ELETRICISTA", "x", -3.7, -38.5, "Rua das Flores 123");
+
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), req, "idem-bai-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_BAIRRO");
+        verifyNoInteractions(requestRepository, userRepository, aiService);
+    }
+
+    @Test
+    void create_bairroNuloOuDaLista_passa() {
+        when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
+        when(aiService.suggest(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertThatCode(() -> service.create(UUID.randomUUID(),
+                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, null), "idem-bai-2"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> service.create(UUID.randomUUID(),
+                new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, "Meireles"), "idem-bai-3"))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -169,28 +218,46 @@ class ServiceRequestServiceTest {
     void publicar_statusPendente_atualizaDescricaoEMantemPendente() {
         UUID requestId = UUID.randomUUID();
         UUID clienteId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
         sr.setCategoria("ELETRICISTA");
         sr.setDescricao("sugestão da IA");
         sr.setStatus(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findByIdAndCliente_Id(requestId, clienteId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         ServiceRequestDto dto = service.publicar(requestId, clienteId, new PublishRequest("descrição final editada"));
 
         assertThat(dto.descricao()).isEqualTo("descrição final editada");
         assertThat(dto.status()).isEqualTo("PENDENTE");
+        verify(requestRepository, never()).findById(any());   // o pedido é lido com trava (a 1ª leitura), nunca com leitura simples
+    }
+
+    @Test
+    void publicar_pedidoDeOutroCliente_respondeComoSeNaoExistisse_eNaoGrava() {
+        UUID requestId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", UUID.randomUUID());
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        sr.setStatus(ServiceRequestStatus.PENDENTE);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
+
+        assertThatThrownBy(() -> service.publicar(requestId, UUID.randomUUID(), new PublishRequest("x")))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
+        verify(requestRepository, never()).save(any());
     }
 
     @Test
     void publicar_statusJaAceito_lancaInvalidTransition() {
         UUID requestId = UUID.randomUUID();
         UUID clienteId = UUID.randomUUID();
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
         sr.setStatus(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(requestId, clienteId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
 
         assertThatThrownBy(() -> service.publicar(requestId, clienteId, new PublishRequest("x")))
                 .isInstanceOf(BusinessException.class);
@@ -282,11 +349,35 @@ class ServiceRequestServiceTest {
         when(requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE))
                 .thenReturn(List.of(sr));
 
-        List<AvailableRequestDto> result = service.listarDisponiveis();
+        List<AvailableRequestDto> result = service.listarDisponiveis(UUID.randomUUID());
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).categoria()).isEqualTo("ELETRICISTA");
         assertThat(result.get(0).status()).isEqualTo("PENDENTE");
+    }
+
+    @Test
+    void listarDisponiveis_naoMostraOsPedidosQueOPrestadorAbriuComoCliente() {
+        // conta única com papéis: o prestador também é cliente. Os pedidos dele não entram na fila dele (ninguém contrata a si
+        // mesmo — e a proposta ao próprio pedido é recusada).
+        var eu = User.builder().nome("Eu").email("eu@x.com").senhaHash("$2a$x").role(com.onda.marketplace.auth.UserRole.ROLE_PROVIDER).build();
+        var outro = User.builder().nome("Outro").email("outro@x.com").senhaHash("$2a$x").role(com.onda.marketplace.auth.UserRole.ROLE_CLIENT).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(eu, "id", UUID.randomUUID());
+        org.springframework.test.util.ReflectionTestUtils.setField(outro, "id", UUID.randomUUID());
+        var meu = new ServiceRequest();
+        meu.setCliente(eu);
+        meu.setCategoria("ELETRICISTA");
+        meu.setStatus(ServiceRequestStatus.PENDENTE);
+        var deOutro = new ServiceRequest();
+        deOutro.setCliente(outro);
+        deOutro.setCategoria("HIDRAULICA");
+        deOutro.setStatus(ServiceRequestStatus.PENDENTE);
+        when(requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE))
+                .thenReturn(List.of(meu, deOutro));
+
+        List<AvailableRequestDto> result = service.listarDisponiveis(eu.getId());
+
+        assertThat(result).extracting(AvailableRequestDto::categoria).containsExactly("HIDRAULICA");
     }
 
     @Test

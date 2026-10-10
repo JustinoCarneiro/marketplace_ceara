@@ -22,6 +22,8 @@ Como **Cliente**, quero me cadastrar com e-mail e senha, para acessar prestadore
 ### US02 — Perfil e verificação do Prestador
 Como **Prestador**, quero criar perfil visual e enviar CPF para validação, para transmitir credibilidade.
 - **Dado que** envio meu CPF, **quando** finalizo o cadastro, **então** o background check é disparado de forma **assíncrona** e meu status fica `EM_VERIFICACAO`.
+- **Dado** um CPF com dígito verificador errado, repetido ou com tamanho errado, **então** o cadastro é recusado (`INVALID_CPF`, 422) e nada é criado. **Dado** um CPF já vinculado a outra conta, com ou sem máscara, **então** o cadastro é recusado (`CPF_ALREADY_REGISTERED`, 422): uma pessoa = um CPF, em todo o sistema — e uma conta só, que pode ser cliente e prestador (US38). Só o hash do CPF vai para a conta; o CPF cifrado fica no perfil. Excluir a conta e se recadastrar não burla um banimento (US36: o hash do prestador reprovado/suspenso fica).
+- **Dado** prestadores cadastrados antes dessa regra (só com o CPF cifrado), **então** a subida da aplicação grava o hash deles (`ProviderCpfBackfill`, idempotente); o mesmo CPF em duas contas legadas não é resolvido sozinho: a segunda fica sem hash e listada no log, só pelo id, para decisão humana.
 - **Dado que** o background check retorna aprovado, **então** meu status vira `VERIFICADO` e passo a aparecer nas buscas.
 - **Dado que** retorna reprovado/inconclusivo, **então** status `REPROVADO` e não apareço nas buscas.
 - **Dado que** meu status não é `VERIFICADO` (em verificação, reprovado ou suspenso), **quando** tento enviar uma proposta, **então** a API recusa (`PROVIDER_NOT_VERIFIED`, 422) dizendo o motivo — "ainda em verificação", "não aprovado" ou "suspenso" — e não grava nada. Os pedidos disponíveis continuam visíveis; só propor é bloqueado. (2026-10-04: até aí o status só filtrava a busca e o prestador recém-cadastrado propunha normalmente.)
@@ -42,6 +44,43 @@ Como **Usuário** (Cliente ou Prestador) que esqueceu a senha, quero redefini-la
 - **Dado** uma conta suspensa (US26), **então** ela não recebe código (mesma confirmação genérica).
 - **Dado** que o servidor não tem e-mail configurado, **então** o app avisa que a recuperação está indisponível em vez de prometer um e-mail que não sairá.
 - Fora do escopo: administradores (painel interno) redefinem a senha pelo suporte/operação; o JWT já emitido continua válido até expirar (até 15 min), mas nenhum refresh é possível.
+
+### US36 — Exclusão de conta
+Como **Usuário** (Cliente ou Prestador), quero excluir minha conta pelo próprio app, para exercer meu direito de eliminação dos dados (LGPD, art. 18, VI) — exigência também da App Store e da Play Store.
+- **Dado que** estou logado, **quando** peço a exclusão (`POST /api/v1/users/me/delete`) e confirmo com a minha senha, **então** a conta é encerrada (204): o acesso — inclusive o token já emitido — para na hora, as sessões e os códigos de recuperação são apagados e meus dados pessoais são removidos ou anonimizados.
+- **Dado** uma senha incorreta, **então** a exclusão é recusada (`INVALID_PASSWORD`, 422 — não 401, que o app trataria como sessão expirada) e nada muda.
+- **Dado** um pedido meu aceito, em andamento ou em disputa — ou, como **cliente**, um reembolso ainda a caminho (pedido cancelado com o dinheiro retido) ou, como **prestador**, um repasse ainda por receber (serviço concluído com o dinheiro retido) —, **quando** peço a exclusão, **então** ela é recusada (`ACCOUNT_HAS_ACTIVE_ORDERS`) dizendo o que preciso resolver; nada é apagado (apagar a chave Pix com repasse pendente deixaria o dinheiro sem destino). O cliente cujo serviço já foi concluído **não** é barrado pelo repasse do prestador: o que falta não depende dos dados dele.
+- **Dado** pedidos meus ainda sem compromisso (pendente ou proposto), **então** são cancelados e as propostas abertas neles encerradas: nada meu fica visível a prestadores. **Dado** um prestador com propostas abertas, **então** elas são encerradas; o pedido do cliente em que a proposta dele era a única volta a `PENDENTE` (reaparece na fila), e onde há outras propostas ativas segue `PROPOSTO`.
+- **Dado** o histórico financeiro e de reputação, **então** é mantido **sem identificação pessoal**: nome "Usuário removido", sem e-mail, CPF nem localização. Transações e pedidos concluídos ficam por obrigação fiscal e para disputas (LGPD, art. 16, I e II); a **nota** das avaliações e o **bairro** (região ampla, usada nos relatórios) ficam. Saem os **textos livres** que escrevi — descrição e dados de disputa dos meus pedidos, comentários de avaliações, mensagens do chat (a linha da mensagem fica, com "[mensagem removida]") — e as **fotos e áudios dos meus pedidos**.
+- **Dado** o CPF, **então** o CPF cifrado do prestador e o hash do CPF são apagados. O hash só permanece se o prestador foi reprovado ou suspenso pela moderação, ou a conta estava suspensa (antifraude: excluir a conta não desfaz o vínculo que impede o mesmo CPF em outra conta). Uma conta "limpa" pode se cadastrar de novo, com o mesmo CPF e e-mail.
+- **Dado** o aceite de termos (que inclui o IP), os alertas de SOS e as denúncias, **então** são mantidos: prova do consentimento — imutável por desenho —, segurança e moderação.
+- **Dado** um administrador, **então** ele não exclui a própria conta por este fluxo (`ADMIN_CANNOT_DELETE`). **Dado** uma conta suspensa, **então** ela não consegue pedir a exclusão pelo app (o acesso está cortado); o pedido dela passa pelo suporte.
+- **Dado** uma conta excluída, **quando** o admin lista os usuários, **então** ela aparece como "Usuário removido" com status `EXCLUIDO`, sem ação possível: não é reativável nem moderável (`ACCOUNT_DELETED`).
+- **Dado** dois pedidos de exclusão simultâneos (toque duplo no botão), **então** a conta é excluída uma vez e um só aviso é enviado.
+- **Dado** que o servidor tem e-mail configurado, **então** o dono recebe um aviso de que a conta foi excluída (melhor esforço; o envio nunca desfaz a exclusão).
+- Premissas jurídicas assumidas (a confirmar com a assessoria — `docs/PENDENCIAS_JURIDICAS.md`, item 5): histórico anonimizado retido sem prazo de expurgo por ora; alertas de SOS (que guardam latitude/longitude) e denúncias mantidos por segurança e moderação; IP do aceite de termos mantido como prova do consentimento; CPF cifrado do prestador apagado mesmo após repasses concluídos (se a obrigação fiscal exigir retê-lo, a regra muda).
+
+
+### US37 — Limite de tentativas de senha
+Como **Usuário**, quero que a minha senha não possa ser adivinhada por tentativa e erro, para que ninguém assuma a minha conta nem apague os meus dados com um token roubado.
+- **Dado** 5 senhas erradas seguidas na minha conta — no login ou na confirmação da exclusão de conta (US36) —, **então** a conta não aceita nova tentativa por 15 minutos: a API responde `429` (`TOO_MANY_ATTEMPTS`) com `Retry-After`, a mensagem diz quanto falta e **nem a senha certa** vale durante o bloqueio.
+- **Dado** que acertei a senha, **então** o contador zera. **Dado** que redefini a senha pelo e-mail (US35), **então** o bloqueio termina na hora: é a saída de quem foi bloqueado, inclusive por palpites alheios.
+- **Dado** que o contador é da **conta**, **então** vale para o login e para a exclusão de conta ao mesmo tempo, e outra conta não é afetada. Passados os 15 minutos, o próximo erro recomeça a contagem do zero.
+- **Dado** palpites simultâneos, **então** só 5 são avaliados e os demais já encontram o bloqueio (a conta é lida com trava de linha).
+- **Dado** um e-mail que não existe, **então** a resposta é a mesma de senha errada (`INVALID_CREDENTIALS`) e nada é contado.
+- Limite e duração são configuráveis: `marketplace.password-attempts.max-failures` (5) e `marketplace.password-attempts.lock-seconds` (900).
+- Trade-off assumido: como o bloqueio é por conta, quem sabe o e-mail de alguém pode bloqueá-lo por 15 minutos. O bloqueio é curto e a recuperação por e-mail o encerra. Ver `memoria-tecnica/decisoes/limite-de-tentativas-de-senha.md`.
+
+### US38 — Conta única com papéis (cliente e prestador na mesma conta)
+Como **Pessoa**, quero ter uma conta só e poder ser cliente e prestador nela, para contratar um serviço sem criar outra conta e sem perder a identidade já confirmada.
+- **Dado** que me cadastro como **prestador**, **então** a conta já nasce com os dois papéis (todo prestador também contrata) e abre no modo prestador. **Dado** que me cadastro como **cliente**, **então** a conta tem só o papel de cliente.
+- **Dado** que a conta tem os dois papéis, **quando** toco em "Alternar para modo cliente/prestador" no Perfil, **então** a mesma conta passa a operar no outro papel (`POST /api/v1/auth/switch-role`): novo token e novo refresh no papel escolhido, e o anterior é revogado. **Dado** um papel que a conta **não** tem (ou `ROLE_ADMIN`), **então** `ROLE_NOT_AVAILABLE` (422) e nada é emitido.
+- **Dado** que renovo a sessão (refresh), **então** continuo no papel em que estava — renovar não devolve ao papel principal.
+- **Dado** que sou **cliente** e quero prestar serviço, **quando** toco em "Quero ser prestador" e informo CPF, categoria, bio e aceito os termos (`POST /api/v1/auth/become-provider`), **então** a **mesma conta** ganha o papel de prestador, em verificação (US02), a sessão passa ao modo prestador e o aceite dos termos é registrado de novo. **Dado** que já sou prestador, **então** `ALREADY_PROVIDER`; **dado** um CPF diferente do que já confirmei num pagamento, **então** `CPF_MISMATCH`; **dado** um CPF de outra conta, `CPF_ALREADY_REGISTERED`.
+- **Dado** que meu perfil de prestador é reprovado ou suspenso (US25), **então** continuo podendo contratar como cliente; a suspensão da **conta** (US26) corta os dois papéis.
+- **Dado** que excluo a conta (US36), **então** a exclusão vale para os dois papéis e as recusas cobrem os dois lados (serviço em andamento, repasse a receber, reembolso a caminho).
+- **Dado** o painel admin, **então** cada conta mostra todos os seus papéis ("Cliente + Prestador").
+- Ver `memoria-tecnica/decisoes/conta-unica-com-papeis.md`.
 
 ---
 
@@ -94,10 +133,15 @@ Como **Prestador**, quero enviar uma proposta de preço para um pedido, para con
 - **Dado** que envio a proposta, **então** informo também data/hora em que atenderei
   (`horarioProposto`) — obrigatório e precisa ser no futuro. É a partir desse horário, comparado
   contra o início real do atendimento, que a pontualidade do prestador (US03) é calculada.
+- **Dado** que o pedido é meu (a conta é uma só e também é de cliente, US38), **quando** tento propor a ele, **então** a API recusa (`SELF_HIRE_FORBIDDEN`, 422) e não grava nada; o meu pedido também **não aparece** na minha fila de pedidos disponíveis.
 
 ### US16 — Cliente compara e aceita proposta
 Como **Cliente**, quero comparar propostas e aceitar uma, para contratar com preço justo.
 - **Dado** múltiplas propostas, **quando** aceito uma, **então** as demais são encerradas e o fluxo segue para pagamento/Escrow.
+- **Dado** um pedido `PROPOSTO`, **quando** recuso uma proposta, **então**: se ainda há outra proposta ativa, o pedido continua `PROPOSTO` (as outras seguem disputando); se era a **última**, o pedido volta a `PENDENTE` e reaparece na fila dos prestadores. (Antes ficava preso em `PROPOSTO`: a fila só lista `PENDENTE` e o cliente não tinha como cancelá-lo.) O mesmo vale quando o prestador da única proposta ativa exclui a conta (US36).
+- **Dado** um pedido `PENDENTE` ou `PROPOSTO` (sem prestador e sem dinheiro), **quando** o **cliente dono** o cancela, **então** vai para `CANCELADO`, as propostas ativas são encerradas e **não há reembolso** (nada foi cobrado). O prestador, que ainda não é parte do pedido, não cancela.
+- **Dado** um pedido `PENDENTE` ou `PROPOSTO` sem andamento — nenhuma mudança de estado e nenhuma proposta nova — há **15 dias** (`marketplace.request.expiration-days`), **então** ele expira: `CANCELADO` e propostas ativas encerradas. Uma proposta nova conta como andamento. `ACEITO` e os estados seguintes nunca expiram sozinhos.
+- **Dado** que sou prestador e também contrato (a mesma conta, em modo cliente), **quando** aceito a proposta de **outro** prestador, **então** o fluxo segue normal para pagamento — sem segunda conta e sem confirmar o CPF de novo (ele veio do cadastro de prestador). **Dado** que tento aceitar a proposta da minha própria conta, **então** `SELF_HIRE_FORBIDDEN`. A conta também não aparece na própria busca de prestadores.
 - **Dado** que estou comparando propostas, **então** vejo também o horário que cada prestador propôs pra atender — preço não é o único critério de decisão.
 > Nota: sem lances em tempo real no MVP (decisão de escopo). Evolução para leilão dinâmico → v2.
 
@@ -253,6 +297,7 @@ Como **Admin**, quero buscar e gerenciar usuários, para dar suporte e conter ab
 - **Dado** uma busca por e-mail/nome, **quando** localizo um usuário, **então** vejo seu perfil, histórico e status.
 - **Dado** um usuário em abuso, **quando** o suspendo/reativo, **então** o acesso dele é bloqueado/liberado e a ação fica auditável.
   - (2026-10-01) "Bloqueado" vale de verdade no **login** e no **refresh**: conta suspensa não entra nem renova a sessão. Até 2026-10-01 o flag `ativo` era gravado mas nunca consultado, e o usuário suspenso continuava usando o app. O JWT já emitido segue válido até expirar (até 15 min).
+  - (2026-10-04) **Corte imediato:** o token já emitido de uma conta suspensa (ou excluída, US36) também deixa de valer na hora — o filtro de autenticação confere, a cada requisição, se a conta continua ativa (uma consulta por chave primária). Antes valia até expirar.
 
 ### US27 — Reconciliação financeira (Escrow)
 Como **Admin**, quero acompanhar o estado das transações e dos eventos, para garantir que nenhum valor fique preso ou inconsistente.
@@ -297,8 +342,9 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 ---
 
 ## Dicionário de dados (reconciliado com as migrations Flyway V1–V7 em 2026-06-28)
-- `users` (id, nome, email, cpf_cifrado, senha_hash, role)
-- `refresh_tokens` (id, user_id, token_hash, expires_at, revogado, created_at) — sessão persistente (US12)
+- `users` (id, nome, email, cpf_cifrado, senha_hash, role) — `role` é o papel **principal** (o do cadastro; o login abre nele)
+- `user_papeis` (user_id, papel) — os papéis que a conta TEM (conta única, US38, migration `V24`)
+- `refresh_tokens` (id, user_id, token_hash, expires_at, revogado, created_at, papel) — sessão persistente (US12); `papel` é o contexto da sessão
 - `providers_profile` (id, user_id, categoria, status_verificacao, saldo_retido, nota_media)
 - `background_checks` (id, provider_id, status, resultado, requested_at, completed_at) — verificação assíncrona (US02)
 - `service_categories` (id, nome, slug, ativa) — catálogo do admin (US28)
@@ -313,7 +359,7 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `admin_notifications` (id, tipo, ref_id, lida, criado_em) — central de alertas do admin (US30)
 
 - `admin_audit_log` (id, admin_id, acao, recurso, recurso_id, detalhe, criado_em) — trilha imutável de ações administrativas (US22/TS09). Migration `V8__admin_audit_log.sql`; registrada em `AuditService` e consultada em `GET /api/v1/admin/audit`.
-- `users.cpf_hash` — hash determinístico HMAC-SHA256 (antifraude Camada 2, unicidade de CPF de cliente sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado em `POST /api/v1/auth/verify-identity`.
+- `users.cpf_hash` — hash determinístico HMAC-SHA256 do CPF só com dígitos (antifraude Camada 2: uma pessoa = um CPF, sem guardar em claro), migration `V9__user_cpf_hash.sql`; gravado no cadastro do **prestador** (`POST /api/v1/auth/register/provider`), em `POST /api/v1/auth/become-provider` e, para o cliente, em `POST /api/v1/auth/verify-identity` (1º pagamento). Os dígitos verificadores são validados (`INVALID_CPF`); CPF já vinculado a outra conta é recusado (`CPF_ALREADY_REGISTERED`) e CPF diferente do já confirmado também (`CPF_MISMATCH`). A chave do HMAC é **própria** (`CPF_HASH_KEY`, distinta da de cifra) e `users.cpf_hash_versao` (`V25`) guarda a versão dela — ver `memoria-tecnica/decisoes/chave-do-hash-do-cpf.md`.
 - `service_requests.motivo_disputa` / `detalhes_disputa` — motivo informado ao abrir a disputa (US18), migration `V10__dispute_reason.sql`.
 - `reviews.revelada` / `revelada_em` — double-blind (US31), migration `V11__review_double_blind.sql`.
 - `denuncias` (id, tipo, alvo_id, denunciante_id, motivo, detalhes, status, resolvido_por_id, resolvido_em, criado_em) — canal de denúncia de prestador/avaliação fraudulenta (US32), migration `V12__denuncia.sql`.

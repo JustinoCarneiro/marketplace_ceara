@@ -30,7 +30,7 @@ class DiscoveryControllerTest {
     @Test
     void nearby_validParams_returns200WithList() throws Exception {
         var dto = new NearbyProviderDto(UUID.randomUUID(), "Carlos", "ELETRICISTA", null, "VERIFICADO", null, 1234.5);
-        when(discoveryService.findNearby(any())).thenReturn(List.of(dto));
+        when(discoveryService.findNearby(any(), any())).thenReturn(List.of(dto));
 
         mvc.perform(get("/api/v1/providers/nearby")
                         .param("lat", "-3.7319")
@@ -49,7 +49,7 @@ class DiscoveryControllerTest {
 
     @Test
     void nearby_emptyResult_returns200EmptyList() throws Exception {
-        when(discoveryService.findNearby(any())).thenReturn(List.of());
+        when(discoveryService.findNearby(any(), any())).thenReturn(List.of());
 
         mvc.perform(get("/api/v1/providers/nearby")
                         .param("lat", "-3.7319")
@@ -64,7 +64,7 @@ class DiscoveryControllerTest {
         var dto = new com.onda.marketplace.servicerequest.AvailableRequestDto(
                 UUID.randomUUID(), "Chuveiro sem funcionar", "Chuveiro sem funcionar",
                 "ELETRICISTA", "PENDENTE", null, null, java.time.Instant.now());
-        when(serviceRequestService.listarDisponiveis()).thenReturn(List.of(dto));
+        when(serviceRequestService.listarDisponiveis(any())).thenReturn(List.of(dto));
 
         mvc.perform(get("/api/v1/providers/available-requests"))
                 .andExpect(status().isOk())

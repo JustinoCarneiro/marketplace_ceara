@@ -21,4 +21,11 @@ public final class ProviderProfiles {
         }
         return perfil;
     }
+
+    /** VERIFICADO, mas com o CPF em duplicata legada (achado da revisão cruzada, 2026-10-05). */
+    public static ProviderProfile verificadoComCpfNaoConciliado() {
+        ProviderProfile perfil = comStatus(ProviderStatus.VERIFICADO);
+        perfil.marcarCpfNaoConciliado();
+        return perfil;
+    }
 }

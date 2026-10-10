@@ -18,13 +18,13 @@ Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construí
 - **Escrow nunca em `@Transactional` sobre o gateway.** Cobrança/repasse externos via **Saga + Outbox + idempotência** e reconciliação por webhook. O estado financeiro é dirigido por eventos confirmados, não por transação de banco.
 - **Geobusca por PostGIS** (índice espacial GiST), não haversine em SQL puro. SLA de busca `nearby` < 300ms (p95).
 - **LGPD:** CPF e dados sensíveis criptografados em repouso; mínimo necessário trafegado; DTOs (Records) nunca expõem entidades.
-- **Auth:** JWT de validade curta + **refresh token**; roles `ROLE_CLIENT`, `ROLE_PROVIDER`, `ROLE_ADMIN`.
+- **Auth:** JWT de validade curta + **refresh token**; roles `ROLE_CLIENT`, `ROLE_PROVIDER`, `ROLE_ADMIN`. **Conta única com papéis (US38):** uma pessoa tem uma conta que pode ser cliente e prestador; o papel EM USO vai no token (`/auth/switch-role` troca). CPF único em todo o sistema; chave do HMAC do CPF própria e versionada.
 - **IA com fallback manual obrigatório:** se a IA falhar/indisponível, o usuário conclui o pedido manualmente. IA nunca é caminho crítico bloqueante.
 - **Idempotência** em todo endpoint que move dinheiro ou cria pedido (chave de idempotência por requisição).
 - Latência alvo por endpoint (não global); telas dependentes de integração externa têm SLA próprio.
 
 ## Épicos
-1. **Gestão de Identidade e Verificação** — cadastro Cliente/Prestador, CPF + background check assíncrono, recuperação de senha por código no e-mail (US35).
+1. **Gestão de Identidade e Verificação** — cadastro Cliente/Prestador, CPF + background check assíncrono, recuperação de senha por código no e-mail (US35), exclusão de conta por anonimização (US36), limite de tentativas de senha (US37).
 2. **Descoberta e Geobusca** — lista por categoria e proximidade (PostGIS), filtros básicos.
 3. **Solicitação Multimídia + IA** — pedido por texto/áudio/foto; IA sugere descrição e orçamento (com fallback manual).
 4. **Propostas e Orçamentos** — prestador envia proposta de preço; cliente aceita (versão simples do "leilão", sem lances em tempo real).
@@ -40,7 +40,8 @@ Plataformas do app: **Android e iOS** (Expo/EAS). O iOS ainda não foi construí
 ```
 PENDENTE ──(prestador envia proposta)──► PROPOSTO
 PROPOSTO ──(cliente aceita + paga/escrow)──► ACEITO
-PROPOSTO ──(cliente recusa / expira)──► CANCELADO
+PROPOSTO ──(última proposta ativa sai: cliente recusa / prestador excluído)──► PENDENTE
+PENDENTE | PROPOSTO ──(cliente cancela / 15 dias sem andamento)──► CANCELADO
 ACEITO ──(prestador inicia)──► EM_ANDAMENTO
 EM_ANDAMENTO ──(cliente confirma conclusão)──► CONCLUIDO  → split/repasse
 EM_ANDAMENTO ──(qualquer parte abre disputa)──► EM_DISPUTA

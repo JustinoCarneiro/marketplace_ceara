@@ -29,6 +29,8 @@ import RateConfirmScreen from '../screens/shared/RateConfirmScreen';
 import SosScreen from '../screens/shared/SosScreen';
 import SosActiveScreen from '../screens/shared/SosActiveScreen';
 import LegalScreen from '../screens/legal/LegalScreen';
+import DeleteAccountScreen from '../screens/shared/DeleteAccountScreen';
+import BecomeProviderScreen from '../screens/shared/BecomeProviderScreen';
 
 const Tab = createBottomTabNavigator<ClientTabParams>();
 const Stack = createNativeStackNavigator<ClientStackParams>();
@@ -118,6 +120,8 @@ export default function ClientNavigator() {
       <Stack.Screen name="Sos" component={SosScreen} options={{ presentation: 'modal' }} />
       <Stack.Screen name="SosActive" component={SosActiveScreen} />
       <Stack.Screen name="Legal" component={LegalScreen} />
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <Stack.Screen name="BecomeProvider" component={BecomeProviderScreen} />
     </Stack.Navigator>
   );
 }

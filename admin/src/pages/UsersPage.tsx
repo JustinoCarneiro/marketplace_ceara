@@ -2,11 +2,28 @@ import { useState } from 'react';
 import { api } from '../api/client';
 import { useLista } from '../hooks/useLista';
 
-interface User { id: string; nome: string; email: string; role: string; status: string; }
+// `role` é o papel principal (o do cadastro); `papeis`, todos os que a conta tem — conta única: a mesma pessoa pode ser
+// cliente e prestador (todo prestador também contrata).
+interface User { id: string; nome: string; email: string; role: string; papeis?: string[]; status: string; }
+
+const ROTULO_PAPEL: Record<string, string> = { ROLE_CLIENT: 'Cliente', ROLE_PROVIDER: 'Prestador', ROLE_ADMIN: 'Admin' };
+
+function rotuloDosPapeis(u: User): string {
+  const papeis = u.papeis && u.papeis.length > 0 ? u.papeis : [u.role];
+  return papeis.map(p => ROTULO_PAPEL[p] ?? p).join(' + ');
+}
 
 const AVATAR_COLORS = ['#15596E', '#DA6A32', '#C0392B', '#1B8C84', '#3C7A4E', '#244C86'];
 function avatarBg(n: string) { return AVATAR_COLORS[n.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(n: string) { return n.split(' ').slice(0, 2).map(s => s[0]).join('').toUpperCase(); }
+
+// Enum real do backend (UserAdminDto.status): ATIVO, SUSPENSO e EXCLUIDO (o próprio usuário excluiu a conta, US36).
+// Um status que a tela não conhece aparece como veio, em tom neutro — nunca como "ATIVO".
+const STATUS_ESTILO: Record<string, { rotulo: string; cor: string; fundo: string; borda: string }> = {
+  ATIVO:    { rotulo: 'ATIVO',    cor: '#15756E', fundo: '#DDF0EC', borda: 'none' },
+  SUSPENSO: { rotulo: 'SUSPENSO', cor: '#C0392B', fundo: '#fff',    borda: '1px solid #E6BFA6' },
+  EXCLUIDO: { rotulo: 'EXCLUÍDO', cor: '#4C636A', fundo: '#EAE0CB', borda: 'none' },
+};
 
 export default function UsersPage() {
   const { itens: users, loading, recarregar } = useLista<User>('/admin/users');
@@ -53,15 +70,22 @@ export default function UsersPage() {
             </div>
             {filtered.map(u => {
               const isSuspended = u.status === 'SUSPENSO';
+              const isDeleted = u.status === 'EXCLUIDO';
+              const badge = STATUS_ESTILO[u.status] ?? { rotulo: u.status, cor: '#4C636A', fundo: '#EAE0CB', borda: 'none' };
               return (
-                <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center', background: isSuspended ? '#FBE6E2' : 'transparent' }}>
+                <div key={u.id} data-testid={`usuario-${u.id}`} style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr 0.9fr 0.9fr', padding: '14px 20px', borderBottom: '1px solid #E6DDC9', alignItems: 'center', background: isSuspended ? '#FBE6E2' : 'transparent' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 38, height: 38, borderRadius: 11, background: avatarBg(u.nome), color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials(u.nome)}</div>
                     <div><div style={{ fontSize: 14, fontWeight: 700, color: '#0E2A33' }}>{u.nome}</div><div style={{ fontSize: 12, color: '#606E71' }}>{u.email}</div></div>
                   </div>
-                  <span style={{ fontSize: 13, color: '#4C636A' }}>{u.role === 'ROLE_PROVIDER' ? 'Prestador' : 'Cliente'}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: isSuspended ? '#C0392B' : '#15756E', background: isSuspended ? '#fff' : '#DDF0EC', border: isSuspended ? '1px solid #E6BFA6' : 'none', padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{isSuspended ? 'SUSPENSO' : 'ATIVO'}</span>
-                  <button onClick={() => toggleStatus(u.id, u.status)} disabled={togglingId === u.id} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#10847D' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: togglingId === u.id ? 'default' : 'pointer', opacity: togglingId === u.id ? 0.6 : 1, justifySelf: 'end' }}>{togglingId === u.id ? '...' : isSuspended ? 'Reativar' : 'Suspender'}</button>
+                  <span data-testid={`papeis-${u.id}`} style={{ fontSize: 13, color: '#4C636A' }}>{rotuloDosPapeis(u)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: badge.cor, background: badge.fundo, border: badge.borda, padding: '4px 10px', borderRadius: 100, justifySelf: 'start' }}>{badge.rotulo}</span>
+                  {isDeleted ? (
+                    // conta excluída não se suspende nem se reativa: não há mais dado a reativar (o backend recusa)
+                    <span style={{ fontSize: 13, color: '#606E71', justifySelf: 'end' }}>Sem ação</span>
+                  ) : (
+                    <button onClick={() => toggleStatus(u.id, u.status)} disabled={togglingId === u.id} style={{ height: 38, padding: '0 16px', border: isSuspended ? 'none' : '1.5px solid #C0392B', borderRadius: 100, background: isSuspended ? '#10847D' : 'transparent', color: isSuspended ? '#fff' : '#C0392B', fontWeight: 700, fontSize: 13, cursor: togglingId === u.id ? 'default' : 'pointer', opacity: togglingId === u.id ? 0.6 : 1, justifySelf: 'end' }}>{togglingId === u.id ? '...' : isSuspended ? 'Reativar' : 'Suspender'}</button>
+                  )}
                 </div>
               );
             })}

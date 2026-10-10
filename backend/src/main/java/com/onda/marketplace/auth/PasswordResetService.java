@@ -140,7 +140,13 @@ public class PasswordResetService {
             throw new BusinessException("INVALID_PASSWORD", "A senha é longa demais (máximo de 72 bytes).");
         }
         Instant agora = Instant.now();
-        Optional<User> alvo = userRepository.findByEmail(email).filter(User::isAtivo);
+        // Com trava de linha, como PRIMEIRA leitura da conta (rodada 3): o save mais abaixo regrava a entidade inteira. Sem a trava, uma
+        // suspensão ou uma exclusão de conta que commitasse entre esta leitura e o save era DESFEITA — `ativo` voltava a true, e e-mail,
+        // nome e excluido_em voltavam ao valor antigo (a anonimização revertida: o dado pessoal volta e a conta excluída reaparece com a
+        // senha nova). A trava só vale como primeira leitura: sobre uma entidade já carregada o Hibernate devolve a instância antiga.
+        // Quem espera aqui lê a conta já suspensa/excluída e cai no mesmo "código inválido" de sempre. Mesma trava do login
+        // (PasswordAuthenticator), então a espera é entre operações da MESMA conta.
+        Optional<User> alvo = userRepository.findByEmailComTrava(email).filter(User::isAtivo);
 
         // Calcula o HMAC mesmo sem usuário: o tempo não deve separar e-mail inexistente de código errado.
         String digitado = hash(alvo.map(User::getId).orElse(USUARIO_INEXISTENTE), normalizar(codigoDigitado));
@@ -162,6 +168,7 @@ public class PasswordResetService {
         }
 
         user.trocarSenha(passwordEncoder.encode(novaSenha));
+        user.limparTentativasDeSenha();   // a posse do e-mail foi provada: encerra um bloqueio por erros de senha
         userRepository.save(user);
         codigo.fechar(agora);
         codeRepository.save(codigo);

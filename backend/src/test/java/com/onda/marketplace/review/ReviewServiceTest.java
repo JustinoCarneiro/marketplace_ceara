@@ -160,7 +160,7 @@ class ReviewServiceTest {
                 .isCloseTo(Instant.now().plus(Duration.ofDays(PRAZO_DIAS)),
                         within(1, java.time.temporal.ChronoUnit.MINUTES));
         // a nota oculta não pode entrar na média — senão a média denunciaria a nota
-        verify(providerProfileRepository, never()).save(any());
+        verify(providerProfileRepository, never()).atualizarNotaMedia(any(), any(), any());
     }
 
     @Test
@@ -184,7 +184,7 @@ class ReviewServiceTest {
 
         assertThat(dto.revelada()).isTrue();
         assertThat(doCliente.isRevelada()).isTrue();
-        verify(providerProfileRepository).save(any(ProviderProfile.class));
+        verify(providerProfileRepository).atualizarNotaMedia(eq(PRESTADOR_ID), any(BigDecimal.class), any(Instant.class));
     }
 
     @Test
@@ -198,7 +198,7 @@ class ReviewServiceTest {
 
         assertThat(sozinha.isRevelada()).isTrue();
         assertThat(sozinha.getReveladaEm()).isNotNull();
-        verify(providerProfileRepository).save(any(ProviderProfile.class));
+        verify(providerProfileRepository).atualizarNotaMedia(eq(PRESTADOR_ID), any(BigDecimal.class), any(Instant.class));
     }
 
     @Test
@@ -212,7 +212,7 @@ class ReviewServiceTest {
 
         assertThat(jaRevelada.getReveladaEm()).isEqualTo(primeiraRevelacao);
         verify(reviewRepository, never()).saveAll(any());
-        verify(providerProfileRepository, never()).save(any());
+        verify(providerProfileRepository, never()).atualizarNotaMedia(any(), any(), any());
     }
 
     @Test
@@ -258,9 +258,6 @@ class ReviewServiceTest {
     private void stubMediaEPerfil(double media) {
         when(reviewRepository.calcularMediaNota(eq(PRESTADOR_ID), eq(ReviewType.CLIENTE_AVALIA_PRESTADOR)))
                 .thenReturn(media);
-        when(providerProfileRepository.findByUserId(PRESTADOR_ID))
-                .thenReturn(Optional.of(mock(ProviderProfile.class)));
-        when(providerProfileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 
     private Proposal proposta(UUID prestadorId) {

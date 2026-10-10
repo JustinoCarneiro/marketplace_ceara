@@ -47,6 +47,14 @@ public class ProviderProfile {
     @Column(name = "nota_media")
     private BigDecimal notaMedia;
 
+    /**
+     * {@code false}: o CPF deste perfil colidiu com o de OUTRA conta na unicidade (duplicata legada, achada no
+     * backfill). O guard de verificação recusa operar até o suporte resolver à mão — ver
+     * {@code ProviderCpfBackfill} e {@code ProviderVerificationGuard}.
+     */
+    @Column(name = "cpf_conciliado", nullable = false)
+    private boolean cpfConciliado = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -81,8 +89,25 @@ public class ProviderProfile {
     public void  setLocalizacao(Point p)   { this.localizacao = p; }
 
     public void setNotaMedia(BigDecimal v) { this.notaMedia = v; }
+    public boolean isCpfConciliado()       { return cpfConciliado; }
+    public void marcarCpfNaoConciliado()   { this.cpfConciliado = false; }
+    /** O suporte decidiu a duplicata de CPF (ver ModerationAction.CONCILIAR_CPF): o perfil volta a operar. */
+    public void marcarCpfConciliado()      { this.cpfConciliado = true; }
 
     public void aprovar()   { this.statusVerificacao = ProviderStatus.VERIFICADO; }
     public void reprovar()  { this.statusVerificacao = ProviderStatus.REPROVADO; }
     public void suspender() { this.statusVerificacao = ProviderStatus.SUSPENSO; }
+
+    /**
+     * Exclusão de conta (US36): apaga o que é pessoal (bio, chave Pix, CPF cifrado, localização) e põe o
+     * perfil como SUSPENSO — fora da busca (só VERIFICADO aparece) e sem poder operar. A categoria e a
+     * nota média ficam: são do histórico, não identificam ninguém.
+     */
+    public void anonimizar() {
+        this.bio             = null;
+        this.chavePixCifrada = null;
+        this.cpfCifrado      = null;
+        this.localizacao     = null;
+        this.statusVerificacao = ProviderStatus.SUSPENSO;
+    }
 }

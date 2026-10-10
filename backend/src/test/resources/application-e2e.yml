@@ -10,6 +10,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate       # Flyway cuida do schema
+    # Igual à produção (application.yml principal): sem isto o E2E rodava com open-in-view LIGADO — uma sessão do Hibernate
+    # compartilhada pela requisição inteira, em que uma entidade carregada numa transação (ex.: o REQUIRES_NEW da senha) volta
+    # com o estado antigo na seguinte e a trava de linha não relê nada. Teste com configuração diferente da produção mente.
+    open-in-view: false
   flyway:
     enabled: true
 
@@ -20,6 +24,9 @@ jwt:
 
 cpf:
   encryption-key: test-cpf-aes256-key-32-chars-here!
+  hash-key: test-cpf-hmac-key-for-e2e-tests-32-chars
+  # a chave de ANTES da separação: o e2e cria contas com hash dela (versão 1) para provar a rotação
+  hash-key-previous: test-cpf-aes256-key-32-chars-here!
 
 marketplace:
   webhook:

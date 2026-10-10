@@ -25,11 +25,12 @@ public class JwtService {
         this.accessTokenMs = accessTokenMs;
     }
 
-    public String generateAccessToken(User user) {
+    /** {@code contexto}: o papel em uso nesta sessão (a conta pode ter mais de um) — é o que os controllers autorizam. */
+    public String generateAccessToken(User user, UserRole contexto) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(user.getId().toString())
-                .claim("role", user.getRole().name())
+                .claim("role", contexto.name())
                 .claim("email", user.getEmail())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessTokenMs))

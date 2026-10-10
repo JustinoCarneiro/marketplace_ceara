@@ -26,6 +26,9 @@ public class ServiceExecutionService {
 
     private static final Set<ServiceRequestStatus> CANCELAVEIS =
             Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO);
+    /** Sem prestador definido nem dinheiro: o cliente cancela sozinho, sem reembolso. */
+    private static final Set<ServiceRequestStatus> CANCELAVEIS_SEM_PRESTADOR =
+            Set.of(ServiceRequestStatus.PENDENTE, ServiceRequestStatus.PROPOSTO);
 
     private final ServiceRequestRepository srRepository;
     private final ProposalRepository       proposalRepository;
@@ -48,10 +51,19 @@ public class ServiceExecutionService {
         this.verificationGuard     = verificationGuard;
     }
 
+    /*
+     * Revisão cruzada, 2ª rodada — start, confirmCompletion e openDispute (e a mediação do admin) liam o pedido sem trava e
+     * regravavam a entidade inteira. Entre a leitura e o save, um cancel() (UPDATE guardado) podia commitar CANCELADO e enfileirar
+     * PAYMENT_REFUNDED; o save sobrescrevia com CONCLUIDO e, relendo a transação ainda RETIDA, enfileirava também PAYMENT_RELEASED:
+     * o outbox ficava com reembolso E repasse da mesma transação. Agora o pedido é lido com trava como PRIMEIRA leitura dele
+     * (sobre uma entidade já carregada o Hibernate devolve a instância com o estado antigo): o cancel() espera o commit e
+     * reavalia o WHERE; quem chega depois de um cancel() lê CANCELADO e recusa.
+     */
+
     /** ACEITO → EM_ANDAMENTO. Verifica que o prestador autenticado é o dono da proposta aceita. */
     @Transactional
     public void start(UUID srId, UUID prestadorId) {
-        ServiceRequest sr = srRepository.findById(srId)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.ACEITO) {
@@ -88,7 +100,9 @@ public class ServiceExecutionService {
     /** EM_ANDAMENTO → CONCLUIDO. Escrita atômica: status + OutboxEvent(PAYMENT_RELEASED). */
     @Transactional
     public void confirmCompletion(UUID srId, UUID clienteId) {
-        ServiceRequest sr = srRepository.findByIdAndCliente_Id(srId, clienteId)
+        // pedido de outro cliente: mesma resposta de "não existe" (não confirma a existência do pedido alheio)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
+                .filter(r -> r.getCliente().getId().equals(clienteId))
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.EM_ANDAMENTO) {
@@ -110,7 +124,7 @@ public class ServiceExecutionService {
     /** EM_ANDAMENTO → EM_DISPUTA. Qualquer parte que participa do pedido pode abrir disputa. */
     @Transactional
     public void openDispute(UUID srId, UUID userId, String motivo, String detalhes) {
-        ServiceRequest sr = srRepository.findById(srId)
+        ServiceRequest sr = srRepository.findByIdComTrava(srId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         // Sem isto, qualquer usuário autenticado congelava o escrow de pedido alheio —
@@ -133,7 +147,17 @@ public class ServiceExecutionService {
         notificationService.criarAlerta("DISPUTA", srId);
     }
 
-    /** ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED). */
+    /**
+     * PENDENTE | PROPOSTO | ACEITO | EM_ANDAMENTO → CANCELADO. Se transação RETIDA, gera OutboxEvent(PAYMENT_REFUNDED).
+     * Em PENDENTE/PROPOSTO só o cliente dono participa (o prestador com proposta ativa ainda não é parte do pedido) e as
+     * propostas ativas são encerradas: sem isso o cliente não tinha saída de um pedido que ninguém atendia.
+     *
+     * <p>Achado da revisão cruzada (2026-10-05): a escrita confere o estado ATUAL na própria transação SQL
+     * ({@code cancelarSeEmEstadoCancelavel}), não o que foi lido no início do método — sem isso, um aceite (e
+     * início de pagamento) concorrente, entre a leitura e a gravação, era silenciosamente sobrescrito para
+     * CANCELADO. Se o estado mudou nesse intervalo, a escrita não afeta nenhuma linha e o método relê para
+     * devolver o erro certo, em vez de seguir como se tivesse cancelado.
+     */
     @Transactional
     public void cancel(UUID srId, UUID userId) {
         ServiceRequest sr = srRepository.findById(srId)
@@ -145,13 +169,29 @@ public class ServiceExecutionService {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 
-        if (!CANCELAVEIS.contains(sr.getStatus())) {
+        boolean semPrestador = CANCELAVEIS_SEM_PRESTADOR.contains(sr.getStatus());
+        Set<ServiceRequestStatus> estadosValidos = semPrestador ? CANCELAVEIS_SEM_PRESTADOR : CANCELAVEIS;
+        if (!semPrestador && !CANCELAVEIS.contains(sr.getStatus())) {
             throw new BusinessException("INVALID_STATE_TRANSITION",
-                    "cancel() exige ACEITO ou EM_ANDAMENTO, atual: " + sr.getStatus());
+                    "cancel() exige PENDENTE, PROPOSTO, ACEITO ou EM_ANDAMENTO, atual: " + sr.getStatus());
         }
 
-        sr.setStatus(ServiceRequestStatus.CANCELADO);
-        srRepository.save(sr);
+        int linhas = srRepository.cancelarSeEmEstadoCancelavel(srId, estadosValidos, Instant.now());
+        if (linhas == 0) {
+            // o estado mudou entre a leitura e esta escrita (corrida) — relê pra dar o erro com o estado de verdade
+            ServiceRequestStatus atual = srRepository.findById(srId)
+                    .map(ServiceRequest::getStatus)
+                    .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+            throw new BusinessException("INVALID_STATE_TRANSITION",
+                    "cancel() exige PENDENTE, PROPOSTO, ACEITO ou EM_ANDAMENTO, atual: " + atual);
+        }
+
+        if (semPrestador) {
+            proposalRepository.findByServiceRequestIdAndStatus(srId, ProposalStatus.ATIVA).forEach(p -> {
+                p.encerrar();
+                proposalRepository.save(p);
+            });
+        }
 
         transactionRepository.findByServiceRequestId(srId)
                 .filter(tx -> tx.getStatusPagamento() == TransactionStatus.RETIDO)

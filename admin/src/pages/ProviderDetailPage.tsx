@@ -3,14 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 
 // Contrato real do backend (ProviderAdminDto): id (= userId), nome, categoria,
-// statusVerificacao, notaMedia. Não existe endpoint de detalhe único — reaproveita
+// statusVerificacao, notaMedia, cpfConciliado. Não existe endpoint de detalhe único — reaproveita
 // a lista já usada por ProvidersPage e filtra pelo id.
+// `cpfConciliado === false`: o mesmo CPF estava em outra conta quando o sistema passou a conferir; o prestador não opera
+// nem aparece na busca até o suporte decidir (ação CONCILIAR_CPF). Só o `false` literal acende o aviso.
 interface Provider {
   id: string;
   nome: string;
   categoria: string;
   statusVerificacao: string;
   notaMedia?: number;
+  cpfConciliado?: boolean;
 }
 
 const AVATAR_COLORS = ['#15596E', '#3C7A4E', '#DA6A32', '#C0392B', '#1B8C84', '#244C86'];
@@ -45,6 +48,7 @@ function ProviderDetail({ id }: { id: string | undefined }) {
   const [provider, setProvider] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(true);
   const [justificativa, setJustificativa] = useState('');
+  const [justificativaCpf, setJustificativaCpf] = useState('');
   const [showSuspend, setShowSuspend] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
@@ -64,11 +68,11 @@ function ProviderDetail({ id }: { id: string | undefined }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  async function moderate(action: 'APROVAR' | 'REPROVAR' | 'SUSPENDER') {
+  async function moderate(action: 'APROVAR' | 'REPROVAR' | 'SUSPENDER' | 'CONCILIAR_CPF', texto: string = justificativa) {
     setErr(''); setSubmitting(true);
     try {
-      await api.post(`/admin/providers/${id}/moderate`, { action, justificativa: justificativa.trim() || null });
-      setJustificativa(''); setShowSuspend(false);
+      await api.post(`/admin/providers/${id}/moderate`, { action, justificativa: texto.trim() || null });
+      setJustificativa(''); setJustificativaCpf(''); setShowSuspend(false);
       await load();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Erro ao registrar a ação.');
@@ -106,6 +110,28 @@ function ProviderDetail({ id }: { id: string | undefined }) {
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {provider.cpfConciliado === false && (
+            <div style={{ ...S.card, background: '#FDF3D6', border: '1.5px solid #F2B015' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A33' }}>CPF em duplicidade</span>
+              <span style={{ fontSize: 13, color: '#4C636A' }}>
+                Este CPF já estava em outra conta quando o sistema passou a conferir. Até o suporte decidir, o prestador não envia
+                propostas, não é contratado e não aparece na busca.
+              </span>
+              <textarea
+                style={S.textarea}
+                placeholder="O que foi verificado e por que esta é a conta verdadeira (obrigatório, fica no log de auditoria)"
+                value={justificativaCpf}
+                maxLength={500}
+                onChange={e => setJustificativaCpf(e.target.value)}
+              />
+              <button
+                style={{ ...S.btn, background: '#10847D', opacity: submitting || !justificativaCpf.trim() ? 0.5 : 1 }}
+                onClick={() => moderate('CONCILIAR_CPF', justificativaCpf)}
+                disabled={submitting || !justificativaCpf.trim()}
+              >Conciliar CPF</button>
+            </div>
+          )}
+
           {provider.statusVerificacao === 'EM_VERIFICACAO' && (
             <div style={S.card}>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#0E2A33' }}>Verificação pendente</span>
@@ -125,6 +151,7 @@ function ProviderDetail({ id }: { id: string | undefined }) {
                     style={S.textarea}
                     placeholder="Justificativa da suspensão (opcional, fica no log de auditoria)"
                     value={justificativa}
+                    maxLength={500}
                     onChange={e => setJustificativa(e.target.value)}
                   />
                   <button style={{ ...S.btn, background: '#C0392B' }} onClick={() => moderate('SUSPENDER')} disabled={submitting}>Confirmar suspensão</button>

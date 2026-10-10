@@ -65,5 +65,28 @@ Os rascunhos referenciam placeholders que precisam ser preenchidos antes do lan�
 
 ---
 
+## 5. Exclusão de conta (US36)
+
+**Implementada em 2026-10-04** por anonimização no lugar (ver
+`memoria-tecnica/decisoes/exclusao-de-conta-por-anonimizacao.md`). As escolhas abaixo são **premissas de
+engenharia**, não decisão jurídica — confirmar com a assessoria antes do lançamento:
+
+- [ ] **Retenção do histórico anonimizado** (transações, pedidos concluídos, notas das avaliações): hoje **sem
+  prazo de expurgo**. Definir o prazo (fiscal/contábil, defesa em disputas) e quem expurga.
+- [ ] **CPF cifrado e chave Pix do prestador** são apagados na exclusão, depois do repasse. Se a plataforma, como
+  pagadora no Modelo A, tiver de guardar o CPF de quem recebeu (obrigação fiscal), a regra muda: reter o
+  `cpf_cifrado` dos prestadores com repasse concluído.
+- [ ] **IP do aceite de termos** (`terms_acceptance.ip_address`) fica depois da exclusão como prova do
+  consentimento — é dado pessoal. Confirmar base legal e prazo.
+- [ ] **Alertas de SOS** (`sos_alerts` e o payload `SOS_TRIGGERED` do outbox: latitude, longitude e `userId`)
+  ficam por segurança. Confirmar o prazo; avaliar zerar/arredondar as coordenadas depois de resolvido.
+- [ ] **Denúncias** (`denuncias.detalhes`, texto livre do denunciante) ficam para a moderação.
+- [ ] **Trilha de auditoria do admin** (`admin_audit_log`) fica (administradores não excluem a conta por este fluxo).
+- [ ] **Conta suspensa** não consegue excluir pelo app (o acesso está cortado). Definir o atendimento desse
+  pedido pelo suporte e se a retenção antifraude (hash do CPF) se sustenta como base legal.
+- [ ] **Pedido de eliminação feito fora do app** (e-mail ao encarregado/DPO): hoje não há fluxo nem prazo (item 2).
+
+---
+
 **Responsável pelo alinhamento:** Marcos (produto) + assessoria jurídica  
 **Criado em:** Junho 2026

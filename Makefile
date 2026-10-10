@@ -13,7 +13,7 @@ DC           := docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE)
 $(ENV_FILE): | .env.homolog.example
 	@cp .env.homolog.example $(ENV_FILE)
 	@chmod 600 $(ENV_FILE)
-	@for v in POSTGRES_PASSWORD MARKETPLACE_WEBHOOK_SECRET ADMIN_PASS PGADMIN_PASSWORD CPF_ENCRYPTION_KEY; do \
+	@for v in POSTGRES_PASSWORD MARKETPLACE_WEBHOOK_SECRET ADMIN_PASS PGADMIN_PASSWORD CPF_ENCRYPTION_KEY CPF_HASH_KEY; do \
 	  sed -i "s|^$$v=.*|$$v=$$(openssl rand -hex 16)|" $(ENV_FILE); done
 	@sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$$(openssl rand -hex 32)|" $(ENV_FILE)
 	@echo "✓ $(ENV_FILE) gerado com segredos aleatórios (login do admin: ADMIN_USER e ADMIN_PASS no próprio arquivo)"

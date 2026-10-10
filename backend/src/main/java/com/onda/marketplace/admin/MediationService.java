@@ -43,7 +43,9 @@ public class MediationService {
 
     @Transactional
     public void resolver(UUID serviceRequestId, UUID adminId, ResolveDisputeRequest req) {
-        ServiceRequest sr = srRepository.findById(serviceRequestId)
+        // Com trava, como PRIMEIRA leitura do pedido (revisão cruzada, 2ª rodada): ver ServiceExecutionService — o save abaixo
+        // regrava a entidade inteira, e um cancel() concorrente não pode ser sobrescrito nem gerar RELEASED e REFUNDED juntos.
+        ServiceRequest sr = srRepository.findByIdComTrava(serviceRequestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.EM_DISPUTA) {

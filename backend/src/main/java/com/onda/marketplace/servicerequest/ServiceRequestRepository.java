@@ -1,9 +1,15 @@
 package com.onda.marketplace.servicerequest;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -84,6 +90,100 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // precisar manter uma tabela separada de bairros válidos.
     @Query("SELECT DISTINCT s.bairro FROM ServiceRequest s WHERE s.bairro IS NOT NULL ORDER BY s.bairro")
     java.util.List<String> bairrosDistintos();
+
+    /**
+     * Pedidos sem andamento desde {@code limite}: nenhuma mudança de estado e nenhuma proposta nova depois dele
+     * (a proposta nova também é andamento: o cliente ainda está recebendo ofertas). Expiração de pedido sem prestador.
+     */
+    @Query("""
+           SELECT s.id FROM ServiceRequest s
+            WHERE s.status IN :statuses AND s.updatedAt < :limite
+              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+            ORDER BY s.id
+           """)
+    List<UUID> idsSemAndamentoDesde(@Param("statuses") Collection<ServiceRequestStatus> statuses,
+                                    @Param("limite") Instant limite);
+
+    /**
+     * O estado é conferido de novo na escrita, com a MESMA condição de {@link #idsSemAndamentoDesde} (status, prazo
+     * e nenhuma proposta recente) — não só o status. Achado da revisão cruzada (2026-10-05): checar só o status
+     * deixava passar uma corrida concreta — uma proposta nova chega entre a consulta (que montou {@code ids}) e
+     * este UPDATE; ela reinicia o prazo (é andamento), mas só re-conferir o status não via isso, e o pedido
+     * expirava apesar da proposta ser recente. Conferir os três de novo, na mesma transação da escrita, fecha a
+     * corrida — um aceite ou uma proposta que chegou nesse intervalo não é desfeito.
+     */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s
+              SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO, s.updatedAt = :agora
+            WHERE s.id IN :ids
+              AND s.status IN (com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE,
+                               com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO)
+              AND s.updatedAt < :limite
+              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+           """)
+    int cancelarSemAndamento(@Param("ids") Collection<UUID> ids, @Param("limite") Instant limite, @Param("agora") Instant agora);
+
+    /**
+     * Trava (FOR NO KEY UPDATE, em ordem de id) as linhas deste lote num comando PRÓPRIO, ANTES de {@link #cancelarSemAndamento}. Achado da
+     * rodada 3 (E2E 74): o {@code NOT EXISTS} do UPDATE usa o snapshot do início do comando, e em READ COMMITTED quem espera uma linha só
+     * TRAVADA (a {@code create()} de uma proposta nova não atualiza um pedido que já está PROPOSTO) não reavalia o WHERE — o pedido era
+     * cancelado e a proposta que acabava de chegar, encerrada. Com as linhas já travadas por este comando, o UPDATE seguinte é um comando novo,
+     * com snapshot novo, e enxerga o que commitou durante a espera. A ordem de id é a mesma da exclusão de conta (sem ciclo entre as duas).
+     */
+    @Query(value = """
+            SELECT s.id FROM service_requests s
+             WHERE s.id IN (:ids)
+             ORDER BY s.id
+               FOR NO KEY UPDATE OF s
+            """, nativeQuery = true)
+    List<UUID> travarPedidos(@Param("ids") Collection<UUID> ids);
+
+    /**
+     * Dentre {@code ids}, quais foram cancelados POR ESTA expiração — lido DEPOIS do {@code cancelarSemAndamento} acima, na
+     * MESMA transação (visibilidade das próprias escritas). {@code agora} é o mesmo instante que o UPDATE gravou em
+     * {@code updated_at}: um pedido que o cliente cancelou entre a consulta e o UPDATE também está CANCELADO, mas com o
+     * {@code updated_at} do cancelamento dele — sem este filtro o job o contava como expirado (e a métrica "cancelados por
+     * falta de andamento" atribuía uma ação do usuário ao job). É o que decide quais propostas de fato precisam ser encerradas.
+     */
+    @Query("""
+           SELECT s.id FROM ServiceRequest s
+            WHERE s.id IN :ids AND s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO
+              AND s.updatedAt = :agora
+           """)
+    List<UUID> idsCanceladosEm(@Param("ids") Collection<UUID> ids, @Param("agora") Instant agora);
+
+    /**
+     * O mesmo princípio do {@code cancelarSemAndamento} acima, para o cancelamento pelo cliente/prestador
+     * (achado da revisão cruzada, 2026-10-05): {@code ServiceExecutionService.cancel} lia o status, decidia se
+     * cancelava, e só DEPOIS gravava — sem reler o estado na escrita. Entre a leitura e a gravação, o pedido podia
+     * ter sido aceito e o pagamento iniciado numa transação concorrente; o {@code save()} do objeto em memória
+     * sobrescrevia esse aceite com {@code CANCELADO} sem deixar rastro (nem erro, nem reembolso — a consulta por
+     * transação RETIDA, logo depois, não achava nada porque ainda não tinha sido criada). Este {@code UPDATE}
+     * confere o estado ATUAL na própria escrita: 0 linhas afetadas = o estado mudou nesse intervalo, e quem chama
+     * tem de reler para decidir o que fazer, em vez de seguir como se tivesse cancelado.
+     */
+    @Modifying
+    @Query("""
+           UPDATE ServiceRequest s
+              SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO, s.updatedAt = :agora
+            WHERE s.id = :id AND s.status IN :estadosValidos
+           """)
+    int cancelarSeEmEstadoCancelavel(@Param("id") UUID id,
+                                     @Param("estadosValidos") Collection<ServiceRequestStatus> estadosValidos,
+                                     @Param("agora") Instant agora);
+
+    /**
+     * Leitura com trava de escrita na linha (revisão cruzada, 2026-10-05): serializa {@code ProposalService.create}
+     * (proposta nova, PENDENTE→PROPOSTO) contra a reabertura de {@code reject} (recusada a ÚLTIMA proposta ativa,
+     * PROPOSTO→PENDENTE). Sem a trava as duas liam o pedido sem se bloquear — cada uma reconferia status e propostas
+     * ativas, mas via SELECT simples, nunca preso pelo banco: dava pra reabrir o pedido (PENDENTE) bem no instante em
+     * que uma proposta nova (ATIVA) acabava de ser gravada para ele, escondendo-a da fila dos outros prestadores —
+     * o pedido simplesmente não aparecia mais pra ninguém, sem erro nenhum.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ServiceRequest s WHERE s.id = :id")
+    Optional<ServiceRequest> findByIdComTrava(@Param("id") UUID id);
 
     // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
     @Query("""

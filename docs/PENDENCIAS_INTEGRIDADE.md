@@ -1,8 +1,9 @@
 # 🛡️ Pendências de Integridade e Antifraude — Backlog
 
 > **Status:** Camadas 1 e 2 (recomendadas para o MVP) **implementadas e confirmadas em
-> 2026-08-07** durante o teste de fluxo ponta a ponta do mobile — ver abaixo. Camada 3 e
-> defesas complementares continuam como backlog de v2.
+> 2026-08-07** durante o teste de fluxo ponta a ponta do mobile — ver abaixo. **Camada 3
+> (conta única com papéis) implementada em 2026-10-05**, antecipada da v2 por decisão do dono
+> do produto. As defesas complementares continuam como backlog de v2.
 > **Origem:** Levantado em 2026-06-28 durante revisão da tela de Pedidos.
 
 ---
@@ -31,14 +32,21 @@ reais a um profissional não validado pelo mercado.
 #### Camada 1 — Validação de transação (backend) · esforço BAIXO · ✅ IMPLEMENTADA
 `ProposalService.accept()` (`backend/.../proposal/ProposalService.java:52`) bloqueia
 com `SELF_HIRE_FORBIDDEN` quando `clienteId == proposal.getPrestadorId()`. Resolve o
-caso trivial (conta única dual-role no futuro), mas **não** impede duas contas
-distintas da mesma pessoa — só a Camada 2 resolve isso.
+caso trivial. Com a **conta única** (Camada 3) ele passa a cobrir também a mesma pessoa
+como cliente e prestador: é sempre o mesmo `userId`. Desde 2026-10-05 a recusa vale também
+na **criação** da proposta (`ProposalService.create`), e o pedido da própria conta nem
+aparece na fila do prestador nem na busca.
 
 #### Camada 2 — CPF único na plataforma · esforço MÉDIO · ✅ IMPLEMENTADA
 - `users.cpf_hash` é `UNIQUE` (migration `V9__user_cpf_hash.sql`) — hash determinístico,
   não o CPF em claro (nota LGPD abaixo, já respeitada).
-- Uma pessoa = um CPF = uma identidade. A segunda conta com o mesmo CPF é rejeitada
-  (`AuthService.verifyIdentity`, 422).
+- Uma pessoa = um CPF = uma identidade **= uma conta** (que pode ser cliente e prestador, Camada 3). A segunda conta com
+  o mesmo CPF é rejeitada (`AuthService.vincularCpf`, usado por `verifyIdentity`, `ProviderService.register` e
+  `tornarPrestador`, 422); o CPF **diferente** do já confirmado na conta também é recusado (`CPF_MISMATCH`: antes o hash era
+  sobrescrito). A chave do HMAC é própria e versionada (`CPF_HASH_KEY`), não a de cifra — ver
+  `memoria-tecnica/decisoes/chave-do-hash-do-cpf.md`. Os dígitos verificadores são validados (`shared/Cpf`); sem isso
+  um número inventado burlaria a unicidade. (2026-10-04: até aqui só o cliente tinha o hash; o cadastro de prestador não o
+  gravava, e um prestador reprovado podia se recadastrar com o mesmo CPF. `ProviderCpfBackfill` alcança os legados.)
 - **Mitigação de atrito confirmada em produção do fluxo**: o cliente não informa CPF no
   cadastro — só no **primeiro pagamento**, via `PaymentChoiceScreen` (modal "Confirme sua
   identidade" acionado pelo erro `IDENTITY_REQUIRED` de `PaymentService`). Onboarding
@@ -48,10 +56,12 @@ distintas da mesma pessoa — só a Camada 2 resolve isso.
   nunca é indexado — já implementado assim. Alinhar com [[PENDENCIAS_JURIDICAS]] pra
   formalizar a base legal desse tratamento na Política de Privacidade.
 
-#### Camada 3 — Conta única com múltiplos papéis · esforço ALTO · v2
-Modelo Uber/Airbnb: uma conta carrega `roles: [CLIENT, PROVIDER]` e alterna de
-contexto. Torna a auto-contratação impossível por construção (sempre o mesmo
-`userId`). Custa reescrita de auth + onboarding — fora do escopo do MVP.
+#### Camada 3 — Conta única com múltiplos papéis · esforço ALTO · ✅ IMPLEMENTADA (2026-10-05)
+Modelo Uber/Airbnb: uma conta carrega os papéis `CLIENT` e `PROVIDER` e alterna de contexto
+(`POST /auth/switch-role`; o papel em uso vai no token). Torna a auto-contratação impossível
+por construção (sempre o mesmo `userId`) e elimina a segunda conta do prestador que quer
+contratar. O cliente vira prestador na mesma conta (`POST /auth/become-provider`). Decisão,
+limites e alternativas em `memoria-tecnica/decisoes/conta-unica-com-papeis.md` (US38).
 
 #### Defesas complementares (v2+)
 - **Detecção de colusão:** mesmo dispositivo (device fingerprint), mesma conta
@@ -70,7 +80,7 @@ contexto. Torna a auto-contratação impossível por construção (sempre o mesm
 |--------|--------------------|--------|----------------|
 | 1 — Validação de transação | ✅ Sim | ✅ Feito | Uma linha no backend, custo zero |
 | 2 — CPF único (pedido no 1º pagamento) | ✅ Sim | ✅ Feito | Resolve o problema real, atrito controlado |
-| 3 — Conta dual-role | ❌ v2 | — | Mudança arquitetural grande |
+| 3 — Conta única com papéis | ✅ Sim (antecipada) | ✅ Feito (2026-10-05) | O prestador contrata sem segunda conta; fecha a auto-contratação por construção |
 | Avaliação double-blind | ✅ Sim (antecipado) | ✅ Feito | Barato e ataca conluio direto |
 | Device fingerprint / detecção de colusão | ❌ v2 | — | Refinamento pós-tração |
 

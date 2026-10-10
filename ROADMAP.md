@@ -32,8 +32,12 @@ Refinamento formal do dicionário de dados de `docs/spec.md`. Tipos PostgreSQL; 
 | email | varchar UNIQUE | |
 | senha_hash | varchar | BCrypt/Argon2 — **nunca texto puro** (US01) |
 | cpf_cifrado | bytea NULL | criptografado em repouso, LGPD (TS04) |
-| cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: unicidade de pessoa sem guardar CPF em claro do cliente (preenchido no 1º pagamento) |
-| role | enum | `ROLE_CLIENT` · `ROLE_PROVIDER` · `ROLE_ADMIN` |
+| cpf_hash | varchar(64) UNIQUE NULL | hash determinístico HMAC-SHA256 (V9) — antifraude Camada 2: uma pessoa = um CPF, sem guardar CPF em claro. Prestador: gravado no cadastro (e por backfill nos legados); cliente: no 1º pagamento. Dígitos validados, CPF repetido ou diferente do já confirmado recusado. Chave do HMAC própria e versionada (`cpf_hash_versao`, V25) |
+| role | enum | `ROLE_CLIENT` · `ROLE_PROVIDER` · `ROLE_ADMIN` — papel **principal** (o do cadastro); os papéis que a conta TEM ficam em `user_papeis` (conta única, V24) |
+| ativo | boolean | `false` = suspensa (US26) **ou** excluída (US36); o filtro JWT confere a cada requisição |
+| senha_falhas | int | V23 — erros de senha seguidos desde o último acerto (limite de tentativas, US37) |
+| senha_bloqueada_ate | timestamptz NULL | V23 — até quando a conta não aceita tentativa de senha (login e exclusão de conta) |
+| excluido_em | timestamptz NULL | V22 — preenchido = conta excluída por anonimização (US36); nome/e-mail/senha/CPF já trocados, a linha fica porque outras tabelas apontam para ela |
 | created_at / updated_at | timestamptz | |
 
 **`refresh_tokens`** — sessão persistente (US12)
@@ -226,6 +230,16 @@ Alinhados ao projetado: `payments/webhook`, `admin/alerts`, `admin/notifications
 
 **Adicionado em 2026-09-29:** `GET /api/v1/payments/comissao` → `{ percentualComissao }` (fração: `0.10` = 10%), aberto a qualquer usuário autenticado. É a mesma configuração (`marketplace.comissao`) que a cobrança aplica; o app do prestador lê dela pra mostrar "Você recebe após comissão" em vez de repetir o número numa constante na tela.
 
+**Adicionado em 2026-10-04 (4):** uma pessoa = um CPF também para o prestador — `POST /auth/register/provider` valida os dígitos verificadores (`422 INVALID_CPF`), grava o `cpf_hash` e recusa CPF já vinculado a qualquer conta (`422 CPF_ALREADY_REGISTERED`, inclusive o de um cliente); `verify-identity` passa a validar os dígitos também. `ProviderCpfBackfill` (na subida, idempotente) grava o hash dos prestadores cadastrados antes, listando por id os CPFs repetidos em mais de uma conta. Antes só o cliente, no 1º pagamento, tinha o CPF único: o prestador recusado podia se recadastrar com o mesmo CPF.
+
+**Adicionado em 2026-10-05:** conta única com papéis (US38, antifraude Camada 3) — a mesma pessoa é cliente e prestador numa conta só: `user_papeis` e `refresh_tokens.papel` (`V24`), `POST /api/v1/auth/switch-role` (alterna o papel em uso; o token carrega o contexto), `POST /api/v1/auth/become-provider` (o cliente passa a prestar serviço na mesma conta, em verificação) e `AuthResponse.papeis`. Todo prestador também contrata; contratar a si mesmo é impossível por construção (`SELF_HIRE_FORBIDDEN` também na criação da proposta; o pedido da própria conta some da fila e da busca). **E** a chave do HMAC do CPF ficou própria e versionada (`CPF_HASH_KEY`, `CPF_HASH_KEY_PREVIOUS`, `users.cpf_hash_versao`, `V25`; `CpfHashKeyCheck` recusa subir sem a chave anterior quando há conta nela) — **no deploy, configurar as duas variáveis antes**; ver `memoria-tecnica/decisoes/chave-do-hash-do-cpf.md`. Antes, o CPF único entre papéis forçava duas contas (ou impedia o prestador de contratar).
+
+**Adicionado em 2026-10-04 (3):** pedido sem prestador deixa de ficar preso — recusar a última proposta ativa (ou o prestador dela excluir a conta) devolve o pedido a `PENDENTE`; `POST /service-requests/{id}/cancel` passa a valer também em `PENDENTE`/`PROPOSTO` para o cliente dono (sem reembolso, propostas encerradas); `PedidoExpiracaoJob` (de hora em hora) cancela `PENDENTE`/`PROPOSTO` sem andamento há `marketplace.request.expiration-days` (15) dias. Botão "Cancelar pedido" no app para esses estados.
+
+**Adicionado em 2026-10-04 (2):** limite de tentativas de senha (US37) — 5 erros seguidos bloqueiam a conta por 15 min (`429 TOO_MANY_ATTEMPTS` + `Retry-After`) no login **e** na confirmação da exclusão de conta; colunas `users.senha_falhas`/`senha_bloqueada_ate` (V23); a redefinição de senha por e-mail encerra o bloqueio.
+
+**Adicionado em 2026-10-04:** exclusão de conta (US36) — `POST /api/v1/users/me/delete`, coluna `users.excluido_em` (V22) e a tela "Excluir conta" do app (aba Perfil, nos dois papéis). **Corrigido junto:** o `JwtAuthFilter` agora confere a cada requisição se a conta está ativa — antes um access token já emitido seguia valendo até 15 min depois da suspensão (US26). `UserAdminDto.status` ganhou `EXCLUIDO`; suspender, reativar e moderar conta excluída dão `ACCOUNT_DELETED` (422).
+
 **Adicionado em 2026-10-01:** recuperação de senha (US35) — `POST /api/v1/auth/forgot-password` e `POST /api/v1/auth/reset-password`, tabela `password_reset_codes` (V20) e as telas "Esqueci a senha" / "Nova senha" do app. O e-mail ao usuário (`UserMailSender`) é um contrato à parte do `EmailSender` (que só avisa o admin) e **exige SMTP configurado** (`MAIL_USERNAME`/`MAIL_PASSWORD`); sem ele o app avisa que a recuperação está indisponível. Em dev/CI, `NOTIFICATION_MAIL_SINK_DIR` grava o e-mail em arquivo para os testes lerem o código. Junto, **corrigido**: o flag `ativo` (suspensão, US26) nunca era consultado — conta suspensa continuava entrando e renovando a sessão; agora login e refresh a recusam.
 
 ### M01 — Identidade & Auth
@@ -236,6 +250,8 @@ POST /api/v1/auth/register/client
   422:  { code:"EMAIL_IN_USE", message } | { code:"VALIDATION_ERROR" }   # sem aceite dos termos
 
 POST /api/v1/auth/login           req:{ email, senha } → 200 { accessToken, refreshToken, role }
+  422:  { code:"INVALID_CREDENTIALS" }   # senha errada ou e-mail desconhecido (mesma resposta)
+  429:  { code:"TOO_MANY_ATTEMPTS", message } + cabeçalho Retry-After   # US37: 5 erros seguidos → 15 min, mesmo com a senha certa
 POST /api/v1/auth/refresh         req:{ refreshToken } → 200 { accessToken, refreshToken } | 401
 # login e refresh recusam conta suspensa (US26): 422 ACCOUNT_SUSPENDED (só depois da senha certa) / INVALID_REFRESH_TOKEN
 
@@ -248,6 +264,14 @@ POST /api/v1/auth/reset-password   req:{ email, codigo, novaSenha }   # novaSenh
   422:  { code:"INVALID_RESET_CODE", message:"Código inválido ou expirado." }   # único para errado/expirado/usado/e-mail desconhecido/conta suspensa
         | { code:"INVALID_PASSWORD" } | VALIDATION_ERROR
 # código: 8 caracteres (alfabeto sem I/L/O/U), 30 min, uso único, 5 erros o invalidam, 3 pedidos/hora por usuário, só o último vale
+
+# US36 — exclusão de conta (anonimização no lugar; ver memoria-tecnica/decisoes/exclusao-de-conta-por-anonimizacao.md)
+POST /api/v1/users/me/delete       req:{ senha }   # autenticado; POST de ação (DELETE com corpo não tem semântica definida)
+  204:  conta anonimizada; o token já emitido deixa de valer na hora; aviso por e-mail (melhor esforço)
+  422:  { code:"INVALID_PASSWORD" }          # 422 e não 401: o app trataria 401 como sessão expirada
+        | { code:"ACCOUNT_HAS_ACTIVE_ORDERS", message }   # pedido aceito/em andamento/em disputa; reembolso a caminho (cliente); repasse a receber (prestador)
+        | { code:"ADMIN_CANNOT_DELETE" } | VALIDATION_ERROR
+  401:  sem token, ou conta já inativa (suspensa/excluída)
 ```
 
 ### M02 — Verificação de Prestador

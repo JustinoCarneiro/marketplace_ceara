@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerCliente, registerPrestador, login } from './helpers/auth';
+import { registerCliente, registerPrestador, login, fakeCpf } from './helpers/auth';
 
 const ts = Date.now();
 
@@ -17,7 +17,7 @@ test.describe('Cadastro', () => {
   test('cadastro de prestador cai em EM VERIFICAÇÃO e depois de logar acessa Pedidos disponíveis', async ({ page }) => {
     await registerPrestador(page, {
       nome: 'Jose Prestador',
-      cpf: '111.444.777-35',
+      cpf: fakeCpf(ts),
       email: `jose-cadastro-${ts}@onda.dev`,
       senha: 'senha1234',
       categoria: 'Elétrica',

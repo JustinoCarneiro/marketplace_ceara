@@ -84,6 +84,20 @@ class ProviderVerificationGuardTest {
     }
 
     @Test
+    void exigirVerificado_cpfNaoConciliado_recusa_mesmoVerificado() {
+        // Achado da revisão cruzada (2026-10-05): duplicata legada (CPF já tem dono sob outra conta) continuava
+        // VERIFICADA e apta a propor — o self-hire só compara IDs de conta, nunca enxerga que é a MESMA pessoa.
+        when(profileRepository.findByUserId(PRESTADOR_ID))
+                .thenReturn(Optional.of(ProviderProfiles.verificadoComCpfNaoConciliado()));
+
+        assertThatThrownBy(() -> guard.exigirVerificado(PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PROVIDER_NOT_VERIFIED")
+                .hasMessageContaining("vinculado a outra conta")
+                .hasMessageContaining("suporte");
+    }
+
+    @Test
     void exigirVerificado_semPerfil_recusaComoNaoVerificado() {
         // Um código só para "não pode operar": quem consome a API (e o aceite do cliente, que já
         // fazia assim) não precisa tratar "perfil ausente" como um caso à parte.
@@ -115,6 +129,17 @@ class ProviderVerificationGuardTest {
                 .hasMessageContaining("Escolha outra proposta")
                 // o cliente não deve ler a mensagem escrita para o prestador ("Seu cadastro…")
                 .hasMessageNotContaining("Seu cadastro");
+    }
+
+    @Test
+    void exigirContratavel_cpfNaoConciliado_recusa_mesmoVerificado() {
+        when(profileRepository.findByUserId(PRESTADOR_ID))
+                .thenReturn(Optional.of(ProviderProfiles.verificadoComCpfNaoConciliado()));
+
+        assertThatThrownBy(() -> guard.exigirContratavel(PRESTADOR_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PROVIDER_NOT_VERIFIED")
+                .hasMessageContaining("Escolha outra proposta");
     }
 
     @Test

@@ -41,6 +41,7 @@ public class UserAdminService {
     @Transactional
     public void suspender(UUID id) {
         User user = buscar(id);
+        exigirNaoExcluido(user);
         if (user.getRole() == UserRole.ROLE_ADMIN) {
             throw new BusinessException("CANNOT_SUSPEND_ADMIN",
                     "Não é permitido suspender um administrador.");
@@ -52,12 +53,28 @@ public class UserAdminService {
     @Transactional
     public void reativar(UUID id) {
         User user = buscar(id);
+        exigirNaoExcluido(user);
         user.reativar();
         userRepository.save(user);
     }
 
+    /** Conta excluída (US36) não volta: os dados pessoais já se foram. Erro de negócio, não um 500. */
+    private static void exigirNaoExcluido(User user) {
+        if (user.isExcluido()) {
+            throw new BusinessException("ACCOUNT_DELETED",
+                    "A conta foi excluída pelo próprio usuário e não pode ser alterada.");
+        }
+    }
+
+    /**
+     * Com trava de linha, e como PRIMEIRA leitura do usuário na transação (revisão cruzada, 2ª rodada): suspender e
+     * reativar gravam a entidade inteira de volta. Sem a trava, uma exclusão de conta que commitasse entre esta leitura
+     * e o {@code save} era desfeita — nome, e-mail e {@code excluido_em} voltavam ao valor antigo (a anonimização
+     * revertida) e a conta excluída podia até ser reativada. A trava só vale como primeira leitura: sobre uma entidade
+     * já carregada o Hibernate devolve a mesma instância, com o estado antigo.
+     */
     private User buscar(UUID id) {
-        return userRepository.findById(id)
+        return userRepository.findByIdComTrava(id)
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND",
                         "Usuário não encontrado."));
     }

@@ -29,6 +29,12 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha: password }),
       });
+      if (res.status === 429) {
+        // Limite de tentativas (US37): com a conta bloqueada, "senha errada" seria mentira — a senha pode estar certa.
+        const corpo = await res.json().catch(() => ({})) as { message?: string };
+        setError(corpo.message ?? 'Muitas tentativas. Aguarde alguns minutos e tente de novo.');
+        return;
+      }
       if (!res.ok) {
         setError('Credenciais inválidas. Verifique e-mail e senha.');
         return;

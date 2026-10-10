@@ -81,6 +81,15 @@ public class AuthController {
         return authService.refresh(req);
     }
 
+    /**
+     * Conta única com papéis — troca o papel em uso (cliente ↔ prestador) sem novo login. Exige sessão: a rota não está
+     * na lista pública do SecurityConfig.
+     */
+    @PostMapping("/switch-role")
+    public AuthResponse switchRole(@Valid @RequestBody SwitchRoleRequest req, Authentication auth) {
+        return authService.switchRole(UUID.fromString(auth.getName()), req);
+    }
+
     /** Antifraude Camada 2 — vincula CPF ao cliente no 1º pagamento (LGPD: só o hash é guardado) */
     @PostMapping("/verify-identity")
     @ResponseStatus(HttpStatus.NO_CONTENT)

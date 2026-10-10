@@ -33,8 +33,8 @@ O manifesto do Android sai **idêntico** (9 permissões, conferido com `expo pre
 O projeto iOS gera (`expo prebuild --platform ios`); o `Info.plist` traz os textos em português e nenhuma chave "Always".
 
 ## O que continua pendente
-- **Exclusão de conta pelo app** — exigência da App Store (5.1.1(v)) e da Play Store, e direito da LGPD; não existe hoje.
-  Mexe em dado pessoal (R2): plano e revisão cruzada antes de implementar.
+- ~~**Exclusão de conta pelo app**~~ — **implementada em 2026-10-04** (US36), ver [[exclusao-de-conta-por-anonimizacao]].
+  Falta só passar pelo fluxo num iPhone real quando houver conta Apple.
 - **Conta Apple Developer** (US$ 99/ano; individual com CPF ou organização com CNPJ + D-U-N-S) e teste em iPhone real.
 - Rótulos de privacidade da App Store.
 

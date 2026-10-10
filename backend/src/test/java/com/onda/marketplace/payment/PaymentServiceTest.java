@@ -1,5 +1,6 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
@@ -37,6 +38,9 @@ class PaymentServiceTest {
     @Mock ProposalRepository       proposalRepository;
     @Mock UserRepository           userRepository;
 
+    /** Real: o que se prova é a versão da chave, e um mock não a teria. */
+    final CpfHashService cpfHashService = new CpfHashService("test-cpf-hmac-key-0123456789-0123456789", 2);
+
     PaymentService service;
 
     private static final UUID CLIENTE_ID = UUID.randomUUID();
@@ -46,14 +50,14 @@ class PaymentServiceTest {
         service = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, BigDecimal.valueOf(0.15));
+                userRepository, cpfHashService, BigDecimal.valueOf(0.15));
     }
 
     /** Retorna um usuário com CPF hash registrado (identidade verificada). */
     private User clienteVerificado() {
         User u = User.builder().nome("Cliente").email("c@test.com")
                 .senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
-        u.setCpfHash("abc123hashfake");
+        u.vincularCpf("abc123hashfake", cpfHashService.versaoAtual());
         return u;
     }
 
@@ -81,7 +85,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, new BigDecimal("0.10"));
+                userRepository, cpfHashService, new BigDecimal("0.10"));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
@@ -104,7 +108,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, new BigDecimal(percentual));
+                userRepository, cpfHashService, new BigDecimal(percentual));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
@@ -150,6 +154,30 @@ class PaymentServiceTest {
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_INITIATED");
         assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.PENDENTE);
+    }
+
+    @Test
+    void initiate_hashDeChaveAntiga_pedeConfirmarDeNovo() {
+        // rotação do HMAC: o hash do cliente está na versão anterior. Só ele sabe o CPF em claro, então o 1º pagamento depois
+        // da troca pede a confirmação outra vez (que regrava o hash com a chave atual).
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        u.vincularCpf("hash-da-chave-antiga", cpfHashService.versaoAtual() - 1);
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+
+        assertThatThrownBy(() -> service.initiate(UUID.randomUUID(), new InitiatePaymentRequest("PIX"), "idem-rot", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "IDENTITY_REQUIRED");
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void initiate_semCpfConfirmado_pedeConfirmar() {
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+
+        assertThatThrownBy(() -> service.initiate(UUID.randomUUID(), new InitiatePaymentRequest("PIX"), "idem-sem", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "IDENTITY_REQUIRED");
     }
 
     @Test
@@ -211,10 +239,22 @@ class PaymentServiceTest {
                 .hasFieldOrPropertyWithValue("code", "REQUEST_NOT_FOUND");
     }
 
+    /** O pedido da transação travado como 1ª leitura (revisão cruzada, 2ª rodada): o id sai de uma consulta escalar. */
+    private void pedidoTravado(String gatewayId, UUID srId, ServiceRequestStatus status) {
+        when(transactionRepository.findServiceRequestIdByGatewayTransactionId(gatewayId)).thenReturn(Optional.of(srId));
+        when(requestRepository.findByIdComTrava(srId)).thenReturn(Optional.of(serviceRequest(status)));
+    }
+
+    private Transaction transacao(UUID srId, String chave) {
+        return new Transaction(srId, BigDecimal.valueOf(200), BigDecimal.valueOf(30), BigDecimal.valueOf(0.15),
+                PaymentMethod.PIX, chave);
+    }
+
     @Test
     void confirmPayment_statusPago_atualizaParaRetido() {
-        var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-4");
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-4");
+        pedidoTravado("gw-123", srId, ServiceRequestStatus.ACEITO);
         when(transactionRepository.findByGatewayTransactionId("gw-123")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -224,15 +264,112 @@ class PaymentServiceTest {
     }
 
     @Test
-    void confirmPayment_statusRejeitado_mantemPendente() {
-        var tx = new Transaction(UUID.randomUUID(), BigDecimal.valueOf(200),
-                BigDecimal.valueOf(30), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-5");
-        when(transactionRepository.findByGatewayTransactionId("gw-456")).thenReturn(Optional.of(tx));
+    void confirmPayment_pedidoJaCancelado_retemEDevolveNaMesmaHora() {
+        // Achado da revisão cruzada (2026-10-05): cancel() pode ter cancelado o pedido enquanto o pagamento já
+        // estava a caminho (cobrança enfileirada antes do cancelamento). Sem isto, o dinheiro ficaria retido pra
+        // sempre: cancel() não encontrou transação RETIDA na hora (ela ainda nem existia) e não criou reembolso.
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-cancelado");
+        pedidoTravado("gw-cancelado", srId, ServiceRequestStatus.CANCELADO);
+        when(transactionRepository.findByGatewayTransactionId("gw-cancelado")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.confirmPayment("gw-cancelado", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.REEMBOLSADO);
+        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(captor.capture());
+        assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_REFUNDED");
+    }
+
+    @Test
+    void confirmPayment_reentregaDoWebhookDepoisDaReconciliacao_eNoOp_naoEstouraNemReembolsaDeNovo() {
+        // 2ª rodada: a reconciliação deixa a transação REEMBOLSADA. O gateway reentrega o MESMO "PAGO" (é normal): reter()
+        // só era no-op para RETIDO, então a reentrega estourava INVALID_PAYMENT_TRANSITION (422 ao gateway, que reentrega
+        // para sempre). Agora confirmação de transação que já não está PENDENTE é no-op.
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-reentrega");
+        tx.reter();
+        tx.reembolsar();
+        pedidoTravado("gw-reentrega", srId, ServiceRequestStatus.CANCELADO);
+        when(transactionRepository.findByGatewayTransactionId("gw-reentrega")).thenReturn(Optional.of(tx));
+
+        assertThatCode(() -> service.confirmPayment("gw-reentrega", "PAGO")).doesNotThrowAnyException();
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.REEMBOLSADO);
+        verifyNoInteractions(outboxRepository);
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmPayment_transacaoJaRetidaEPedidoCancelado_naoEnfileiraUmSegundoReembolso() {
+        // 2ª rodada: cancel() viu a transação RETIDA e JÁ enfileirou o PAYMENT_REFUNDED. Uma reentrega do "PAGO" com a
+        // transação ainda RETIDA (o outbox não processou) não pode enfileirar outro: dois reembolsos ao gateway.
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-ja-retida");
+        tx.reter();
+        pedidoTravado("gw-ja-retida", srId, ServiceRequestStatus.CANCELADO);
+        when(transactionRepository.findByGatewayTransactionId("gw-ja-retida")).thenReturn(Optional.of(tx));
+
+        service.confirmPayment("gw-ja-retida", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    void confirmPayment_travaOPedidoAntesDeLerATransacao_aTravaEAPrimeiraLeitura() {
+        // a transação só é carregada DEPOIS da trava do pedido: o estado lido é o de agora (uma entrega duplicada simultânea
+        // espera a primeira e vê RETIDO/REEMBOLSADO, em vez de as duas verem PENDENTE e enfileirarem dois reembolsos)
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-ordem");
+        pedidoTravado("gw-ordem", srId, ServiceRequestStatus.ACEITO);
+        when(transactionRepository.findByGatewayTransactionId("gw-ordem")).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.confirmPayment("gw-ordem", "PAGO");
+
+        var ordem = inOrder(transactionRepository, requestRepository);
+        ordem.verify(transactionRepository).findServiceRequestIdByGatewayTransactionId("gw-ordem");
+        ordem.verify(requestRepository).findByIdComTrava(srId);
+        ordem.verify(transactionRepository).findByGatewayTransactionId("gw-ordem");
+        verify(requestRepository, never()).findById(any());
+    }
+
+    @Test
+    void confirmPayment_transacaoDesconhecida_naoFazNada() {
+        when(transactionRepository.findServiceRequestIdByGatewayTransactionId("gw-x")).thenReturn(Optional.empty());
+
+        service.confirmPayment("gw-x", "PAGO");
+
+        verifyNoInteractions(requestRepository, outboxRepository);
+    }
+
+    @Test
+    void confirmPayment_pedidoAindaAtivo_retemNormalmente_semReembolso() {
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-ativo");
+        pedidoTravado("gw-ativo", srId, ServiceRequestStatus.ACEITO);
+        when(transactionRepository.findByGatewayTransactionId("gw-ativo")).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        service.confirmPayment("gw-ativo", "PAGO");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verifyNoInteractions(outboxRepository);
+    }
+
+    @Test
+    void confirmPayment_statusRejeitado_mantemPendente() {
+        var srId = UUID.randomUUID();
+        var tx = transacao(srId, "idem-5");
+        pedidoTravado("gw-456", srId, ServiceRequestStatus.ACEITO);
+        when(transactionRepository.findByGatewayTransactionId("gw-456")).thenReturn(Optional.of(tx));
 
         service.confirmPayment("gw-456", "REJEITADO");
 
         assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.PENDENTE);
+        verify(transactionRepository, never()).save(any());
     }
 
     // helpers
