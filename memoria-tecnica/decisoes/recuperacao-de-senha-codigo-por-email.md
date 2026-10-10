@@ -62,6 +62,11 @@ normalizado (minúsculas, hífen, O→0, I/L→1).
   domínio, truncado a 32) e o consumo (renovar, trocar de papel, virar prestador — caminho único `consumirRefresh`) recusa o token cuja
   impressão não bate com a senha atual. Não depende de ordem de transações nem de travas: o token que nasce com a senha antiga já nasce inválido.
   `NULL` = sessão anterior à migration, continua valendo (o deploy não desloga ninguém; essas sessões seguem sujeitas à corrida até expirarem, ≤ 30 dias).
+- **A troca de senha desfazia suspensão e exclusão (E2E 70):** `redefinir` lia o usuário SEM trava e o regravava inteiro. Uma suspensão ou uma exclusão
+  de conta que commitasse entre a leitura e o `save` era desfeita — `ativo` voltava a `true`, e e-mail/nome/`excluido_em` voltavam ao valor antigo (o dado
+  pessoal volta e a conta excluída reaparece com a senha nova). Conserto: `findByEmailComTrava` como primeira leitura (a trava só vale como primeira leitura;
+  mesma do login). Quem espera lê a conta já suspensa/excluída e recebe o mesmo "código inválido". Não há inversão de ordem de travas (usuário → códigos,
+  como a exclusão). Provado vermelho antes e verde depois, nos dois cenários.
 - **Não coberto:** o access token já emitido segue valendo até expirar (≤ 15 min), como antes — fechar isso exigiria consultar o banco a cada requisição.
 - Prova: unitários (`AuthServiceTest`: emissão grava a impressão, senha trocada recusa sem consumir nem emitir, `switchRole` pelo mesmo caminho) e E2E 69
   (renovação segurada em voo × troca de senha; controle positivo: login com a senha nova renova). Mutação — emitir sem a impressão; consumir sem conferir —

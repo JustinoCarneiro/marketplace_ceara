@@ -2986,4 +2986,56 @@ class E2EFluxoPrincipalTest {
         given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + depoisDaTroca.path("refreshToken") + "\"}")
                 .when().post("/api/v1/auth/refresh").then().statusCode(200);
     }
+
+    @Test @Order(70)
+    @DisplayName("70 · Troca de senha com a conta sendo suspensa ou excluída em voo: a troca não desfaz nenhuma das duas")
+    void trocaDeSenha_contaSuspensaOuExcluidaEmVoo_naoEhDesfeita() throws Exception {
+        // Achado da rodada 3. redefinir() lia o usuário SEM trava e o regravava inteiro (save): uma suspensão ou uma exclusão que commitasse
+        // entre a leitura e o save era desfeita — `ativo` voltava a true, e e-mail/nome/excluido_em voltavam ao valor antigo (a anonimização
+        // revertida: o dado pessoal volta, e a conta excluída reaparece com a senha nova). O molde: o outro lado segura a linha em voo.
+        for (String cenario : java.util.List.of("suspensao", "exclusao")) {
+            var u = cadastrarCliente("Conta " + cenario, "conta." + cenario + ".voo@onda.test");
+            CaixaDeEntrada.EMAILS.clear();
+            pedirCodigo(u.email());
+            aguardarEmails(1);
+            String codigo = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+
+            var travaObtida = new java.util.concurrent.CountDownLatch(1);
+            var liberar     = new java.util.concurrent.CountDownLatch(1);
+            var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            // "o outro lado, em voo": suspende/anonimiza com a trava da linha (como UserAdminService e AccountDeletionService), sem commitar
+            var outroLado = pool.submit(() -> transacao.executeWithoutResult(st -> {
+                User x = userRepository.findByIdComTrava(u.id()).orElseThrow();
+                if (cenario.equals("suspensao")) {
+                    x.suspender();
+                } else {
+                    x.anonimizar("removido-" + UUID.randomUUID() + "@excluido.invalid",
+                            passwordEncoder.encode(UUID.randomUUID().toString()), false);
+                }
+                userRepository.save(x);
+                travaObtida.countDown();
+                try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }));
+            org.junit.jupiter.api.Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "o outro lado deveria ter a linha da conta (" + cenario + ")");
+
+            var troca = pool.submit(() -> redefinir(u.email(), codigo, "NovaSenha@2").extract().statusCode());
+            Thread.sleep(800);
+            assertThat("a troca deveria estar ESPERANDO a linha da conta (" + cenario + ")", troca.isDone(), is(false));
+
+            liberar.countDown();
+            outroLado.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            int status = troca.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            pool.shutdown();
+
+            var linha = conta(u.id());
+            if (cenario.equals("suspensao")) {
+                assertThat("a suspensão não foi desfeita pela troca", linha.get("ativo"), equalTo(false));
+            } else {
+                assertThat("a anonimização não foi desfeita pela troca", String.valueOf(linha.get("email")), startsWith("removido-"));
+                assertThat(linha.get("excluido_em"), notNullValue());
+            }
+            assertThat("a troca enxerga a conta como ela está agora: código inválido, nada trocado (" + cenario + ")", status, equalTo(422));
+        }
+    }
 }

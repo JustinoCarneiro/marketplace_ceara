@@ -154,10 +154,12 @@ trava" não relê nada. Por isso cada correção toma a trava antes de qualquer 
 conferem a ordem (`inOrder`). Prova no E2E, passos 36–39 (exclusão em voo segura a trava; o escritor concorrente espera e recusa).
 A mutação (trava trocada por leitura simples) derruba os três primeiros.
 
-**Limite aceito, não corrigido:** `PasswordResetService.redefinir` lê o usuário por e-mail sem trava e regrava a entidade. A corrida
-com a exclusão exige o código de redefinição do próprio e-mail do dono e uma exclusão simultânea dele — o resultado seria o dono
-desfazendo a própria exclusão. Corrigir pede trava por e-mail antes da primeira leitura e mexe em ~8 testes por uma janela de
-milissegundos; fica registrado aqui.
+**Era um limite aceito; corrigido na rodada 3 (2026-10-10):** `PasswordResetService.redefinir` lia o usuário por e-mail sem trava e
+regrava a entidade. Eu havia avaliado só a corrida com a exclusão ("o dono desfazendo a própria exclusão") e a deixei registrada como
+aceita; **a avaliação estava incompleta**: a mesma janela desfazia também uma **suspensão** do admin (`ativo` voltava a `true`), e
+uma conta suspensa só precisa de um código que pediu antes de ser suspensa. Provado em Postgres real (E2E 70, vermelho antes do conserto,
+os dois cenários) e corrigido com a trava por e-mail como primeira leitura (`findByEmailComTrava`, a mesma do login). Detalhes no ADR
+`recuperacao-de-senha-codigo-por-email`.
 
 ## Efeito nos testes
 Unitário (`AccountDeletionServiceTest`, `AccountControllerTest`, `AccountDeletedMailListenerTest`,
