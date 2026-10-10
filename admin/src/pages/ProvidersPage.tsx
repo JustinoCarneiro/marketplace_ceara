@@ -10,6 +10,8 @@ interface Provider {
   statusVerificacao: string;
   notaMedia?: number;
   totalPedidos?: number;
+  // false = o mesmo CPF estava em outra conta (duplicata legada): o prestador não opera até o suporte conciliar.
+  cpfConciliado?: boolean;
 }
 
 const AVATAR_COLORS = ['#15596E', '#3C7A4E', '#DA6A32', '#C0392B', '#1B8C84', '#244C86'];
@@ -33,7 +35,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function ProvidersPage() {
   const nav = useNavigate();
   const { itens: providers, loading, recarregar } = useLista<Provider>('/admin/providers');
-  const [filter, setFilter] = useState<'EM_VERIFICACAO' | ''>('EM_VERIFICACAO');
+  const [filter, setFilter] = useState<'EM_VERIFICACAO' | 'CPF_DUPLICADO' | ''>('EM_VERIFICACAO');
   const [actionErr, setActionErr] = useState('');
 
   async function verify(id: string) {
@@ -47,8 +49,11 @@ export default function ProvidersPage() {
     catch (e: unknown) { setActionErr(e instanceof Error ? e.message : 'Erro ao reprovar prestador.'); }
   }
 
-  const filtered = filter ? providers.filter(p => p.statusVerificacao === filter) : providers;
+  const filtered = filter === 'CPF_DUPLICADO' ? providers.filter(p => p.cpfConciliado === false)
+    : filter ? providers.filter(p => p.statusVerificacao === filter) : providers;
   const pendingCount = providers.filter(p => p.statusVerificacao === 'EM_VERIFICACAO').length;
+  // Sem este filtro a duplicata (que costuma estar VERIFICADA) ficaria escondida atrás da aba padrão "Em verificação".
+  const duplicadosCount = providers.filter(p => p.cpfConciliado === false).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -56,6 +61,9 @@ export default function ProvidersPage() {
         <span style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>Moderação de prestadores</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span onClick={() => setFilter('EM_VERIFICACAO')} style={{ fontSize: 12.5, fontWeight: 700, color: filter === 'EM_VERIFICACAO' ? '#0E2A33' : '#4C636A', background: filter === 'EM_VERIFICACAO' ? '#FDF3D6' : '#F3ECDC', border: `1px solid ${filter === 'EM_VERIFICACAO' ? '#F2B015' : '#E6DDC9'}`, padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Em verificação · {pendingCount}</span>
+          {(duplicadosCount > 0 || filter === 'CPF_DUPLICADO') && (
+            <span onClick={() => setFilter('CPF_DUPLICADO')} style={{ fontSize: 12.5, fontWeight: 700, color: filter === 'CPF_DUPLICADO' ? '#0E2A33' : '#4C636A', background: filter === 'CPF_DUPLICADO' ? '#FDF3D6' : '#F3ECDC', border: `1px solid ${filter === 'CPF_DUPLICADO' ? '#F2B015' : '#E6DDC9'}`, padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>CPF duplicado · {duplicadosCount}</span>
+          )}
           <span onClick={() => setFilter('')} style={{ fontSize: 12.5, fontWeight: 600, color: '#4C636A', background: '#F3ECDC', border: '1px solid #E6DDC9', padding: '8px 14px', borderRadius: 100, cursor: 'pointer' }}>Todos</span>
         </div>
       </div>
@@ -78,6 +86,13 @@ export default function ProvidersPage() {
                 <div style={{ fontSize: 13, color: '#4C636A' }}>{p.categoria}</div>
               </div>
               <StatusBadge status={p.statusVerificacao} />
+              {p.cpfConciliado === false && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', background: '#FBE6E2', color: '#C0392B', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', padding: '5px 11px', borderRadius: 100, flexShrink: 0 }}>CPF DUPLICADO</span>
+              )}
+              {isPending && p.cpfConciliado === false && (
+                // o par Verificar/Reprovar abaixo não leva ao perfil, e é lá que se concilia
+                <span onClick={() => nav(`/providers/${p.id}`)} style={{ fontSize: 13.5, fontWeight: 700, color: '#606E71', flexShrink: 0, cursor: 'pointer' }}>Ver perfil →</span>
+              )}
               {isPending ? (
                 <>
                   <button onClick={() => verify(p.id)} style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}>Verificar</button>

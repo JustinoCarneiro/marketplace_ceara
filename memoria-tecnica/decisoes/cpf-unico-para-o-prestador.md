@@ -68,8 +68,11 @@ passou a ter chave própria e versionada: [[chave-do-hash-do-cpf]].
 - **A marca `cpf_conciliado = false` era permanente e não tirava o perfil da busca.** O guard barrava proposta e aceite, mas o prestador
   duplicado continuava aparecendo para o cliente como VERIFICADO — e o cliente caía num `PROVIDER_NOT_VERIFIED` sem entender —, e só um
   `UPDATE` manual no banco desfazia a marca. Agora a busca (`findNearby`) filtra `cpf_conciliado = TRUE` e há a ação de moderação
-  `CONCILIAR_CPF` (`POST /admin/providers/{id}/moderate`) para o suporte decidir a duplicata. **Pendência:** o painel ainda não tem o botão; a
-  ação existe na API. E2E 68.
+  `CONCILIAR_CPF` (`POST /admin/providers/{id}/moderate`) para o suporte decidir a duplicata. **No painel (2026-10-10):** a lista do admin passou a expor
+  `cpfConciliado` (`ProviderAdminDto`); o perfil do prestador mostra o aviso "CPF em duplicidade" com o botão "Conciliar CPF" (justificativa
+  obrigatória na tela, vai para o log de auditoria como `MODERAR_PRESTADOR`) e a lista ganha o filtro e o selo "CPF duplicado" — sem o filtro a
+  duplicata, que costuma estar VERIFICADA, ficava escondida atrás da aba padrão "Em verificação". E2E 68 (lista do painel antes e depois);
+  admin `16-conciliar-cpf.spec.ts` (tela) e contrato em `09-contratos-api`.
 - **Prestador com CPF cifrado que não decifra nunca é conferido.** O backfill o ignora em toda subida (não tem como saber se o CPF dele colide
   com o de um cliente), então a marca de duplicata nunca é posta para ele — e só a CONTAGEM saía no log. Agora os ids saem em `WARN` (nunca o
   CPF). Não foi bloqueado de operar: o seed da demo grava um placeholder que não decifra, e bloquear por ausência de hash quebraria a demo.
