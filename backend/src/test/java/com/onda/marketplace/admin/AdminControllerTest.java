@@ -282,12 +282,14 @@ class AdminControllerTest {
     void providers_retorna200_comLista() throws Exception {
         UUID userId = UUID.randomUUID();
         when(providerAdminService.listar(any())).thenReturn(List.of(
-                new ProviderAdminDto(userId, "João", "eletrica", "VERIFICADO", null)));
+                new ProviderAdminDto(userId, "João", "eletrica", "VERIFICADO", null, false)));
 
         mvc.perform(get("/api/v1/admin/providers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].nome").value("João"))
-                .andExpect(jsonPath("$[0].statusVerificacao").value("VERIFICADO"));
+                .andExpect(jsonPath("$[0].statusVerificacao").value("VERIFICADO"))
+                // o painel lê este nome exato (ProviderDetailPage/ProvidersPage → interface Provider)
+                .andExpect(jsonPath("$[0].cpfConciliado").value(false));
     }
 
     @Test

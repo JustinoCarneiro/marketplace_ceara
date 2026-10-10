@@ -2905,6 +2905,13 @@ class E2EFluxoPrincipalTest {
                 contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid AND revogado = false", lara.id().toString()), equalTo(0));
     }
 
+    /** O {@code cpfConciliado} que a LISTA do painel (GET /admin/providers) mostra para este prestador; {@code null} se o campo faltar. */
+    private Boolean cpfConciliadoNoPainel(UUID prestadorId) {
+        return given().header("Authorization", "Bearer " + tokenAdmin())
+                .when().get("/api/v1/admin/providers").then().statusCode(200)
+                .extract().jsonPath().getObject("find { it.id == '" + prestadorId + "' }.cpfConciliado", Boolean.class);
+    }
+
     @Test @Order(68)
     @DisplayName("68 · Perfil com CPF não conciliado some da busca; o suporte concilia (CONCILIAR_CPF) e ele volta")
     void cpfNaoConciliado_somaDaBusca_eOSuporteConcilia() {
@@ -2918,6 +2925,10 @@ class E2EFluxoPrincipalTest {
                     lng, lat, c.id().toString());
         }
         jdbc.update("UPDATE providers_profile SET cpf_conciliado = false WHERE user_id = ?::uuid", ari.id().toString());   // o backfill marcou
+        // o painel precisa SABER quem está com a marca: é o campo da lista que acende o aviso e o botão "Conciliar CPF"
+        // (comparação com Boolean: campo ausente vira null e falha, em vez de virar um false por omissão)
+        assertThat("o painel enxerga a duplicata", cpfConciliadoNoPainel(ari.id()), equalTo(false));
+        assertThat("e não acusa quem está conciliado", cpfConciliadoNoPainel(bel.id()), equalTo(true));
         var cliente = cadastrarCliente("Cliente Busca Conciliada", "cliente.busca.conciliada@onda.test");
 
         List<String> antes = given().header("Authorization", "Bearer " + cliente.token())
@@ -2931,6 +2942,7 @@ class E2EFluxoPrincipalTest {
                 .body("{\"action\":\"CONCILIAR_CPF\"}")
                 .when().post("/api/v1/admin/providers/{id}/moderate", ari.id()).then().statusCode(200);
         assertThat(contar("SELECT count(*) FROM providers_profile WHERE user_id = ?::uuid AND cpf_conciliado = true", ari.id().toString()), equalTo(1));
+        assertThat("o painel passa a mostrá-lo como conciliado (o aviso some)", cpfConciliadoNoPainel(ari.id()), equalTo(true));
 
         List<String> depois = given().header("Authorization", "Bearer " + cliente.token())
                 .queryParam("lat", lat).queryParam("lng", lng).queryParam("raio", 50000).queryParam("categoria", "eletrica").queryParam("limite", 50)
