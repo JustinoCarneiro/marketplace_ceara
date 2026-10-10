@@ -217,6 +217,11 @@ public class AuthService {
             // conta suspensa (US26) não renova a sessão — mesma resposta de token inválido
             throw refreshInvalido();
         }
+        if (stored.getSenhaFp() != null && !stored.getSenhaFp().equals(impressaoDaSenha(stored.getUser()))) {
+            // a senha mudou desde que esta sessão foi emitida (rodada 3): a troca de senha encerra TODAS as sessões, inclusive a que
+            // nasceu em voo, depois do UPDATE que as revogava — esta não é uma delas na tabela, mas nasceu com a senha antiga
+            throw refreshInvalido();
+        }
         if (refreshTokenRepository.revogarSeAindaValido(stored.getId()) == 0) {
             throw refreshInvalido();   // outro pedido com o mesmo token o consumiu entre a leitura e esta escrita
         }
@@ -239,12 +244,21 @@ public class AuthService {
                 user,
                 sha256(rawRefresh),
                 Instant.now().plus(refreshTokenDays, ChronoUnit.DAYS),
-                contexto
+                contexto,
+                impressaoDaSenha(user)
         );
         refreshTokenRepository.save(rt);
         return new AuthResponse(accessToken, rawRefresh, contexto.name(),
                 user.getId(), user.getNome(), user.getEmail(),
                 user.getPapeis().stream().sorted().map(UserRole::name).toList());
+    }
+
+    /**
+     * Impressão da senha vigente: sha256 do hash bcrypt (nunca a senha), truncado e separado por domínio. Gravada na emissão da sessão e
+     * comparada no consumo — ver V28. Quem tem o banco já tem o hash bcrypt; a impressão não acrescenta nada a um ataque offline.
+     */
+    static String impressaoDaSenha(User user) {
+        return sha256("senha-fp:v1|" + user.getSenhaHash()).substring(0, 32);
     }
 
     private static void exigirCpfValido(String cpf) {

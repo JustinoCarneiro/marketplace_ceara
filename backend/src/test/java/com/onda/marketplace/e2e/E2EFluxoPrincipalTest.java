@@ -2937,4 +2937,53 @@ class E2EFluxoPrincipalTest {
                 .when().get("/api/v1/providers/nearby").then().statusCode(200).extract().jsonPath().getList("id");
         assertThat("conciliado, volta à busca", depois, hasItem(ari.id().toString()));
     }
+
+    @Test @Order(69)
+    @DisplayName("69 · Troca de senha com uma renovação de sessão em voo: o token que nasce com a senha antiga não pode servir depois da troca")
+    void trocaDeSenha_sessaoEmitidaEmVoo_naoSobrevive() throws Exception {
+        // Achado da rodada 3. A troca encerra as sessões com um UPDATE (revogarTodosDoUsuario) que só enxerga as linhas JÁ commitadas no
+        // instante dele. Uma renovação em voo — que consumiu o token antigo e inseriu o novo, sem commitar — faz o UPDATE esperar a linha
+        // antiga e, ao acordar, NÃO ver a linha nova: o token novo sobrevivia a uma troca de senha feita justamente para encerrar sessões.
+        // Quem tem um refresh roubado e renova em laço consegue isso de propósito; o molde abaixo força o mesmo entrelaçamento.
+        var vera = cadastrarCliente("Vera Sessao", "vera.sessao@onda.test");
+        CaixaDeEntrada.EMAILS.clear();
+        pedirCodigo(vera.email());
+        aguardarEmails(1);
+        String codigo = extrairCodigo(CaixaDeEntrada.EMAILS.get(0).corpo());
+        UUID tokenId = jdbc.queryForObject(
+                "SELECT id FROM refresh_tokens WHERE user_id = ?::uuid AND revogado = false ORDER BY created_at DESC LIMIT 1",
+                UUID.class, vera.id().toString());
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a renovação, em voo": consome o token antigo e emite a sessão nova (o mesmo que AuthService.refresh faz), sem commitar
+        var renovacao = pool.submit(() -> transacao.execute(st -> {
+            assertThat(refreshTokensRepo.revogarSeAindaValido(tokenId), equalTo(1));
+            var nova = authService.emitirSessao(userRepository.findById(vera.id()).orElseThrow(), UserRole.ROLE_CLIENT);
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            return nova;
+        }));
+        org.junit.jupiter.api.Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS),
+                "a renovação deveria ter consumido o token antigo e emitido o novo");
+
+        var troca = pool.submit(() -> redefinir(vera.email(), codigo, "NovaSenha@2").extract().statusCode());
+        Thread.sleep(800);
+        assertThat("a troca deveria estar ESPERANDO a linha do token antigo", troca.isDone(), is(false));
+
+        liberar.countDown();
+        var sessaoEmVoo = renovacao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(troca.get(15, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+        pool.shutdown();
+
+        // a sessão que nasceu com a senha antiga não renova
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + sessaoEmVoo.refreshToken() + "\"}")
+                .when().post("/api/v1/auth/refresh").then().statusCode(422).body("code", equalTo("INVALID_REFRESH_TOKEN"));
+        // controle positivo: quem entra com a senha nova tem uma sessão que renova normalmente
+        var depoisDaTroca = login(vera.email(), "NovaSenha@2");
+        depoisDaTroca.then().statusCode(200);
+        given().contentType(ContentType.JSON).body("{\"refreshToken\":\"" + depoisDaTroca.path("refreshToken") + "\"}")
+                .when().post("/api/v1/auth/refresh").then().statusCode(200);
+    }
 }

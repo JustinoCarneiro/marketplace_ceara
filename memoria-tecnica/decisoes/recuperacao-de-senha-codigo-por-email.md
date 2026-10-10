@@ -53,5 +53,19 @@ normalizado (minúsculas, hífen, O→0, I/L→1).
 - O JWT já emitido continua válido até expirar (até 15 min); só o refresh é cortado.
 - Administradores (painel interno) ficam fora: a senha deles é redefinida pelo suporte/operação.
 
+## Rodada 3 de revisão cruzada (2026-10-10) — sessão emitida em voo sobrevivia à troca
+- **O defeito (provado em Postgres real, E2E 69):** "troca encerra as sessões" era um `UPDATE` (`revogarTodosDoUsuario`) que só enxerga as
+  linhas JÁ commitadas no instante dele. Uma renovação (ou login) em voo — que consumiu o token antigo e inseriu o novo, sem commitar — faz o
+  `UPDATE` esperar a linha antiga e, ao acordar, não ver a nova: o token novo seguia válido por 30 dias depois de uma troca de senha feita para
+  encerrar sessões. Quem tem um refresh roubado e renova em laço consegue isso de propósito; a janela é a duração da transação de renovação.
+- **O conserto (V28):** cada refresh token grava a **impressão da senha** vigente na emissão (`senha_fp` = sha256 do hash bcrypt, separado por
+  domínio, truncado a 32) e o consumo (renovar, trocar de papel, virar prestador — caminho único `consumirRefresh`) recusa o token cuja
+  impressão não bate com a senha atual. Não depende de ordem de transações nem de travas: o token que nasce com a senha antiga já nasce inválido.
+  `NULL` = sessão anterior à migration, continua valendo (o deploy não desloga ninguém; essas sessões seguem sujeitas à corrida até expirarem, ≤ 30 dias).
+- **Não coberto:** o access token já emitido segue valendo até expirar (≤ 15 min), como antes — fechar isso exigiria consultar o banco a cada requisição.
+- Prova: unitários (`AuthServiceTest`: emissão grava a impressão, senha trocada recusa sem consumir nem emitir, `switchRole` pelo mesmo caminho) e E2E 69
+  (renovação segurada em voo × troca de senha; controle positivo: login com a senha nova renova). Mutação — emitir sem a impressão; consumir sem conferir —
+  derruba unitário e E2E.
+
 ## Ligado a
 - US35 e US26 em `docs/spec.md`; contrato em `ROADMAP.md` (M01); migração `V20__password_reset_codes.sql`.
