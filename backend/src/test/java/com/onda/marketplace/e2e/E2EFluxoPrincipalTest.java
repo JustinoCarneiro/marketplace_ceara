@@ -2993,6 +2993,12 @@ class E2EFluxoPrincipalTest {
             assertThat(contradicao.getMessage(), containsString("CPF_HASH_KEY_PREVIOUS"));
             org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> confirmado.run(null));
             assertThat("contradição não grava o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
+
+            // 4) o bean do contexto e2e tem o cruzamento DESLIGADO (cpf-backfill.enabled=false): a recusa não pode depender dessa flag
+            //    (ela só diz "não há como consultar a âncora"; sem âncora e com contas, a subida segue sendo recusada)
+            var semCruzamento = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> cpfHashKeyCheck.run(null));
+            assertThat(semCruzamento.getMessage(), containsString("CPF_HASH_KEY_CONFIRMED"));
+            assertThat("recusar não grava o verificador", verificacaoChaveRepo.existsById(versaoAnterior), is(false));
         } finally {
             // volta ao padrão de conta sem CPF confirmado (cpf_hash_versao é NOT NULL DEFAULT 1) e devolve o verificador da subida
             jdbc.update("UPDATE users SET cpf_hash = NULL, cpf_hash_versao = 1 WHERE id IN (?::uuid, ?::uuid)",

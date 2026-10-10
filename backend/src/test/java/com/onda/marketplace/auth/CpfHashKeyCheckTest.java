@@ -236,6 +236,41 @@ class CpfHashKeyCheckTest {
     // ── Decisão do dono (2026-10-09): sem âncora e com contas, a subida é RECUSADA; só a confirmação explícita do operador a libera.
 
     @Test
+    void cruzamentoDesativado_comContasNaVersao_recusaSubir_aFlagDoBackfillNaoDesligaARecusa() {
+        // Achado da revisão da rodada 3: `marketplace.cpf-backfill.enabled=false` desliga o backfill (e o H2 dos testes de contexto), mas
+        // era reaproveitada aqui devolvendo CONFERE — "tudo certo". Com a recusa, isso permitia a um operador que só queria pular o
+        // backfill desligar também a checagem da chave. Sem como consultar âncora é "nenhuma âncora", como o comentário do campo já dizia.
+        var check = new CpfHashKeyCheck(userRepository, new CpfHashService(ATUAL, 2), profileRepository, cpfEncryptor,
+                verificacaoRepository, false, false);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(4L);
+
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("4 conta(s)")
+                .hasMessageContaining("CPF_HASH_KEY_CONFIRMED");
+        // continua sem consultar o perfil (a tabela pode nem existir) e sem gravar nada
+        org.mockito.Mockito.verifyNoInteractions(profileRepository, cpfEncryptor);
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void cruzamentoDesativado_comContasNaVersao_eConfirmacaoDoOperador_sobeEGravaOVerificador() {
+        var check = new CpfHashKeyCheck(userRepository, new CpfHashService(ATUAL, 2), profileRepository, cpfEncryptor,
+                verificacaoRepository, false, true);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(4L);
+
+        assertThatCode(check::verificar).doesNotThrowAnyException();
+        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
+        org.mockito.Mockito.verifyNoInteractions(profileRepository, cpfEncryptor);
+    }
+
+    @Test
     void primeiraSubidaSemAncora_comContasNaVersao_recusaSubir_enaoGravaOVerificador() {
         // Só prestador tem o CPF cifrado; o hash do cliente não se prova. Com contas na versão e nenhum prestador decifrável, uma
         // chave digitada errada seria gravada como referência sem nada que a desminta (antes: só um aviso, e a subida parecia limpa).

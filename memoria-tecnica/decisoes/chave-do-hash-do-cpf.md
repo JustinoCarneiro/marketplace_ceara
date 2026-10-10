@@ -117,6 +117,12 @@ e a subida recusa se sobrar conta mais antiga.
   herdava isso, então o bean do E2E **nunca** fazia o cruzamento com âncora: a consulta `comHashNaVersao` só tinha rodado contra mocks.
   O passo 69 monta as instâncias à mão com o cruzamento ligado e cobre, no Postgres real, as três situações (sem âncora, âncora que
   confere, âncora que contradiz).
+- **A flag do backfill não desliga a recusa (achado ao reler o próprio #24):** o cruzamento compartilha `marketplace.cpf-backfill.enabled` com o
+  `ProviderCpfBackfill`. Com ela em `false` o cruzamento devolvia `CONFERE` ("tudo certo") em vez de "nenhuma âncora", como o comentário do campo já
+  dizia — e, depois da recusa, isso deixava um operador que só queria pular o backfill desligar também a checagem da chave, sem aviso. Agora é
+  `SEM_ANCORA`: com contas na versão a subida segue recusada (só `CPF_HASH_KEY_CONFIRMED` libera); sem contas (H2 dos testes de contexto) nada muda.
+  Prova: unitários (recusa e confirmação com o cruzamento desligado) e fase 4 do E2E 69, que usa o bean real do contexto `e2e` (cruzamento desligado);
+  restaurar o `CONFERE` derruba os dois.
 - Continua valendo o limite de que o check roda como `ApplicationRunner`, depois de o servidor já aceitar conexões (janela de milissegundos).
 
 ## Efeito nos testes

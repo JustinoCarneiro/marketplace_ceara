@@ -57,7 +57,8 @@ public class CpfHashKeyCheck implements ApplicationRunner {
     private final CpfEncryptor                        cpfEncryptor;
     private final CpfHashKeyVerificacaoRepository    verificacaoRepository;
     /** Mesma flag do {@code ProviderCpfBackfill}: onde {@code providers_profile} (coluna geográfica) não existe — o H2
-     *  dos testes de contexto —, não há como cruzar contra uma âncora real; trata como "nenhuma âncora" sem consultar. */
+     *  dos testes de contexto —, não há como cruzar contra uma âncora real; trata como "nenhuma âncora" sem consultar. Isso NÃO
+     *  desliga a recusa: com contas na versão e sem âncora a subida continua recusada (só {@link #chaveConfirmada} a libera). */
     private final boolean                            cruzamentoAtivo;
     /** {@code CPF_HASH_KEY_CONFIRMED}: o operador afirma que a chave configurada é a que calculou os hashes já gravados, para a
      *  1ª subida de uma versão sem âncora. Só afrouxa o caso "sem âncora" — ver o Javadoc da classe. */
@@ -156,7 +157,10 @@ public class CpfHashKeyCheck implements ApplicationRunner {
 
     private Cruzamento cruzar(int versao) {
         if (!cruzamentoAtivo) {
-            return Cruzamento.CONFERE;   // onde providers_profile não existe não há o que cruzar, e nada a avisar
+            // Sem como consultar a âncora é "nenhuma âncora" — NÃO "conferido". Devolver CONFERE aqui fazia a flag do backfill
+            // (marketplace.cpf-backfill.enabled=false, que só deveria pular o backfill) desligar também a recusa de subida sem prova
+            // da chave. Onde não há conta na versão (o H2 dos testes de contexto) nada muda: sem contas, não há o que provar.
+            return Cruzamento.SEM_ANCORA;
         }
         for (ProviderCpfBackfill.PerfilSemHash perfil : profileRepository.comHashNaVersao(versao)) {
             String cpfDecifrado;
