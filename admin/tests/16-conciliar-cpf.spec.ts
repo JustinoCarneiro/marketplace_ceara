@@ -33,6 +33,8 @@ test.describe('Conciliar CPF (duplicata legada)', () => {
     await page.goto(`/providers/${DUDA.id}`);
 
     await expect(page.getByText('CPF em duplicidade')).toBeVisible();
+    // a justificativa vai para o log de auditoria: o backend recusa mais de 500 caracteres, a tela já não deixa digitar além disso
+    await expect(page.getByPlaceholder(/O que foi verificado/)).toHaveAttribute('maxlength', '500');
     const conciliar = page.getByRole('button', { name: 'Conciliar CPF' });
     await expect(conciliar).toBeDisabled();   // decidir uma duplicata às cegas não é uma opção: a justificativa vai para a auditoria
     await page.getByPlaceholder(/O que foi verificado/).fill('   ');

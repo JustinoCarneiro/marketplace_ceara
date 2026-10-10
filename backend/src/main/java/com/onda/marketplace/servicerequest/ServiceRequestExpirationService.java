@@ -58,6 +58,7 @@ public class ServiceRequestExpirationService {
         int cancelados = 0;
         for (int i = 0; i < parados.size(); i += LOTE) {
             List<UUID> lote = parados.subList(i, Math.min(i + LOTE, parados.size()));
+            requestRepository.travarPedidos(lote);   // 1º, num comando à parte: o UPDATE abaixo precisa de snapshot novo (rodada 3)
             requestRepository.cancelarSemAndamento(lote, limite, agora);
             List<UUID> efetivamenteCancelados = requestRepository.idsCanceladosEm(lote, agora);
             proposalRepository.encerrarAtivasDosPedidos(efetivamenteCancelados);

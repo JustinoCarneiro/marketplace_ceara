@@ -3186,4 +3186,81 @@ class E2EFluxoPrincipalTest {
         assertThat("com uma proposta ativa, o pedido não pode estar na fila como PENDENTE (accept() exige PROPOSTO)",
                 statusDoPedido(pedido), equalTo("PROPOSTO"));
     }
+
+    @Test @Order(74)
+    @DisplayName("74 · Expiração com uma proposta nova em voo: o pedido não é cancelado por cima da proposta que acabou de chegar")
+    void expiracao_propostaNovaEmVoo_naoCancelaOPedido() throws Exception {
+        // Achado da rodada 3 (mesma classe do passo 69). cancelarSemAndamento é um UPDATE em lote com NOT EXISTS (proposta recente). Quem espera uma
+        // linha só TRAVADA (create() não atualiza o pedido que já está PROPOSTO) não reavalia o WHERE, e o NOT EXISTS segue com o snapshot do início do
+        // comando: o pedido era cancelado e a proposta de última hora, encerrada, no instante em que chegava. O passo 41 só SIMULAVA esta corrida.
+        var vitor = cadastrarCliente("Vitor Expira Voo", "vitor.expira.voo@onda.test");
+        var antigo = cadastrarPrestador("Prestador Antigo Expira", "antigo.expira@onda.test", "100.700.300-65");
+        var novo = cadastrarPrestador("Prestador Novo Expira", "novo.expira@onda.test", "101.707.313-91");
+        moderarPrestador(novo.id().toString(), "APROVAR");
+        UUID pedido = pedidoDe(vitor, "Pedido parado há 20 dias com uma proposta velha", "PROPOSTO");
+        proposta(pedido, antigo.id(), ProposalStatus.ATIVA);
+        jdbc.update("UPDATE service_requests SET updated_at = now() - interval '20 days' WHERE id = ?::uuid", pedido.toString());
+        jdbc.update("UPDATE proposals SET created_at = now() - interval '20 days' WHERE service_request_id = ?::uuid", pedido.toString());
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a proposta nova, em voo": travou o pedido e inseriu a proposta ATIVA, sem commitar (o que ProposalService.create faz num pedido PROPOSTO)
+        var propostaEmVoo = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
+            proposalRepository.save(new Proposal(sr, novo.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a proposta nova deveria ter a trava do pedido");
+
+        var expiracaoEmCurso = pool.submit(() -> expiracao.expirar(Instant.now()));
+        Thread.sleep(800);
+        assertThat("a expiração deveria estar ESPERANDO o pedido preso pela proposta nova", expiracaoEmCurso.isDone(), is(false));
+
+        liberar.countDown();
+        propostaEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        expiracaoEmCurso.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat("o pedido recebeu uma proposta agora: tem andamento e não pode ser cancelado", statusDoPedido(pedido), equalTo("PROPOSTO"));
+        assertThat("a proposta que acabou de chegar segue ativa (não foi encerrada pela expiração)", contar(
+                "SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid AND prestador_id = ?::uuid AND status = 'ATIVA'",
+                pedido.toString(), novo.id().toString()), equalTo(1));
+    }
+
+    @Test @Order(75)
+    @DisplayName("75 · Backfill de subida com a conta sendo excluída em voo: não desfaz a anonimização nem vincula CPF à conta excluída")
+    void backfill_contaExcluidaEmVoo_naoDesfazAAnonimizacao() throws Exception {
+        // Achado da rodada 3. ProviderCpfBackfill.vincular lia o usuário SEM trava e o regravava inteiro (save): uma exclusão de conta que commitasse
+        // entre a leitura e o save era desfeita (e-mail, nome e excluido_em voltavam ao valor antigo, e a conta excluída ganhava um hash de CPF).
+        UUID legadoId = legado("backfill.voo@onda.test", cpfEncryptor.encrypt("102.714.326-16"));
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a exclusão, em voo": anonimiza com a trava da linha (como AccountDeletionService) e fica parada antes do commit
+        var exclusaoEmVoo = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            User x = userRepository.findByIdComTrava(legadoId).orElseThrow();
+            x.anonimizar("removido-" + UUID.randomUUID() + "@excluido.invalid", passwordEncoder.encode(UUID.randomUUID().toString()), false);
+            userRepository.save(x);
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a exclusão deveria ter a linha da conta");
+
+        var backfill = pool.submit(() -> cpfBackfill.preencher());
+        Thread.sleep(800);
+        assertThat("o backfill deveria estar ESPERANDO a linha da conta", backfill.isDone(), is(false));
+
+        liberar.countDown();
+        exclusaoEmVoo.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        backfill.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        var linha = conta(legadoId);
+        assertThat("a anonimização não foi desfeita pelo backfill", String.valueOf(linha.get("email")), startsWith("removido-"));
+        assertThat(linha.get("excluido_em"), notNullValue());
+        assertThat("nenhum hash de CPF foi gravado numa conta excluída", linha.get("cpf_hash"), nullValue());
+    }
 }

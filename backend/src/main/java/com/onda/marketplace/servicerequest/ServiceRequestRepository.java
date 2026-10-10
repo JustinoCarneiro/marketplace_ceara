@@ -99,6 +99,7 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
            SELECT s.id FROM ServiceRequest s
             WHERE s.status IN :statuses AND s.updatedAt < :limite
               AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+            ORDER BY s.id
            """)
     List<UUID> idsSemAndamentoDesde(@Param("statuses") Collection<ServiceRequestStatus> statuses,
                                     @Param("limite") Instant limite);
@@ -122,6 +123,21 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
               AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
            """)
     int cancelarSemAndamento(@Param("ids") Collection<UUID> ids, @Param("limite") Instant limite, @Param("agora") Instant agora);
+
+    /**
+     * Trava (FOR NO KEY UPDATE, em ordem de id) as linhas deste lote num comando PRÓPRIO, ANTES de {@link #cancelarSemAndamento}. Achado da
+     * rodada 3 (E2E 74): o {@code NOT EXISTS} do UPDATE usa o snapshot do início do comando, e em READ COMMITTED quem espera uma linha só
+     * TRAVADA (a {@code create()} de uma proposta nova não atualiza um pedido que já está PROPOSTO) não reavalia o WHERE — o pedido era
+     * cancelado e a proposta que acabava de chegar, encerrada. Com as linhas já travadas por este comando, o UPDATE seguinte é um comando novo,
+     * com snapshot novo, e enxerga o que commitou durante a espera. A ordem de id é a mesma da exclusão de conta (sem ciclo entre as duas).
+     */
+    @Query(value = """
+            SELECT s.id FROM service_requests s
+             WHERE s.id IN (:ids)
+             ORDER BY s.id
+               FOR NO KEY UPDATE OF s
+            """, nativeQuery = true)
+    List<UUID> travarPedidos(@Param("ids") Collection<UUID> ids);
 
     /**
      * Dentre {@code ids}, quais foram cancelados POR ESTA expiração — lido DEPOIS do {@code cancelarSemAndamento} acima, na

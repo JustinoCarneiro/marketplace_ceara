@@ -119,8 +119,12 @@ public class ProviderCpfBackfill implements ApplicationRunner {
     private Desfecho vincular(UUID userId, String cpf) {
         try {
             return transacao.execute(status -> {
-                User user = userRepository.findById(userId).orElse(null);
-                if (user == null || (user.getCpfHash() != null && user.getCpfHashVersao() == cpfHashService.versaoAtual())) {
+                // Com trava de linha, como PRIMEIRA leitura da conta (rodada 3): o save abaixo regrava a entidade inteira. Sem a trava, uma
+                // exclusão de conta que commitasse entre esta leitura e o save era desfeita (e-mail, nome e excluido_em voltavam ao valor
+                // antigo) e a conta excluída ainda ganhava um hash de CPF. Conta excluída não é vinculada: não há mais o que proteger nela.
+                User user = userRepository.findByIdComTrava(userId).orElse(null);
+                if (user == null || user.isExcluido()
+                        || (user.getCpfHash() != null && user.getCpfHashVersao() == cpfHashService.versaoAtual())) {
                     return Desfecho.JA_TINHA;
                 }
                 // o mesmo CPF em OUTRA conta, sob qualquer chave: a própria conta (hash de chave antiga) não é duplicata
@@ -142,9 +146,17 @@ public class ProviderCpfBackfill implements ApplicationRunner {
      * Marca o perfil para o guard de verificação recusar operar (propor/aceitar) até o suporte resolver a duplicata.
      */
     private void marcarCpfNaoConciliado(UUID userId) {
-        profileRepository.findByUserId(userId).ifPresent(perfil -> {
-            perfil.marcarCpfNaoConciliado();
-            profileRepository.save(perfil);
+        // Mesma ordem do ModerationService: a conta travada primeiro, o perfil depois — o save do perfil regrava a linha inteira e,
+        // sem a trava, desfazia a anonimização de uma exclusão que commitasse no meio (rodada 3).
+        transacao.executeWithoutResult(status -> {
+            User user = userRepository.findByIdComTrava(userId).orElse(null);
+            if (user == null || user.isExcluido()) {
+                return;
+            }
+            profileRepository.findByUserId(userId).ifPresent(perfil -> {
+                perfil.marcarCpfNaoConciliado();
+                profileRepository.save(perfil);
+            });
         });
     }
 }

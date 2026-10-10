@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -74,6 +75,35 @@ class AdminControllerTest {
                 .andExpect(status().isOk());
 
         verify(moderationService).moderar(userId, ModerationAction.SUSPENDER);
+    }
+
+    @Test
+    void moderarPrestador_justificativaMaiorQue500Caracteres_eRecusadaSemChegarAoServico() throws Exception {
+        // sem teto, o texto livre ia inteiro para o log de auditoria (TEXT) e aparecia inteiro na página de Auditoria
+        UUID userId = UUID.randomUUID();
+        var body = new ModerateRequest(ModerationAction.CONCILIAR_CPF, "x".repeat(501));
+
+        mvc.perform(post("/api/v1/admin/providers/{userId}/moderate", userId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().is4xxClientError());
+
+        verifyNoInteractions(moderationService);
+    }
+
+    @Test
+    void moderarPrestador_justificativaDeExatos500Caracteres_passa() throws Exception {
+        UUID userId = UUID.randomUUID();
+        var body = new ModerateRequest(ModerationAction.CONCILIAR_CPF, "x".repeat(500));
+
+        mvc.perform(post("/api/v1/admin/providers/{userId}/moderate", userId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(body)))
+                .andExpect(status().isOk());
+
+        verify(moderationService).moderar(userId, ModerationAction.CONCILIAR_CPF);
     }
 
     private static MetricsDto metricsFake() {

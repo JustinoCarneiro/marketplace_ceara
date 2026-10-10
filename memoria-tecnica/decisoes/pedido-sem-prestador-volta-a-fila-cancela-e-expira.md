@@ -82,9 +82,10 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   snapshot do início do comando — a proposta nova que commitou durante a espera não era vista e o pedido voltava a `PENDENTE` com uma proposta `ATIVA`
   escondida (`accept()` exige `PROPOSTO`: o cliente não conseguia aceitá-la). Provado em Postgres real (`PENDENTE` em vez de `PROPOSTO`). Conserto: um comando
   à parte, `travarPedidosPropostosDoPrestador` (`SELECT ... FOR NO KEY UPDATE`, em ordem de id), roda ANTES do `UPDATE`; o `UPDATE` vira um comando novo, com
-  snapshot novo, e enxerga o que commitou. (O `UPDATE` de `cancelarSemAndamento` da expiração tem o mesmo desenho, mas o pior caso é um estado CONSISTENTE —
-  pedido `CANCELADO` e a proposta de última hora `ENCERRADA` por `idsCanceladosEm` — num evento de fronteira de 15 dias; no caso `PENDENTE→PROPOSTO` o
-  `create()` atualiza a linha e o `WHERE` é reavaliado. Não alterado.)
+  snapshot novo, e enxerga o que commitou. (O `UPDATE` de `cancelarSemAndamento` da expiração tem o MESMO desenho e eu o havia deixado como "estado consistente, não alterado" — o passo 41 só SIMULAVA
+  a corrida, chamando o `UPDATE` com ids escolhidos. A corrida real, com uma proposta nova em voo, foi provada depois (E2E 74, vermelho: o pedido terminou `CANCELADO` por cima
+  da proposta que acabava de chegar, que ainda era encerrada junto). Corrigido com o mesmo conserto: `travarPedidos(lote)` (`FOR NO KEY UPDATE`, em ordem de id — a
+  consulta dos candidatos passou a ter `ORDER BY s.id`, a mesma ordem da exclusão de conta) num comando à parte antes do `UPDATE`.)
   **Fora do escopo, por decisão de foco:** `accept()` também muda o status do pedido (`PROPOSTO → ACEITO`) e fecha as
   outras propostas ativas, sem adquirir a mesma trava — um `create()` correndo bem no meio de um `accept()` não foi
   endereçado aqui (não é o achado do Codex, é um risco adjacente, de menor probabilidade: a janela é bem mais estreita

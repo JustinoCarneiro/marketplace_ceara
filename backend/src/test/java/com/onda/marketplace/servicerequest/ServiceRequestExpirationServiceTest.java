@@ -78,6 +78,23 @@ class ServiceRequestExpirationServiceTest {
     }
 
     @Test
+    void travaOsPedidosDoLoteNumComandoAParte_antesDoUpdate_eDepoisEncerraAsPropostas() {
+        // Rodada 3 (E2E 74): o NOT EXISTS do UPDATE em lote usa o snapshot do início do comando, e quem espera uma linha só TRAVADA não reavalia o
+        // WHERE. Travar as linhas antes, num comando à parte, faz o UPDATE seguinte ser um comando novo, com snapshot novo.
+        List<UUID> ids = List.of(UUID.randomUUID(), UUID.randomUUID());
+        when(requestRepository.idsSemAndamentoDesde(any(), any())).thenReturn(ids);
+        when(requestRepository.idsCanceladosEm(ids, AGORA)).thenReturn(ids);
+
+        service().expirar(AGORA);
+
+        var ordem = org.mockito.Mockito.inOrder(requestRepository, proposalRepository);
+        ordem.verify(requestRepository).travarPedidos(ids);
+        ordem.verify(requestRepository).cancelarSemAndamento(eq(ids), any(), eq(AGORA));
+        ordem.verify(requestRepository).idsCanceladosEm(ids, AGORA);
+        ordem.verify(proposalRepository).encerrarAtivasDosPedidos(ids);
+    }
+
+    @Test
     void contaSohOQueFoiDeFatoCancelado_eSoEncerraAsPropostasDessesMesmos() {
         // Achado da revisão cruzada (2026-10-05): uma proposta nova chegou a tempo (entre a consulta e o UPDATE)
         // pra UM dos três candidatos — ele não é cancelado (o UPDATE guardado não o afeta) e a proposta dele não

@@ -121,6 +121,7 @@ function ProviderDetail({ id }: { id: string | undefined }) {
                 style={S.textarea}
                 placeholder="O que foi verificado e por que esta é a conta verdadeira (obrigatório, fica no log de auditoria)"
                 value={justificativaCpf}
+                maxLength={500}
                 onChange={e => setJustificativaCpf(e.target.value)}
               />
               <button
@@ -150,6 +151,7 @@ function ProviderDetail({ id }: { id: string | undefined }) {
                     style={S.textarea}
                     placeholder="Justificativa da suspensão (opcional, fica no log de auditoria)"
                     value={justificativa}
+                    maxLength={500}
                     onChange={e => setJustificativa(e.target.value)}
                   />
                   <button style={{ ...S.btn, background: '#C0392B' }} onClick={() => moderate('SUSPENDER')} disabled={submitting}>Confirmar suspensão</button>

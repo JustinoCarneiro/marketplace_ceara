@@ -64,6 +64,14 @@ passou a ter chave própria e versionada: [[chave-do-hash-do-cpf]].
   o resultado mais próximo, o filtro o removia e não trazia o 2º. Corrigido excluindo na própria consulta nativa
   (`WHERE pp.user_id <> :quemBusca`), antes do `LIMIT`. Prova no E2E, passo 55.
 
+## 3ª rodada (2026-10-10) — o backfill de subida e a justificativa do painel
+- **O backfill lia a conta SEM trava e a regravava inteira (E2E 75, vermelho):** uma exclusão de conta que commitasse entre a leitura e o `save` era desfeita — e-mail,
+  nome e `excluido_em` voltavam ao valor antigo — e a conta excluída ainda ganhava um hash de CPF. Agora `vincular` lê com `findByIdComTrava` como primeira leitura, ignora
+  conta excluída, e `marcarCpfNaoConciliado` roda na mesma ordem do `ModerationService` (conta travada primeiro, perfil depois). Só roda na subida, mas a subida de uma instância
+  nova pode coincidir com tráfego da antiga num deploy em rolagem.
+- **A `justificativa` do `moderate` tinha tamanho ilimitado** e ia inteira para o log de auditoria (TEXT) e para a página de Auditoria: agora `@Size(max = 500)` no backend e
+  `maxLength` nos dois campos da tela (o teste do backend cai sem a anotação).
+
 ## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
 - **A marca `cpf_conciliado = false` era permanente e não tirava o perfil da busca.** O guard barrava proposta e aceite, mas o prestador
   duplicado continuava aparecendo para o cliente como VERIFICADO — e o cliente caía num `PROVIDER_NOT_VERIFIED` sem entender —, e só um

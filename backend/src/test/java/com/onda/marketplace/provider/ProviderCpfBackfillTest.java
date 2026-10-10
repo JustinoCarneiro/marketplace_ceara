@@ -90,7 +90,7 @@ class ProviderCpfBackfillTest {
     void vinculaOHashDoCpfDecifrado_comAChaveEAVersaoAtuais_ofHashDosDigitos_comOuSemMascara() {
         User u = usuario();
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
-        when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(false);
 
         var r = backfill.preencher();
@@ -102,12 +102,29 @@ class ProviderCpfBackfillTest {
     }
 
     @Test
+    void contaExcluidaEmVoo_naoGanhaHashDeCpf_eNaoEhRegravada() {
+        // Rodada 3 (E2E 75): a conta foi lida SEM trava e regravada inteira — uma exclusão que commitasse no meio era desfeita e a conta excluída
+        // ainda ganhava um hash. Agora a trava vem primeiro; quem espera lê a conta já anonimizada e a ignora.
+        User u = usuario();
+        u.anonimizar("removido-1@excluido.invalid", "$2a$x", false);
+        when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
+
+        var r = backfill.preencher();
+
+        assertThat(r.vinculados()).isZero();
+        assertThat(u.getCpfHash()).isNull();
+        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).findById(any());   // a leitura sem trava não existe mais neste caminho
+    }
+
+    @Test
     void hashDeChaveAntiga_eRegravadoComAChaveAtual_eNaoContaComoDuplicataDeSiMesmo() {
         // rotação do HMAC: o prestador se refaz sozinho (decifra o CPF). A consulta de duplicata ignora a PRÓPRIA conta —
         // o hash antigo dela bateria com a chave anterior e seria lido como "outra conta com este CPF".
         User u = usuarioComHashAntigo("11144477735");
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
-        when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(false);
 
         var r = backfill.preencher();
@@ -125,7 +142,7 @@ class ProviderCpfBackfillTest {
         var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
         perfil.aprovar();   // VERIFICADO: é exatamente o caso que self-hire não enxergava (achado 2026-10-05)
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
-        when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(true);
         when(profileRepository.findByUserId(u.getId())).thenReturn(Optional.of(perfil));
 
@@ -149,7 +166,7 @@ class ProviderCpfBackfillTest {
         UUID ruim = UUID.randomUUID();
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(
                 sem(ruim, "seed-cpf-cifrado-placeholder"), sem(bom.getId(), cifra.encrypt("529.982.247-25"))));
-        when(userRepository.findById(bom.getId())).thenReturn(Optional.of(bom));
+        when(userRepository.findByIdComTrava(bom.getId())).thenReturn(Optional.of(bom));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(bom.getId()))).thenReturn(false);
 
         var r = backfill.preencher();
@@ -165,7 +182,7 @@ class ProviderCpfBackfillTest {
         var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
         perfil.aprovar();
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
-        when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
         when(userRepository.existsByCpfHashInAndIdNot(any(), eq(u.getId()))).thenReturn(false);
         when(userRepository.save(any())).thenThrow(new DataIntegrityViolationException("uk_users_cpf_hash"));
         when(profileRepository.findByUserId(u.getId())).thenReturn(Optional.of(perfil));
@@ -182,7 +199,7 @@ class ProviderCpfBackfillTest {
         User u = usuario();
         u.vincularCpf("hash-ja-gravado", 2);
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
-        when(userRepository.findById(u.getId())).thenReturn(Optional.of(u));
+        when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
 
         var r = backfill.preencher();
 
