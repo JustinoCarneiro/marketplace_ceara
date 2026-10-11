@@ -3263,4 +3263,39 @@ class E2EFluxoPrincipalTest {
         assertThat(linha.get("excluido_em"), notNullValue());
         assertThat("nenhum hash de CPF foi gravado numa conta excluída", linha.get("cpf_hash"), nullValue());
     }
+
+    @Test @Order(76)
+    @DisplayName("76 · Pedido de código de senha NÃO espera a trava da conta que redefinir/exclusão seguram (sem ciclo de deadlock usuário↔códigos)")
+    void pedidoDeCodigo_naoEsperaATravaDaConta() throws Exception {
+        // Revisão cruzada do Codex (2026-10-11) apontou um ciclo: redefinir/exclusão travam o USUÁRIO e depois pedem os códigos; solicitar
+        // trava os CÓDIGOS (UPDATE) e, ao inserir o novo, a FK pede lock no USUÁRIO. Medido: o ciclo não existe porque a trava de conta que o
+        // Hibernate emite é `for no key update` (413 leituras num E2E completo, nenhuma `for update`), e o lock da FK (`for key share`) NÃO
+        // conflita com ela. A segurança depende exatamente disso — se a trava virar `for update` (outro dialeto, outra versão do Hibernate,
+        // um `LockModeType` diferente), o pedido de código passa a esperar e os dois lados se travam em ciclo. Este passo fixa a propriedade.
+        var vera = cadastrarCliente("Vera Trava", "vera.trava@onda.test");
+        // um código ativo: o UPDATE dos códigos do pedido seguinte precisa de uma linha para travar (é isso que forma a metade do ciclo)
+        pedirCodigo(vera.email());
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "redefinir/exclusão em voo": segura a trava da conta (a MESMA consulta delas) até o fim do teste
+        var segurando = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            userRepository.findByEmailComTrava(vera.email()).orElseThrow();
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "deveria ter a trava da conta");
+
+        // com a trava segurada: um novo pedido de código tem de completar sem esperar (se esperasse, estouraria o TimeoutException)
+        var pedido = pool.submit(() -> pedirCodigo(vera.email()));
+        try {
+            pedido.get(8, java.util.concurrent.TimeUnit.SECONDS);
+        } finally {
+            liberar.countDown();
+            segurando.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            pool.shutdown();
+        }
+        assertThat("os dois pedidos de código foram gravados", contar("SELECT count(*) FROM password_reset_codes WHERE user_id = ?::uuid", vera.id().toString()), equalTo(2));
+    }
 }
