@@ -89,7 +89,12 @@ public class PaymentService {
      * chega depois) — nesse instante `cancel()` não encontra transação RETIDA (ela ainda nem existe) e não cria
      * reembolso nenhum. Sem esta checagem, o dinheiro ficaria retido para sempre num pedido já CANCELADO. Este é
      * o evento confirmado que dirige o estado financeiro (princípio do CLAUDE.md), então é AQUI que a
-     * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
+     * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e enfileira o reembolso.
+     *
+     * <p>Revisão cruzada de 2026-10-11 (Codex): a transação fica RETIDO, como em {@code cancel()} — só vira REEMBOLSADO quando o
+     * {@code OutboxProcessor} conclui o reembolso no gateway. Gravar REEMBOLSADO aqui declarava devolvido um dinheiro que ainda
+     * não saiu: se o evento caísse em FALHA o estado mentia, e a exclusão de conta (que só enxerga "pedido CANCELADO + transação
+     * RETIDO" como reembolso pendente) deixava a conta ser apagada com o reembolso ainda por fazer.
      *
      * <p>2ª rodada (auto-revisão, 2026-10-09), duas correções na própria reconciliação:
      * <ul>
@@ -117,7 +122,6 @@ public class PaymentService {
             }
             tx.reter();
             if (sr != null && sr.getStatus() == ServiceRequestStatus.CANCELADO) {
-                tx.reembolsar();
                 outboxRepository.save(outboxEventReembolso(tx));
             }
             transactionRepository.save(tx);

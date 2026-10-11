@@ -264,10 +264,14 @@ class PaymentServiceTest {
     }
 
     @Test
-    void confirmPayment_pedidoJaCancelado_retemEDevolveNaMesmaHora() {
+    void confirmPayment_pedidoJaCancelado_retemEEnfileiraOReembolso_masSoViraReembolsadoQuandoOGatewayDevolver() {
         // Achado da revisão cruzada (2026-10-05): cancel() pode ter cancelado o pedido enquanto o pagamento já
         // estava a caminho (cobrança enfileirada antes do cancelamento). Sem isto, o dinheiro ficaria retido pra
         // sempre: cancel() não encontrou transação RETIDA na hora (ela ainda nem existia) e não criou reembolso.
+        // Revisão cruzada de 2026-10-11 (Codex): a transação NÃO pode ser gravada REEMBOLSADO aqui — o gateway ainda não
+        // devolveu nada. Fica RETIDO (como em cancel()) até o OutboxProcessor concluir o reembolso; se o evento cair em
+        // FALHA o estado continua dizendo a verdade ("retido, reembolso pendente"), que é também o que a exclusão de
+        // conta consulta (clienteTemReembolsoPendente = pedido CANCELADO + transação RETIDO).
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-cancelado");
         pedidoTravado("gw-cancelado", srId, ServiceRequestStatus.CANCELADO);
@@ -276,7 +280,7 @@ class PaymentServiceTest {
 
         service.confirmPayment("gw-cancelado", "PAGO");
 
-        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.REEMBOLSADO);
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
         ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
         verify(outboxRepository).save(captor.capture());
         assertThat(captor.getValue().getTipoEvento()).isEqualTo("PAYMENT_REFUNDED");
@@ -284,7 +288,7 @@ class PaymentServiceTest {
 
     @Test
     void confirmPayment_reentregaDoWebhookDepoisDaReconciliacao_eNoOp_naoEstouraNemReembolsaDeNovo() {
-        // 2ª rodada: a reconciliação deixa a transação REEMBOLSADA. O gateway reentrega o MESMO "PAGO" (é normal): reter()
+        // 2ª rodada: depois que o outbox conclui o reembolso a transação está REEMBOLSADA. O gateway reentrega o MESMO "PAGO" (é normal): reter()
         // só era no-op para RETIDO, então a reentrega estourava INVALID_PAYMENT_TRANSITION (422 ao gateway, que reentrega
         // para sempre). Agora confirmação de transação que já não está PENDENTE é no-op.
         var srId = UUID.randomUUID();
