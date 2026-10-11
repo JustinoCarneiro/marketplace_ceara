@@ -59,6 +59,22 @@ public class PaymentService {
     @Transactional
     public TransactionDto initiate(UUID serviceRequestId, InitiatePaymentRequest req,
                                    String idempotencyKey, UUID clienteId) {
+        // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
+        // conferia: um hit de idempotência devolvia a transação (valores + status) sem
+        // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
+        Optional<ServiceRequest> doCliente = requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId);
+
+        // Reenvio de uma requisição já atendida devolve o mesmo resultado (idempotência) — antes do portão de identidade, que
+        // vale só para CRIAR cobrança nova. Depois de uma rotação do HMAC, o retry de um cliente na versão antiga da chave
+        // recebia IDENTITY_REQUIRED em vez da transação que já existia (revisão cruzada de 2026-10-11).
+        if (doCliente.isPresent()) {
+            Optional<Transaction> existente = transactionRepository
+                    .findByServiceRequestIdAndIdempotencyKey(serviceRequestId, idempotencyKey);
+            if (existente.isPresent()) {
+                return TransactionDto.from(existente.get());
+            }
+        }
+
         userRepository.findById(clienteId).ifPresent(user -> {
             // Sem CPF confirmado, ou com o hash numa versão de chave anterior à atual (rotação do HMAC): o cliente confirma de
             // novo — é o único jeito de regravar com a chave atual, porque só ele sabe o CPF em claro.
@@ -68,16 +84,9 @@ public class PaymentService {
             }
         });
 
-        // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
-        // conferia: um hit de idempotência devolvia a transação (valores + status) sem
-        // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
-        requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId)
-                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+        doCliente.orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
-        return transactionRepository
-                .findByServiceRequestIdAndIdempotencyKey(serviceRequestId, idempotencyKey)
-                .map(TransactionDto::from)
-                .orElseGet(() -> criar(serviceRequestId, req, idempotencyKey, clienteId));
+        return criar(serviceRequestId, req, idempotencyKey, clienteId);
     }
 
     /**

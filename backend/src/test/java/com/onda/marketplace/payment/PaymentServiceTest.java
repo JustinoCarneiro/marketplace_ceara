@@ -182,7 +182,7 @@ class PaymentServiceTest {
 
     @Test
     void initiate_idempotente_retornaExistente() {
-        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        // (o cliente nem é consultado num hit de idempotência: o portão de identidade vale só para criar cobrança nova)
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         var existing = new Transaction(sr.getId(), BigDecimal.valueOf(250),
@@ -192,6 +192,48 @@ class PaymentServiceTest {
 
         service.initiate(sr.getId(), new InitiatePaymentRequest("PIX"), "idem-dup", CLIENTE_ID);
 
+        verify(transactionRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void initiate_retryIdempotenteDeClienteComHashDeChaveAntiga_devolveATransacaoJaCriada() {
+        // Revisão cruzada de 2026-10-11 (Codex): o portão de identidade rodava ANTES da busca por idempotência, então depois
+        // de uma rotação do HMAC um retry com a MESMA chave (cobrança já criada e só repetida pelo cliente) recebia
+        // IDENTITY_REQUIRED em vez da transação. Reenviar uma requisição já atendida tem de devolver o mesmo resultado; o portão
+        // vale só para CRIAR cobrança nova. A posse continua conferida antes de devolver qualquer coisa.
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        u.vincularCpf("hash-da-chave-antiga", cpfHashService.versaoAtual() - 1);
+        // lenient: o cliente com hash antigo é a CONDIÇÃO do teste (com o portão antes da idempotência ele barrava o retry),
+        // mas o código certo nem chega a consultá-lo num hit
+        lenient().when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        var existing = new Transaction(sr.getId(), BigDecimal.valueOf(250),
+                BigDecimal.valueOf(37.5), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-rot-retry");
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(sr.getId(), "idem-rot-retry"))
+                .thenReturn(Optional.of(existing));
+
+        var dto = service.initiate(sr.getId(), new InitiatePaymentRequest("PIX"), "idem-rot-retry", CLIENTE_ID);
+
+        assertThat(dto).isNotNull();
+        verify(transactionRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void initiate_hashDeChaveAntiga_comChaveDeIdempotenciaNova_aindaPedeConfirmarDeNovo() {
+        // contraparte do teste acima: o portão continua barrando a CRIAÇÃO de cobrança nova (pedido do próprio cliente, sem hit)
+        User u = User.builder().nome("Cliente").email("c@test.com").senhaHash("$2a$x").role(UserRole.ROLE_CLIENT).build();
+        u.vincularCpf("hash-da-chave-antiga", cpfHashService.versaoAtual() - 1);
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.initiate(sr.getId(), new InitiatePaymentRequest("PIX"), "idem-rot-nova", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "IDENTITY_REQUIRED");
         verify(transactionRepository, never()).save(any());
         verify(outboxRepository, never()).save(any());
     }

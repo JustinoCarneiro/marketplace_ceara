@@ -32,7 +32,10 @@ Mexe em segredo de produção e em PII: classe **R2**.
   - **prestador:** o CPF existe cifrado, então `ProviderCpfBackfill` (na subida) decifra e regrava o hash com a chave atual;
   - **cliente:** só ele sabe o CPF em claro. No **1º pagamento depois da troca** o app pede a confirmação de identidade de
     novo (`IDENTITY_REQUIRED` também quando o hash está numa versão anterior); a mesma confirmação regrava o hash com a chave
-    atual. CPF diferente do já confirmado é recusado (`CPF_MISMATCH`).
+    atual. CPF diferente do já confirmado é recusado (`CPF_MISMATCH`). O portão vale só para **criar** cobrança nova: o retry
+    idempotente (mesma chave, pedido do próprio cliente) devolve a transação já criada mesmo com o hash na versão antiga —
+    antes recebia `IDENTITY_REQUIRED` (revisão cruzada do Codex, 2026-10-11, provado por `PaymentServiceTest`). A cobrança já
+    enfileirada antes da rotação segue para o gateway: o portão é de criação, não de despacho.
 - **`CpfHashKeyCheck`** (na subida, antes do backfill): **recusa subir** se houver conta com hash de uma versão que a
   configuração não sabe mais calcular. Esquecer `CPF_HASH_KEY_PREVIOUS` na 1ª subida não dá erro nenhum — a unicidade deixa de
   enxergar essas contas e quem já confirmou o CPF fica sem conseguir confirmar de novo. Num deploy em rolagem a versão anterior
