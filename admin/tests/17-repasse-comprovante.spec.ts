@@ -4,9 +4,6 @@ import { loginAdmin } from './helpers/auth';
 test('confirmação de repasse exige referência e a envia ao backend', async ({ page }) => {
   const txId = '99999999-9999-4999-8999-999999999999';
   let enviado: unknown;
-  await page.route('**/api/v1/auth/login', route => route.fulfill({
-    json: { accessToken: 'teste', role: 'ROLE_ADMIN' },
-  }));
   await loginAdmin(page);
   await page.route('**/api/v1/admin/transactions?status=*', route =>
     route.fulfill({ json: [] }));

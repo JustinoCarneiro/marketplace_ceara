@@ -14,8 +14,8 @@ const PRESTADOR = {
   email: `pedro-pix-${ts}@onda.dev`, senha: 'senha1234', categoria: 'Elétrica',
 };
 
-// Mesmo CPF fictício do PixKeyTest: dígitos verificadores corretos / com o último errado.
-const CHAVE_CPF_VALIDA = '111.444.777-35';
+// A chave CPF válida precisa pertencer ao próprio prestador.
+const CHAVE_CPF_VALIDA = PRESTADOR.cpf;
 const CHAVE_CPF_DV_ERRADO = '111.444.777-36';
 // Erro clássico de quem digita o celular: sem o +55 a chave não vale (e 11 dígitos soltos
 // são lidos como CPF, cujo dígito verificador não bate).
@@ -53,6 +53,11 @@ test('chave vazia ou malformada é recusada — com a mensagem do backend — e 
     await expect(page.getByText('Chave Pix salva.')).toHaveCount(0);
     await expect(page.getByText('Você já tem uma chave Pix cadastrada.')).toHaveCount(0);
   }
+
+  await page.getByTestId('input-chave-pix').fill(fakeCpf(ts + 1));
+  await page.getByTestId('btn-salvar-chave-pix').click();
+  await expect(page.getByText('A chave Pix CPF deve ser o CPF desta conta.')).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText('Você já tem uma chave Pix cadastrada.')).toHaveCount(0);
 });
 
 test('chave válida é salva e a tela nunca mostra a chave de volta', async ({ page }) => {
@@ -70,7 +75,7 @@ test('chave válida é salva e a tela nunca mostra a chave de volta', async ({ p
   // não aparece em lugar nenhum da tela.
   await expect(page.getByTestId('input-chave-pix')).toHaveValue('');
   await expect(page.getByText(CHAVE_CPF_VALIDA)).toHaveCount(0);
-  await expect(page.getByText('11144477735')).toHaveCount(0);
+  await expect(page.getByText(CHAVE_CPF_VALIDA.replace(/\D/g, ''))).toHaveCount(0);
 });
 
 test('a chave continua cadastrada em outra sessão e pode ser substituída', async ({ page }) => {
