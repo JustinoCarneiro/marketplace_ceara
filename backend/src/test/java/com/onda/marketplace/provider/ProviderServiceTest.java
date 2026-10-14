@@ -56,7 +56,7 @@ class ProviderServiceTest {
         var authService = new AuthService(userRepository, refreshTokenRepository, jwtService, encoder,
                 cpfHashService, termsAcceptanceRepository, passwordAuthenticator, 30L);
         providerService = new ProviderService(userRepository, profileRepository, authService, encoder, encryptor,
-                backgroundCheckService, termsAcceptanceRepository);
+                backgroundCheckService, termsAcceptanceRepository, cpfHashService);
     }
 
     private void cadastroPossivel() {
@@ -345,7 +345,10 @@ class ProviderServiceTest {
     void atualizarChavePix_guardaAChaveNormalizada_noMesmoFormatoQueORepasseVaiUsar() {
         var userId = java.util.UUID.randomUUID();
         var perfil = new ProviderProfile(null, "ELETRICISTA", "cpf-cifrado");
-        donoVivo(userId);
+        var dono = User.builder().nome("Prestador").email("p@pix.test").senhaHash("$2a$x")
+                .role(UserRole.ROLE_PROVIDER).build();
+        dono.vincularCpf(cpfHashService.hash("11144477735"), cpfHashService.versaoAtual());
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(dono));
         when(profileRepository.findByUserId(userId)).thenReturn(java.util.Optional.of(perfil));
         when(profileRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -353,6 +356,53 @@ class ProviderServiceTest {
 
         var decifrador = new CpfEncryptor("01234567890123456789012345678901");
         assertThat(decifrador.decrypt(perfil.getChavePixCifrada())).isEqualTo("11144477735");
+    }
+
+    @Test
+    void atualizarChavePix_cpfDeOutraPessoa_recusaSemSalvar() {
+        UUID userId = UUID.randomUUID();
+        var dono = User.builder().nome("Prestador").email("p@pix.test").senhaHash("$2a$x")
+                .role(UserRole.ROLE_PROVIDER).build();
+        dono.vincularCpf(cpfHashService.hash("11144477735"), cpfHashService.versaoAtual());
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(dono));
+        when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(new ProviderProfile(null, "EL", "cpf")));
+
+        assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "529.982.247-25"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PIX_CPF_MISMATCH");
+        verify(profileRepository, never()).save(any());
+    }
+
+    @Test
+    void atualizarChavePix_cpfDaVersaoAnterior_daPropriaConta_ehAceito() {
+        UUID userId = UUID.randomUUID();
+        var dono = User.builder().nome("Prestador").email("p@pix.test").senhaHash("$2a$x")
+                .role(UserRole.ROLE_PROVIDER).build();
+        dono.vincularCpf(cpfHashService.hash("11144477735"), 2);
+        var perfil = new ProviderProfile(null, "EL", "cpf");
+        when(userRepository.findByIdComTrava(userId)).thenReturn(Optional.of(dono));
+        when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
+        CpfHashService rotacionado = new CpfHashService("nova-chave-hmac-cpf-0123456789-0123456789", 3, CHAVE_HASH);
+        var encryptor = new CpfEncryptor("01234567890123456789012345678901");
+        var serviceComRotacao = new ProviderService(userRepository, profileRepository, null, null, encryptor,
+                null, null, rotacionado);
+
+        serviceComRotacao.atualizarChavePix(userId, "111.444.777-35");
+
+        assertThat(encryptor.decrypt(perfil.getChavePixCifrada())).isEqualTo("11144477735");
+        verify(profileRepository).save(perfil);
+    }
+
+    @Test
+    void atualizarChavePix_cpfSemHashConciliado_recusa() {
+        UUID userId = UUID.randomUUID();
+        donoVivo(userId);
+        when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(new ProviderProfile(null, "EL", "cpf")));
+
+        assertThatThrownBy(() -> providerService.atualizarChavePix(userId, "111.444.777-35"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PIX_CPF_MISMATCH");
+        verify(profileRepository, never()).save(any());
     }
 
     @Test

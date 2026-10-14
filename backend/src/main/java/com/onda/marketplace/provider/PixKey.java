@@ -17,8 +17,8 @@ import java.util.regex.Pattern;
  * e chave aleatória (UUID). Telefone só é aceito com "+55": 11 dígitos sem prefixo são
  * ambíguos com CPF, e é exatamente por isso que o DICT exige o prefixo.
  *
- * <p>Não prova titularidade — só que a chave é bem formada. Titularidade depende de consulta
- * ao DICT (a confirmar com o Mercado Pago).
+ * <p>Este tipo valida o formato. {@code ProviderService} também confere a chave CPF com o
+ * hash da conta; a titularidade dos outros tipos depende de consulta ao DICT.
  */
 public record PixKey(Tipo tipo, String valor) {
 
