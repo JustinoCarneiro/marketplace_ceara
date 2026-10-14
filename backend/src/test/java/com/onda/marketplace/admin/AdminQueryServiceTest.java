@@ -1,5 +1,6 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.payment.OutboxEvent;
@@ -47,6 +48,7 @@ class AdminQueryServiceTest {
     @Mock UserRepository            userRepository;
     @Mock com.onda.marketplace.provider.ProviderProfileRepository providerProfileRepository;
     @Mock com.onda.marketplace.provider.CpfEncryptor cpfEncryptor;
+    @Mock AuditService auditService;
 
     AdminQueryService service;
 
@@ -58,7 +60,7 @@ class AdminQueryServiceTest {
         service = new AdminQueryService(
                 srRepository, transactionRepository, outboxRepository, resolutionRepository,
                 proposalRepository, mediaRepository, userRepository,
-                providerProfileRepository, cpfEncryptor);
+                providerProfileRepository, cpfEncryptor, auditService);
     }
 
     // --- findDisputas ---
@@ -246,19 +248,41 @@ class AdminQueryServiceTest {
     @Test
     void confirmarRepasseManual_liberaATransacao_eFechaOEventoFalho() {
         Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        UUID adminId = UUID.randomUUID();
         var eventoFalho = new OutboxEvent("transaction", TX_ID, "PAYMENT_RELEASED", "{}");
         eventoFalho.marcarFalha();
 
-        when(transactionRepository.findById(TX_ID)).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
         when(outboxRepository.findByAgregadoIdAndTipoEvento(TX_ID, "PAYMENT_RELEASED"))
                 .thenReturn(List.of(eventoFalho));
 
-        service.confirmarRepasseManual(TX_ID);
+        service.confirmarRepasseManual(TX_ID, adminId, "E2E-12345");
 
         assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.LIBERADO);
         assertThat(eventoFalho.getStatus()).isEqualTo(OutboxStatus.PROCESSADO);
         verify(transactionRepository).save(tx);
         verify(outboxRepository).save(eventoFalho);
+        verify(auditService).registrar(adminId, "CONFIRMAR_REPASSE_MANUAL", "transaction", TX_ID,
+                "comprovante=E2E-12345");
+    }
+
+    @Test
+    void confirmarRepasseManual_repetido_naoDuplicaAuditoria() {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        tx.liberar();
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+
+        service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), "E2E-12345");
+
+        verifyNoInteractions(auditService, outboxRepository);
+    }
+
+    @Test
+    void confirmarRepasseManual_semReferencia_naoConsultaNemAlteraTransacao() {
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), " "))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYOUT_RECEIPT_REQUIRED");
+        verifyNoInteractions(transactionRepository, outboxRepository, auditService);
     }
 
     // helpers

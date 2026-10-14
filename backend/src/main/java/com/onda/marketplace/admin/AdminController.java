@@ -214,9 +214,10 @@ public class AdminController {
     }
 
     @PostMapping("/transactions/{transactionId}/confirmar-repasse-manual")
-    public ResponseEntity<Void> confirmarRepasseManual(@PathVariable UUID transactionId, Authentication auth) {
-        adminQueryService.confirmarRepasseManual(transactionId);
-        auditService.registrar(adminId(auth), "CONFIRMAR_REPASSE_MANUAL", "transaction", transactionId, null);
+    public ResponseEntity<Void> confirmarRepasseManual(@PathVariable UUID transactionId,
+                                                       @Valid @RequestBody ConfirmarRepasseManualRequest request,
+                                                       Authentication auth) {
+        adminQueryService.confirmarRepasseManual(transactionId, adminId(auth), request.comprovanteReferencia());
         return ResponseEntity.ok().build();
     }
 

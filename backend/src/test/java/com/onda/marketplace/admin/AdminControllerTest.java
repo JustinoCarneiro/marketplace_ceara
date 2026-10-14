@@ -269,11 +269,23 @@ class AdminControllerTest {
     void confirmarRepasseManual_retorna200_delegaEAuditora() throws Exception {
         UUID txId = UUID.randomUUID();
 
-        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf()))
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comprovanteReferencia\":\"E2E-12345\"}"))
                 .andExpect(status().isOk());
 
-        verify(adminQueryService).confirmarRepasseManual(txId);
-        verify(auditService).registrar(any(), eq("CONFIRMAR_REPASSE_MANUAL"), eq("transaction"), eq(txId), any());
+        verify(adminQueryService).confirmarRepasseManual(eq(txId), any(), eq("E2E-12345"));
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void confirmarRepasseManual_semReferencia_recusaSemLiberar() throws Exception {
+        UUID txId = UUID.randomUUID();
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comprovanteReferencia\":\" \"}"))
+                .andExpect(status().is4xxClientError());
+        verifyNoInteractions(adminQueryService);
     }
 
     // --- novos endpoints: notificações, usuários e prestadores ---

@@ -1,5 +1,6 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.payment.OutboxEvent;
@@ -44,6 +45,7 @@ public class AdminQueryService {
     private final UserRepository              userRepository;
     private final ProviderProfileRepository   providerProfileRepository;
     private final CpfEncryptor                cpfEncryptor;
+    private final AuditService                auditService;
 
     public AdminQueryService(ServiceRequestRepository srRepository,
                              TransactionRepository transactionRepository,
@@ -53,7 +55,8 @@ public class AdminQueryService {
                              ServiceMediaRepository mediaRepository,
                              UserRepository userRepository,
                              ProviderProfileRepository providerProfileRepository,
-                             CpfEncryptor cpfEncryptor) {
+                             CpfEncryptor cpfEncryptor,
+                             AuditService auditService) {
         this.srRepository         = srRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository     = outboxRepository;
@@ -63,6 +66,7 @@ public class AdminQueryService {
         this.userRepository       = userRepository;
         this.providerProfileRepository = providerProfileRepository;
         this.cpfEncryptor         = cpfEncryptor;
+        this.auditService         = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -196,10 +200,17 @@ public class AdminQueryService {
      * de novo (payout ainda não é automático).
      */
     @Transactional
-    public void confirmarRepasseManual(UUID transactionId) {
-        Transaction tx = transactionRepository.findById(transactionId)
+    public void confirmarRepasseManual(UUID transactionId, UUID adminId, String comprovanteReferencia) {
+        if (comprovanteReferencia == null || comprovanteReferencia.isBlank()) {
+            throw new BusinessException("PAYOUT_RECEIPT_REQUIRED", "Informe a referência do comprovante do repasse.");
+        }
+        Transaction tx = transactionRepository.findByIdComTrava(transactionId)
                 .orElseThrow(() -> new BusinessException(
                         "TRANSACTION_NOT_FOUND", "Transação não encontrada."));
+
+        if (tx.getStatusPagamento() == TransactionStatus.LIBERADO) {
+            return; // repetição da confirmação: não duplica auditoria
+        }
 
         tx.liberar();
         transactionRepository.save(tx);
@@ -211,5 +222,7 @@ public class AdminQueryService {
                     e.marcarProcessado();
                     outboxRepository.save(e);
                 });
+        auditService.registrar(adminId, "CONFIRMAR_REPASSE_MANUAL", "transaction", transactionId,
+                "comprovante=" + comprovanteReferencia);
     }
 }

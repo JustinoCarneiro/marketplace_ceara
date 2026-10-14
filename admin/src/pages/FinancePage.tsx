@@ -43,6 +43,7 @@ export default function FinancePage() {
   const [repasseLoading, setRepasseLoading] = useState(false);
   const [repasseErr, setRepasseErr] = useState('');
   const [confirmando, setConfirmando] = useState(false);
+  const [comprovanteReferencia, setComprovanteReferencia] = useState('');
 
   // 1ª carga sem setState síncrono no efeito (`loading` e `loadError` já nascem true/false);
   // recargas depois de uma ação passam por load().
@@ -86,6 +87,7 @@ export default function FinancePage() {
   // programático pra conta (GatewayService.liberar lança ManualPayoutRequiredException).
   async function abrirRepassePendente(transactionId: string) {
     setRepasseErr('');
+    setComprovanteReferencia('');
     setRepasseLoading(true);
     try {
       setRepasse(await api.get<RepassePendente>(`/admin/transactions/${transactionId}/repasse-pendente`));
@@ -99,11 +101,12 @@ export default function FinancePage() {
   // Só chamar DEPOIS de pagar o prestador de verdade fora do sistema — libera o
   // escrow (Transaction -> LIBERADO) e fecha o evento outbox, sem chamar o gateway de novo.
   async function confirmarRepasseManual() {
-    if (!repasse) return;
+    if (!repasse || !comprovanteReferencia.trim()) return;
     setConfirmando(true);
     setRepasseErr('');
     try {
-      await api.post(`/admin/transactions/${repasse.transactionId}/confirmar-repasse-manual`, {});
+      await api.post(`/admin/transactions/${repasse.transactionId}/confirmar-repasse-manual`,
+        { comprovanteReferencia: comprovanteReferencia.trim() });
       setRepasse(null);
       await load();
     } catch (e: unknown) {
@@ -230,11 +233,18 @@ export default function FinancePage() {
                     {repasse.chavePixCadastrada ? repasse.chavePix : '— não cadastrada pelo prestador —'}
                   </span>
                 </div>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 700 }}>
+                  Referência do comprovante
+                  <input value={comprovanteReferencia} onChange={e => setComprovanteReferencia(e.target.value)}
+                         maxLength={120} pattern="[A-Za-z0-9._:/-]+" required
+                         placeholder="Ex.: E2E-12345"
+                         style={{ height: 40, border: '1px solid var(--line-soft)', borderRadius: 8, padding: '0 12px' }} />
+                </label>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
                   <button onClick={() => setRepasse(null)} style={{ height: 42, padding: '0 16px', border: '1.5px solid var(--line-soft)', borderRadius: 100, background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
-                  <button onClick={confirmarRepasseManual} disabled={confirmando || !repasse.chavePixCadastrada}
+                  <button onClick={confirmarRepasseManual} disabled={confirmando || !repasse.chavePixCadastrada || !/^[A-Za-z0-9._:/-]+$/.test(comprovanteReferencia)}
                           title={!repasse.chavePixCadastrada ? 'Prestador ainda não cadastrou a chave Pix' : ''}
-                          style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: confirmando ? 'default' : 'pointer', opacity: confirmando || !repasse.chavePixCadastrada ? 0.6 : 1 }}>
+                          style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: confirmando ? 'default' : 'pointer', opacity: confirmando || !repasse.chavePixCadastrada || !comprovanteReferencia ? 0.6 : 1 }}>
                     {confirmando ? 'Confirmando…' : 'Já paguei — confirmar'}
                   </button>
                 </div>
