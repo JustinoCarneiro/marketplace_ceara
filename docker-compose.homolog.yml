@@ -64,6 +64,7 @@ services:
       # (a aplicação recusa subir e diz isso). Ligue UMA vez depois de conferir o valor de CPF_HASH_KEY; retire em seguida.
       CPF_HASH_KEY_CONFIRMED: ${CPF_HASH_KEY_CONFIRMED:-false}
       MARKETPLACE_WEBHOOK_SECRET: ${MARKETPLACE_WEBHOOK_SECRET}
+      MARKETPLACE_PAYOUT_OVERDUE_DAYS: ${MARKETPLACE_PAYOUT_OVERDUE_DAYS:-2}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASS: ${ADMIN_PASS:-admin123}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}

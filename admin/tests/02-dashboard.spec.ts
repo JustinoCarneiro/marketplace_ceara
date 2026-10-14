@@ -1,6 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { loginAdmin } from './helpers/auth';
 
+test('alerta de repasse atrasado aponta para o financeiro', async ({ page }) => {
+  await page.route('**/api/v1/auth/login', route => route.fulfill({
+    json: { accessToken: 'teste', role: 'ROLE_ADMIN' },
+  }));
+  await page.route('**/api/v1/admin/alerts', route => route.fulfill({
+    json: [{ tipo: 'REPASSE_ATRASADO', quantidade: 2 }],
+  }));
+  await loginAdmin(page);
+  await page.getByText('2 repasses atrasados').click();
+  await expect(page).toHaveURL('/finance');
+});
+
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await loginAdmin(page);

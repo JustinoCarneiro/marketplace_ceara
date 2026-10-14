@@ -49,9 +49,9 @@ Nunca foi registrado antes — a linha `(est. retroativa)` abaixo é a estimativ
 
 | Data | Fase (0–5) | Horas | Nota |
 |---|---|---|---|
-| _(primeira entrada real aqui)_ | | | |
+| 2026-10-14 | 4 | 0,2 | Endurecimento do repasse manual: comprovante, chave Pix CPF e alerta de atraso; testes locais e revisão do diff. |
 
-Σ real registrada: **0 h** (começa agora)
+Σ real registrada: **0,2 h**
 Σ **(est. retroativa por proxy de commit)**: **~52 h piso · ~65–75 h central · ~103 h teto** — 111 commits, 28 sessões
 
 ## 4. Log de espera / impedimento (Fase 4)

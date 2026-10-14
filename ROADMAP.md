@@ -342,6 +342,7 @@ PUT  /api/v1/proposals/{id}/accept|reject  (ROLE_CLIENT) 200 ProposalDto
 ```
 
 ### M06 — Pagamento & Escrow  *(módulo crítico)*
+**Endurecimento do repasse manual (2026-10-14):** 🔄 Em andamento — referência de comprovante na auditoria, chave Pix CPF vinculada à conta e alerta de atraso de 2 dias implementados e testados localmente; revisão R2 e integração pendentes.
 ```
 POST /api/v1/payments              (ROLE_CLIENT)   Header: Idempotency-Key (obrigatório)
   req:  { serviceRequestId, metodo:"PIX"|"CARTAO" }
@@ -351,6 +352,14 @@ POST /api/v1/payments              (ROLE_CLIENT)   Header: Idempotency-Key (obri
 POST /api/v1/payments/webhook      (gateway → plataforma)   # idempotente, dirige o estado
 GET  /api/v1/transactions/{serviceRequestId}   200 { statusPagamento, valorTotal, valorComissao }
 GET  /api/v1/payments/comissao     200 { percentualComissao }   # fração (0.10 = 10%); qualquer autenticado
+# Repasse manual: admin paga fora do sistema; confirmação exige referência de comprovante
+# e grava auditoria na mesma transação que RETIDO → LIBERADO.
+POST /api/v1/admin/transactions/{id}/confirmar-repasse-manual (ROLE_ADMIN)
+  req: { comprovanteReferencia: string }  # 1..120 caracteres; identificador, sem dados pessoais
+  200: {}
+# Chave Pix do tipo CPF só é aceita quando confere com o CPF da própria conta.
+# PAYMENT_RELEASED não processado por 2 dias (configurável) aparece em /admin/alerts,
+# contado uma vez por transação; o alerta some quando ela deixa RETIDO.
 POST /api/v1/services/requests/{id}/disputes   req:{ motivo } → 200 { status:"EM_DISPUTA" }
 POST /api/v1/disputes/{id}/resolve (ROLE_ADMIN) req:{ resolucao:"LIBERADO"|"REEMBOLSADO" }
 # Conclusão confirmada → Outbox dispara split → transaction LIBERADO. SEM @Transactional sobre o gateway.
