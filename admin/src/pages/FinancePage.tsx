@@ -237,12 +237,12 @@ export default function FinancePage() {
                   Referência do comprovante
                   <input value={comprovanteReferencia} onChange={e => setComprovanteReferencia(e.target.value)}
                          maxLength={120} pattern="[A-Za-z0-9._:/-]+" required
-                         placeholder="Ex.: E2E-12345"
+                         placeholder="Ex.: E2E-12345 (ID do comprovante, nunca CPF)"
                          style={{ height: 40, border: '1px solid var(--line-soft)', borderRadius: 8, padding: '0 12px' }} />
                 </label>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
                   <button onClick={() => setRepasse(null)} style={{ height: 42, padding: '0 16px', border: '1.5px solid var(--line-soft)', borderRadius: 100, background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fechar</button>
-                  <button onClick={confirmarRepasseManual} disabled={confirmando || !repasse.chavePixCadastrada || !/^[A-Za-z0-9._:/-]+$/.test(comprovanteReferencia)}
+                  <button onClick={confirmarRepasseManual} disabled={confirmando || !repasse.chavePixCadastrada || !/^[A-Za-z0-9._:/-]+$/.test(comprovanteReferencia.trim())}
                           title={!repasse.chavePixCadastrada ? 'Prestador ainda não cadastrou a chave Pix' : ''}
                           style={{ height: 42, padding: '0 18px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: confirmando ? 'default' : 'pointer', opacity: confirmando || !repasse.chavePixCadastrada || !comprovanteReferencia ? 0.6 : 1 }}>
                     {confirmando ? 'Confirmando…' : 'Já paguei — confirmar'}

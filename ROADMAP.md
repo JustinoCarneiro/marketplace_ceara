@@ -342,7 +342,7 @@ PUT  /api/v1/proposals/{id}/accept|reject  (ROLE_CLIENT) 200 ProposalDto
 ```
 
 ### M06 — Pagamento & Escrow  *(módulo crítico)*
-**Endurecimento do repasse manual (2026-10-14):** 🔄 Em andamento — referência de comprovante na auditoria, chave Pix CPF vinculada à conta e alerta de atraso de 2 dias implementados e testados localmente; revisão R2 e integração pendentes.
+**Endurecimento do repasse manual (2026-10-14):** ✅ Implementado (Codex, PR #35), revisado e mergeado; implantado na demo em 2026-10-14 (`580c317`). Referência de comprovante na auditoria, chave Pix CPF vinculada à conta e alerta de atraso de 2 dias. Complemento da revisão cruzada (Claude): a referência não pode ser um CPF válido nem um UUID (`PAYOUT_RECEIPT_INVALID`) e o repasse só vale para pedido `CONCLUIDO` (`PAYOUT_NOT_DUE`).
 ```
 POST /api/v1/payments              (ROLE_CLIENT)   Header: Idempotency-Key (obrigatório)
   req:  { serviceRequestId, metodo:"PIX"|"CARTAO" }
@@ -355,8 +355,10 @@ GET  /api/v1/payments/comissao     200 { percentualComissao }   # fração (0.10
 # Repasse manual: admin paga fora do sistema; confirmação exige referência de comprovante
 # e grava auditoria na mesma transação que RETIDO → LIBERADO.
 POST /api/v1/admin/transactions/{id}/confirmar-repasse-manual (ROLE_ADMIN)
-  req: { comprovanteReferencia: string }  # 1..120 caracteres; identificador, sem dados pessoais
+  req: { comprovanteReferencia: string }  # 1..120 caracteres [A-Za-z0-9._:/-]; identificador do comprovante — a API recusa CPF válido
+                                         # (com ou sem máscara) e formato UUID (chave Pix aleatória) com 422 PAYOUT_RECEIPT_INVALID
   200: {}
+  422: PAYOUT_NOT_DUE se o pedido da transação não está CONCLUIDO (repasse só de pedido concluído)
 # Chave Pix do tipo CPF só é aceita quando confere com o CPF da própria conta.
 # PAYMENT_RELEASED não processado por 2 dias (configurável) aparece em /admin/alerts,
 # contado uma vez por transação; o alerta some quando ela deixa RETIDO.

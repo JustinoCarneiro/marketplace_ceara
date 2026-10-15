@@ -166,7 +166,8 @@ Como **Prestador**, quero ver que o cliente pagou e o valor está retido, para i
 ### US17 — Liberação / split na conclusão
 Como **Plataforma**, quero liberar o valor com split de comissão ao concluir, para remunerar prestador e plataforma.
 - **Dado** o pedido em `CONCLUIDO`, **quando** o evento de conclusão é confirmado, **então** o split é acionado (comissão 10–25% para a plataforma, restante ao prestador) e a `transaction` vai para `LIBERADO`.
-- **Dado** um repasse manual pendente, **quando** o admin confirma que pagou fora do sistema, **então** informa a referência do comprovante, que fica na auditoria da mesma transação de banco que libera o valor; sem referência a confirmação é recusada.
+- **Dado** um repasse manual pendente, **quando** o admin confirma que pagou fora do sistema, **então** informa a referência do comprovante, que fica na auditoria da mesma transação de banco que libera o valor; sem referência a confirmação é recusada, e a referência não pode ser um CPF nem uma chave Pix aleatória (o comprovante é identificado por código, nunca por dado pessoal).
+- **Dado** uma transação retida cujo pedido não está concluído (em disputa ou em andamento), **quando** o admin tenta confirmar o repasse manual, **então** a confirmação é recusada e nada é liberado nem auditado.
 - **Dado** que o prestador informa uma chave Pix do tipo CPF, **quando** a cadastra, **então** o CPF deve conferir com o hash da própria conta (inclusive a versão anterior da chave); caso contrário, a chave não é salva.
 - **Dado** um evento de liberação ainda não processado há pelo menos 2 dias desde sua criação (prazo configurável), **quando** o admin abre o painel, **então** vê um alerta com a quantidade de repasses atrasados, contada uma vez por transação e sem expor chave Pix ou CPF; o alerta desaparece quando o repasse é confirmado.
 
