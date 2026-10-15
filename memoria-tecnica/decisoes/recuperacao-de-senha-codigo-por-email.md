@@ -62,11 +62,21 @@ normalizado (minúsculas, hífen, O→0, I/L→1).
   domínio, truncado a 32) e o consumo (renovar, trocar de papel, virar prestador — caminho único `consumirRefresh`) recusa o token cuja
   impressão não bate com a senha atual. Não depende de ordem de transações nem de travas: o token que nasce com a senha antiga já nasce inválido.
   `NULL` = sessão anterior à migration, continua valendo (o deploy não desloga ninguém; essas sessões seguem sujeitas à corrida até expirarem, ≤ 30 dias).
+  **Janela de deploy (apontada pelo Codex em 2026-10-11, aceita e documentada):** num deploy em rolagem, um nó antigo que ainda esteja no ar pode emitir, depois da
+  revogação, um token novo com `senha_fp = NULL`; um nó novo o trata como legado e, ao renová-lo, carimba a impressão atual — o token "lavado" sobrevive à troca de
+  senha (e a renovações sucessivas o mantêm). É a mesma corrida de antes da V28, restrita à sobreposição dos dois binários: acabou quando o último nó antigo saiu
+  (V28 implantada na demo em 2026-10-10), e **um rollback do app a reabre**. Não vale código extra: seria preciso distinguir "legado legítimo" de "nascido na corrida".
 - **A troca de senha desfazia suspensão e exclusão (E2E 70):** `redefinir` lia o usuário SEM trava e o regravava inteiro. Uma suspensão ou uma exclusão
   de conta que commitasse entre a leitura e o `save` era desfeita — `ativo` voltava a `true`, e e-mail/nome/`excluido_em` voltavam ao valor antigo (o dado
   pessoal volta e a conta excluída reaparece com a senha nova). Conserto: `findByEmailComTrava` como primeira leitura (a trava só vale como primeira leitura;
-  mesma do login). Quem espera lê a conta já suspensa/excluída e recebe o mesmo "código inválido". Não há inversão de ordem de travas (usuário → códigos,
-  como a exclusão). Provado vermelho antes e verde depois, nos dois cenários.
+  mesma do login). Quem espera lê a conta já suspensa/excluída e recebe o mesmo "código inválido". Provado vermelho antes e verde depois, nos dois cenários.
+- **Por que `redefinir` (usuário → códigos) e `solicitar` (códigos → usuário, pela FK do insert) não formam ciclo de deadlock** (apontado pelo Codex em 2026-10-11 como
+  P2 e REFUTADO por medição): a trava de conta que o Hibernate emite é `for no key update` (413 leituras com trava num E2E completo, nenhuma `for update`) e o lock
+  que a FK pede ao inserir um código (`for key share`) não conflita com ela. Num Postgres descartável, com a interleaving exata (A trava o usuário e lê os códigos;
+  B atualiza os códigos e insere): `for no key update` → B termina em 0,1 s sem deadlock; `for update` (controle) → `deadlock detected`. **A segurança depende dessa
+  propriedade**, então o E2E 76 a fixa: com a trava da conta segurada, um novo pedido de código completa sem esperar (mutação: trocar a trava por `for update` faz o
+  passo estourar `TimeoutException`). Quem mexer na trava (outro dialeto/versão do Hibernate, `LockModeType` diferente) tem de rodar esse passo. A exclusão, que muda
+  o e-mail (coluna única → lock `for update`) só no fim, depois de já ter apagado os códigos, também não fecha ciclo: `solicitar` nunca espera depois de ter o `key share`.
 - **Não coberto:** o access token já emitido segue valendo até expirar (≤ 15 min), como antes — fechar isso exigiria consultar o banco a cada requisição.
 - Prova: unitários (`AuthServiceTest`: emissão grava a impressão, senha trocada recusa sem consumir nem emitir, `switchRole` pelo mesmo caminho) e E2E 69
   (renovação segurada em voo × troca de senha; controle positivo: login com a senha nova renova). Mutação — emitir sem a impressão; consumir sem conferir —
