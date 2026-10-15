@@ -19,6 +19,7 @@ import com.onda.marketplace.servicerequest.ServiceMediaRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
 import com.onda.marketplace.servicerequest.ServiceRequestRepository;
 import com.onda.marketplace.servicerequest.ServiceRequestStatus;
+import com.onda.marketplace.shared.Cpf;
 import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Consultas administrativas de leitura e reprocessamento de outbox (M11), e a fila de
@@ -204,12 +206,26 @@ public class AdminQueryService {
         if (comprovanteReferencia == null || comprovanteReferencia.isBlank()) {
             throw new BusinessException("PAYOUT_RECEIPT_REQUIRED", "Informe a referência do comprovante do repasse.");
         }
+        // A referência vai para a auditoria, que é retida e lida por todo admin: não pode ser dado pessoal (um CPF colado por engano) nem
+        // uma chave Pix aleatória. O padrão da API (letras, dígitos e . _ : / -) não barra os dois; aqui sim (revisão cruzada, 2026-10-14).
+        if (pareceDadoPessoal(comprovanteReferencia)) {
+            throw new BusinessException("PAYOUT_RECEIPT_INVALID",
+                    "A referência deve ser o identificador do comprovante, não um CPF nem uma chave Pix.");
+        }
         Transaction tx = transactionRepository.findByIdComTrava(transactionId)
                 .orElseThrow(() -> new BusinessException(
                         "TRANSACTION_NOT_FOUND", "Transação não encontrada."));
 
         if (tx.getStatusPagamento() == TransactionStatus.LIBERADO) {
             return; // repetição da confirmação: não duplica auditoria
+        }
+
+        // Repasse só de pedido CONCLUIDO: a API liberava qualquer transação RETIDO, e um pedido em disputa ou em andamento teria o escrow dado
+        // como pago (a mediação depois não conseguiria reembolsar). A UI só mostra a fila certa; a regra vale também na API.
+        ServiceRequest pedido = srRepository.findById(tx.getServiceRequestId())
+                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido da transação não encontrado."));
+        if (pedido.getStatus() != ServiceRequestStatus.CONCLUIDO) {
+            throw new BusinessException("PAYOUT_NOT_DUE", "O repasse só pode ser confirmado em pedido concluído.");
         }
 
         tx.liberar();
@@ -224,5 +240,14 @@ public class AdminQueryService {
                 });
         auditService.registrar(adminId, "CONFIRMAR_REPASSE_MANUAL", "transaction", transactionId,
                 "comprovante=" + comprovanteReferencia);
+    }
+
+    private static final Pattern FORMATO_UUID =
+            Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
+    /** CPF (com ou sem máscara, validado pelos dígitos verificadores) ou formato de chave Pix aleatória (UUID). */
+    private static boolean pareceDadoPessoal(String referencia) {
+        String r = referencia.trim();
+        return Cpf.valido(r) || FORMATO_UUID.matcher(r).matches();
     }
 }

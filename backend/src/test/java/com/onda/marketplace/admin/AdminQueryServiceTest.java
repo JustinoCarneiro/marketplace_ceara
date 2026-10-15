@@ -253,6 +253,8 @@ class AdminQueryServiceTest {
         eventoFalho.marcarFalha();
 
         when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+        var pedido = srMock(SR_ID, ServiceRequestStatus.CONCLUIDO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(pedido));
         when(outboxRepository.findByAgregadoIdAndTipoEvento(TX_ID, "PAYMENT_RELEASED"))
                 .thenReturn(List.of(eventoFalho));
 
@@ -283,6 +285,60 @@ class AdminQueryServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "PAYOUT_RECEIPT_REQUIRED");
         verifyNoInteractions(transactionRepository, outboxRepository, auditService);
+    }
+
+    @Test
+    void confirmarRepasseManual_referenciaQueParecaCpf_recusaSemLiberarNemAuditar() {
+        // A referência é o identificador do comprovante, nunca dado pessoal: um CPF colado por engano (com ou sem máscara) iria para a auditoria,
+        // que é retida e lida por todo admin. O padrão da API (letras, dígitos e . _ : / -) NÃO o barra — só a validação dos dígitos verificadores.
+        for (String cpf : List.of("11144477735", "111.444.777-35")) {
+            assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), cpf))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("code", "PAYOUT_RECEIPT_INVALID");
+        }
+        verifyNoInteractions(transactionRepository, outboxRepository, auditService);
+    }
+
+    @Test
+    void confirmarRepasseManual_referenciaQueParecaChavePixAleatoria_recusa() {
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), UUID.randomUUID().toString()))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYOUT_RECEIPT_INVALID");
+        verifyNoInteractions(transactionRepository, outboxRepository, auditService);
+    }
+
+    @Test
+    void confirmarRepasseManual_identificadorDeComprovanteDoPix_ehAceito() {
+        // controle contra o excesso: o formato real do ID de uma transferência Pix (E + ISPB + data/hora + sufixo) passa
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        UUID adminId = UUID.randomUUID();
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+        var pedido = srMock(SR_ID, ServiceRequestStatus.CONCLUIDO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(pedido));
+
+        service.confirmarRepasseManual(TX_ID, adminId, "E12345678202610141234abcdEFGHIJK");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.LIBERADO);
+        verify(auditService).registrar(adminId, "CONFIRMAR_REPASSE_MANUAL", "transaction", TX_ID,
+                "comprovante=E12345678202610141234abcdEFGHIJK");
+    }
+
+    @Test
+    void confirmarRepasseManual_pedidoNaoConcluido_recusaSemLiberarNemAuditar() {
+        // A API liberava QUALQUER transação RETIDO: um pedido em disputa ou em andamento teria o escrow dado como pago (e a mediação depois não
+        // conseguiria reembolsar). A UI só mostra a fila certa, mas a regra vale na API (defesa em profundidade): repasse só de pedido CONCLUIDO.
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+        var pedido = srMock(SR_ID, ServiceRequestStatus.EM_DISPUTA);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(pedido));
+
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), "E2E-12345"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYOUT_NOT_DUE");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verify(transactionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(outboxRepository, auditService);
     }
 
     // helpers

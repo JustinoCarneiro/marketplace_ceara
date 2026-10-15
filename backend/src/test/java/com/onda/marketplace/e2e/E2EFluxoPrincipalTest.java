@@ -3368,4 +3368,109 @@ class E2EFluxoPrincipalTest {
         }
         assertThat("os dois pedidos de código foram gravados", contar("SELECT count(*) FROM password_reset_codes WHERE user_id = ?::uuid", vera.id().toString()), equalTo(2));
     }
+
+    @Autowired com.onda.marketplace.admin.AdminQueryService adminQueryService;
+
+    @Test @Order(79)
+    @DisplayName("79 · Confirmar o repasse manual espera a linha da transação (outra confirmação em voo) e, ao acordar, vê LIBERADO: não duplica a auditoria")
+    void confirmarRepasseManual_esperaATrava_eNaoDuplicaAuditoria() throws Exception {
+        var vera = cadastrarCliente("Vera Repasse", "vera.repasse@onda.test");
+        UUID pedido = pedidoDe(vera, "Pedido concluido para repasse, Rua T 9", "CONCLUIDO");
+        pagamento(pedido, TransactionStatus.RETIDO);
+        UUID txId = transactionRepository.findByServiceRequestId(pedido).orElseThrow().getId();
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var liberar     = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a outra confirmacao, em voo": segura a linha da transacao e, ao terminar, deixa-a LIBERADO (o que a confirmacao dela faria)
+        var outraConfirmacao = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            jdbc.queryForList("SELECT id FROM transactions WHERE id = ?::uuid FOR NO KEY UPDATE", txId.toString());
+            travaObtida.countDown();
+            try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            jdbc.update("UPDATE transactions SET status_pagamento = 'LIBERADO' WHERE id = ?::uuid", txId.toString());
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a outra confirmacao deveria ter a linha");
+
+        var minha = pool.submit(() -> adminQueryService.confirmarRepasseManual(txId, vera.id(), "E2E-REF-1"));
+        Thread.sleep(800);
+        assertThat("a confirmacao deveria estar ESPERANDO a linha da transacao", minha.isDone(), is(false));
+
+        liberar.countDown();
+        outraConfirmacao.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        minha.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat("a repeticao nao grava auditoria (so quem liberou audita)",
+                contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id = ?::uuid AND acao = 'CONFIRMAR_REPASSE_MANUAL'", txId.toString()), equalTo(0));
+    }
+
+    @Test @Order(80)
+    @DisplayName("80 · Confirmar o repasse manual grava, na mesma transacao que libera, a referencia do comprovante na auditoria")
+    void confirmarRepasseManual_gravaALiberacaoEAReferencia() {
+        var ivo = cadastrarCliente("Ivo Repasse", "ivo.repasse@onda.test");
+        UUID pedido = pedidoDe(ivo, "Pedido concluido 2 para repasse, Rua T 10", "CONCLUIDO");
+        pagamento(pedido, TransactionStatus.RETIDO);
+        UUID txId = transactionRepository.findByServiceRequestId(pedido).orElseThrow().getId();
+
+        adminQueryService.confirmarRepasseManual(txId, ivo.id(), "E2E-REF-2");
+
+        assertThat(texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", txId.toString()), equalTo("LIBERADO"));
+        assertThat(contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id = ?::uuid AND acao = 'CONFIRMAR_REPASSE_MANUAL' AND detalhe = 'comprovante=E2E-REF-2'", txId.toString()), equalTo(1));
+    }
+
+    @Autowired com.onda.marketplace.admin.AdminReportService relatorioService;
+
+    private long repassesAtrasados() {
+        return relatorioService.alertas().stream().filter(a -> a.tipo().equals("REPASSE_ATRASADO")).mapToLong(a -> a.quantidade()).sum();
+    }
+
+    @Test @Order(81)
+    @DisplayName("81 · Alerta REPASSE_ATRASADO contra o banco real: conta a transacao RETIDA com liberacao pendente ha mais de 2 dias, ignora a recente e some ao confirmar")
+    void alertaDeRepasseAtrasado_contaSomeNoBancoReal() {
+        long base = repassesAtrasados();
+        var gil = cadastrarCliente("Gil Atraso", "gil.atraso@onda.test");
+
+        UUID velho = pedidoDe(gil, "Pedido concluido ha 3 dias, Rua U 1", "CONCLUIDO");
+        pagamento(velho, TransactionStatus.RETIDO);
+        UUID txVelho = transactionRepository.findByServiceRequestId(velho).orElseThrow().getId();
+        var evVelho = new com.onda.marketplace.payment.OutboxEvent("transaction", txVelho, "PAYMENT_RELEASED", "{}");
+        evVelho.marcarFalha();
+        outboxEventosRepo.save(evVelho);
+        jdbc.update("UPDATE outbox_events SET criado_em = now() - interval '3 days' WHERE id = ?::uuid", evVelho.getId().toString());
+
+        UUID novo = pedidoDe(gil, "Pedido concluido agora, Rua U 2", "CONCLUIDO");
+        pagamento(novo, TransactionStatus.RETIDO);
+        UUID txNovo = transactionRepository.findByServiceRequestId(novo).orElseThrow().getId();
+        var evNovo = new com.onda.marketplace.payment.OutboxEvent("transaction", txNovo, "PAYMENT_RELEASED", "{}");
+        evNovo.marcarFalha();
+        outboxEventosRepo.save(evNovo);
+
+        assertThat("so o repasse com 3 dias conta; o de agora nao", repassesAtrasados(), equalTo(base + 1));
+
+        adminQueryService.confirmarRepasseManual(txVelho, gil.id(), "E2E-REF-3");
+        assertThat("depois de confirmar o repasse o alerta some", repassesAtrasados(), equalTo(base));
+    }
+
+    @Test @Order(82)
+    @DisplayName("82 · Confirmar o repasse de pedido que NAO esta concluido e recusado no banco real; referencia que parece CPF tambem; nada e liberado nem auditado")
+    void confirmarRepasseManual_recusaPedidoNaoConcluido_eReferenciaComDadoPessoal() {
+        var lia = cadastrarCliente("Lia Repasse", "lia.repasse@onda.test");
+        UUID emDisputa = pedidoDe(lia, "Pedido em disputa, Rua V 1", "EM_DISPUTA");
+        pagamento(emDisputa, TransactionStatus.RETIDO);
+        UUID txDisputa = transactionRepository.findByServiceRequestId(emDisputa).orElseThrow().getId();
+
+        var semConclusao = org.junit.jupiter.api.Assertions.assertThrows(com.onda.marketplace.shared.exception.BusinessException.class,
+                () -> adminQueryService.confirmarRepasseManual(txDisputa, lia.id(), "E2E-REF-4"));
+        assertThat(semConclusao.getCode(), equalTo("PAYOUT_NOT_DUE"));
+        assertThat(texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", txDisputa.toString()), equalTo("RETIDO"));
+
+        UUID concluido = pedidoDe(lia, "Pedido concluido, Rua V 2", "CONCLUIDO");
+        pagamento(concluido, TransactionStatus.RETIDO);
+        UUID txConcluido = transactionRepository.findByServiceRequestId(concluido).orElseThrow().getId();
+        var cpfNaReferencia = org.junit.jupiter.api.Assertions.assertThrows(com.onda.marketplace.shared.exception.BusinessException.class,
+                () -> adminQueryService.confirmarRepasseManual(txConcluido, lia.id(), "111.444.777-35"));
+        assertThat(cpfNaReferencia.getCode(), equalTo("PAYOUT_RECEIPT_INVALID"));
+
+        assertThat("nada foi liberado nem auditado", contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id IN (?::uuid, ?::uuid)", txDisputa.toString(), txConcluido.toString()), equalTo(0));
+    }
 }
