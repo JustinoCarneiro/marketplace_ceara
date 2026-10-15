@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Recusa subir se houver conta com hash de CPF de uma versão de chave que a configuração não sabe mais calcular, OU se
@@ -112,13 +115,19 @@ public class CpfHashKeyCheck implements SmartInitializingSingleton {
                             + "antes de subir (indício de rollback para uma versão anterior).");
         }
 
-        conferirOuRegistrarVerificador(versaoAtual, cpfHashService.verificadorChaveAtual(), "CPF_HASH_KEY");
+        // Decide as DUAS versões antes de gravar qualquer uma (revisão cruzada, 2026-10-14): na 1ª subida de uma rotação a versão atual ainda não
+        // tem verificador nem contas (confia na 1ª vez) e a anterior pode recusar (contas sem âncora). Gravando a atual logo, a subida recusada
+        // deixava para trás uma referência que nada provou — e, corrigida a variável, a mesma chave passava a ser recusada ("não é mais a mesma").
+        List<CpfHashKeyVerificacao> aGravar = new ArrayList<>(2);
+        conferirVerificador(versaoAtual, cpfHashService.verificadorChaveAtual(), "CPF_HASH_KEY").ifPresent(aGravar::add);
         if (cpfHashService.temChaveAnterior()) {
-            conferirOuRegistrarVerificador(versaoAtual - 1, cpfHashService.verificadorChaveAnterior(), "CPF_HASH_KEY_PREVIOUS");
+            conferirVerificador(versaoAtual - 1, cpfHashService.verificadorChaveAnterior(), "CPF_HASH_KEY_PREVIOUS").ifPresent(aGravar::add);
         }
+        aGravar.forEach(verificacaoRepository::save);
     }
 
-    private void conferirOuRegistrarVerificador(int versao, String verificadorCalculado, String variavel) {
+    /** Recusa (exceção) ou devolve o verificador a gravar; vazio quando a versão já tem um verificador igual. Não grava nada. */
+    private Optional<CpfHashKeyVerificacao> conferirVerificador(int versao, String verificadorCalculado, String variavel) {
         var gravado = verificacaoRepository.findById(versao);
         if (gravado.isPresent()) {
             if (!MessageDigest.isEqual(gravado.get().getVerificador().getBytes(StandardCharsets.UTF_8),
@@ -127,7 +136,7 @@ public class CpfHashKeyCheck implements SmartInitializingSingleton {
                         "A chave do hash do CPF da versão " + versao + " não é mais a mesma que calculou os hashes já "
                                 + "gravados nessa versão — confira " + variavel + ".");
             }
-            return;
+            return Optional.empty();
         }
         // 1ª subida desta versão: antes de confiar na chave, cruza contra uma conta cujo CPF decifrado já prova o hash
         Cruzamento cruzamento = cruzar(versao);
@@ -141,8 +150,8 @@ public class CpfHashKeyCheck implements SmartInitializingSingleton {
             long contas = userRepository.countByCpfHashIsNotNullAndCpfHashVersao(versao);
             if (contas > 0) {
                 if (!chaveConfirmada) {
-                    // Recusa ANTES de gravar: nada fica registrado como referência, e a próxima subida (com a chave corrigida ou
-                    // confirmada) recomeça deste ponto.
+                    // Recusa ANTES de gravar: nada fica registrado como referência (nem o da outra versão, que só é gravado depois de
+                    // as duas passarem), e a próxima subida (com a chave corrigida ou confirmada) recomeça deste ponto.
                     throw new IllegalStateException(
                             contas + " conta(s) têm o hash do CPF na versão " + versao + ", mas nenhum prestador com CPF decifrável "
                                     + "permite PROVAR que " + variavel + " é a chave certa — gravá-la agora como referência fixaria um "
@@ -154,7 +163,7 @@ public class CpfHashKeyCheck implements SmartInitializingSingleton {
                         + "O verificador gravado agora vira a referência.", contas, versao, variavel);
             }
         }
-        verificacaoRepository.save(new CpfHashKeyVerificacao(versao, verificadorCalculado));
+        return Optional.of(new CpfHashKeyVerificacao(versao, verificadorCalculado));
     }
 
     private Cruzamento cruzar(int versao) {

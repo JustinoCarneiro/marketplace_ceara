@@ -337,6 +337,49 @@ class CpfHashKeyCheckTest {
     }
 
     @Test
+    void primeiraSubidaReal_versaoAtualVazia_eAnteriorSemAncoraComContas_recusaSemGravarNenhumaDasDuas() {
+        // O caso REAL do deploy (rotação 1 → 2): a versão atual (2) ainda não tem verificador NEM contas (confia na 1ª vez) e a anterior (1) tem
+        // contas e nenhuma âncora. O teste acima já parte da versão 2 gravada, então nunca exercitou isto: a atual era gravada ANTES de a anterior
+        // recusar, e a subida recusada deixava para trás uma referência que nada provou — e que, corrigida a variável, passava a recusar a chave
+        // certa ("não é mais a mesma que calculou os hashes") sem haver hash nenhum calculado com ela. Revisão cruzada (2026-10-14, feita por mim: o Codex estava fora).
+        var cpfHashService = new CpfHashService(ATUAL, 2, ANTERIOR);
+        var check = check(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(1)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(verificacaoRepository.findById(1)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(profileRepository.comHashNaVersao(1)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(1)).thenReturn(3L);
+
+        assertThatThrownBy(check::verificar)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void primeiraSubidaReal_versaoAtualVazia_eAnteriorSemAncoraComContas_comConfirmacao_gravaAsDuas() {
+        // contraparte do teste acima: quando as DUAS versões passam (aqui, a anterior só com a confirmação do operador), as duas referências são gravadas
+        var cpfHashService = new CpfHashService(ATUAL, 2, ANTERIOR);
+        var check = checkConfirmado(cpfHashService);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoLessThan(1)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersaoGreaterThan(2)).thenReturn(0L);
+        when(verificacaoRepository.findById(2)).thenReturn(Optional.empty());
+        when(verificacaoRepository.findById(1)).thenReturn(Optional.empty());
+        when(profileRepository.comHashNaVersao(2)).thenReturn(List.of());
+        when(profileRepository.comHashNaVersao(1)).thenReturn(List.of());
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(0L);
+        when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(1)).thenReturn(3L);
+
+        check.verificar();
+
+        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
+        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 1));
+    }
+
+    @Test
     void confirmacaoDoOperador_naoVenceUmaContradicao_ancoraQueNaoConfereContinuaRecusando() {
         // a confirmação só afrouxa o "não há como provar"; quando HÁ prova e ela desmente a chave, nada a libera
         var cpfHashService = new CpfHashService(ATUAL, 2, OUTRA);

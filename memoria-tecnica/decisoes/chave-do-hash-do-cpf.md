@@ -113,6 +113,14 @@ e a subida recusa se sobrar conta mais antiga.
   com a variável ligada — ela só afrouxa o "não há como provar", nunca o "a prova diz que está errado".
 - **Efeito na implantação:** a 1ª subida de um banco com clientes que já confirmaram o CPF na versão 1 e nenhum prestador decifrável nela
   passa a exigir a confirmação (passo 5 de "Implantação"). É a troca consciente de "sobe com aviso" por "não sobe até alguém conferir a chave".
+- **Os verificadores só são gravados depois de as DUAS versões passarem (revisão cruzada, 2026-10-14, feita por mim com o Codex fora do ar;
+  achado real, P3 de operação):** o código gravava o verificador da versão atual (que, na 1ª subida de uma rotação, ainda não tem contas e "confia
+  na 1ª vez") e SÓ DEPOIS conferia a anterior, que é a que costuma recusar (contas sem âncora). A subida recusada deixava para trás uma referência
+  que nada provou, e o comentário "nada fica registrado" era falso nesse caminho; se o operador corrigisse `CPF_HASH_KEY` depois, a chave certa
+  passava a ser recusada ("não é mais a mesma que calculou os hashes") sem haver hash nenhum calculado com ela, e só se saía editando a tabela. O teste
+  existente da recusa pela anterior já partia da versão atual gravada e por isso nunca exercitou o caminho real do deploy. Agora `conferirVerificador`
+  só decide (devolve o que gravar) e `verificar()` grava no fim, se nenhuma das duas recusou. Teste vermelho antes (`NeverWantedButInvoked`), verde depois,
+  e a contraparte (com a confirmação do operador as duas são gravadas) guarda contra o excesso de correção.
 - **Lacuna de teste achada no caminho:** o `application.yml` de teste liga `cpf-backfill.enabled=false` (por causa do H2) e o perfil `e2e`
   herdava isso, então o bean do E2E **nunca** fazia o cruzamento com âncora: a consulta `comHashNaVersao` só tinha rodado contra mocks.
   O passo 69 monta as instâncias à mão com o cruzamento ligado e cobre, no Postgres real, as três situações (sem âncora, âncora que
