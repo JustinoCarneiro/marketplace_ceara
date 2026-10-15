@@ -78,22 +78,30 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     // ---------- o que sai ----------
 
     /**
-     * Trava (em ordem de id) os pedidos PROPOSTO em que este prestador tem proposta ativa, num comando PRÓPRIO que roda ANTES de
-     * {@link #reabrirPedidosSoComPropostaDoPrestador}. Achado da rodada 3 (E2E 69): o {@code NOT EXISTS} do UPDATE em lote usa o snapshot do
-     * início do comando, e em READ COMMITTED quem espera uma linha só TRAVADA (a {@code create()} de uma proposta nova não a atualiza quando o
-     * pedido já está PROPOSTO) não reavalia o WHERE. Resultado: a proposta nova de outro prestador, commitada durante a espera, não era vista e o
-     * pedido voltava a PENDENTE com uma proposta ATIVA escondida (o ADR dizia que o MVCC protegia isso; não protege). Com as linhas já travadas
-     * por este comando, o UPDATE seguinte é um comando novo, com snapshot novo, e enxerga tudo o que foi commitado.
+     * Trava, num comando PRÓPRIO e em ordem de id, TODOS os pedidos que a exclusão vai escrever: os do usuário como cliente (qualquer status) e
+     * os em que ele tem proposta ativa ou aceita (como prestador). Roda ANTES de qualquer UPDATE em lote, por dois motivos:
+     * <ul>
+     *   <li><b>Snapshot (rodada 3, E2E 73):</b> o {@code NOT EXISTS} de {@link #reabrirPedidosSoComPropostaDoPrestador} usa o snapshot do início do
+     *       comando, e em READ COMMITTED quem espera uma linha só TRAVADA (a {@code create()} de uma proposta nova não a atualiza quando o pedido já
+     *       está PROPOSTO) não reavalia o WHERE: a proposta nova de outro prestador, commitada durante a espera, não era vista e o pedido voltava a
+     *       PENDENTE com uma proposta ATIVA escondida. Com as linhas já travadas por este comando, o UPDATE seguinte é um comando novo, com snapshot
+     *       novo, e enxerga tudo o que foi commitado.</li>
+     *   <li><b>Deadlock (revisão cruzada do Codex, 2026-10-11; E2E 77):</b> antes só os pedidos como PRESTADOR eram travados aqui, e os do usuário
+     *       como CLIENTE eram atualizados depois, um UPDATE por vez, na ordem que o banco quisesse. Em contas de papéis cruzados (A tem proposta no
+     *       pedido de B e B no de A) cada exclusão segurava o pedido "do outro" e pedia o seu, que a outra segurava: {@code deadlock detected}, HTTP 500.
+     *       Com todos os pedidos travados juntos, em ordem de id, duas exclusões que disputam pedidos se serializam na primeira trava, sem segurar
+     *       nada antes dela. (A ordem de id é a mesma de {@code travarPedidos} da expiração; {@code ProposalService} também trava o pedido primeiro.)</li>
+     * </ul>
      */
     @Query(value = """
             SELECT s.id FROM service_requests s
-             WHERE s.status = 'PROPOSTO'
-               AND EXISTS (SELECT 1 FROM proposals p WHERE p.service_request_id = s.id
-                              AND p.prestador_id = :userId AND p.status = 'ATIVA')
+             WHERE s.cliente_id = :userId
+                OR EXISTS (SELECT 1 FROM proposals p WHERE p.service_request_id = s.id
+                              AND p.prestador_id = :userId AND p.status IN ('ATIVA', 'ACEITA'))
              ORDER BY s.id
                FOR NO KEY UPDATE OF s
             """, nativeQuery = true)
-    List<UUID> travarPedidosPropostosDoPrestador(@Param("userId") UUID userId);
+    List<UUID> travarPedidosDoUsuario(@Param("userId") UUID userId);
 
     /**
      * Pedidos PROPOSTO em que a ÚNICA proposta ativa é deste prestador voltam à fila (PENDENTE): sem isso ficariam presos
