@@ -81,7 +81,8 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   quem espera uma linha só TRAVADA (a `create()` não atualiza o pedido quando ele já está `PROPOSTO`) não reavalia o `WHERE`, e o `NOT EXISTS` segue com o
   snapshot do início do comando — a proposta nova que commitou durante a espera não era vista e o pedido voltava a `PENDENTE` com uma proposta `ATIVA`
   escondida (`accept()` exige `PROPOSTO`: o cliente não conseguia aceitá-la). Provado em Postgres real (`PENDENTE` em vez de `PROPOSTO`). Conserto: um comando
-  à parte, `travarPedidosPropostosDoPrestador` (`SELECT ... FOR NO KEY UPDATE`, em ordem de id), roda ANTES do `UPDATE`; o `UPDATE` vira um comando novo, com
+  à parte, `travarPedidosDoUsuario` (`SELECT ... FOR NO KEY UPDATE`, em ordem de id; na rodada 3 só travava os pedidos como PRESTADOR, ver o parágrafo
+  seguinte), roda ANTES do `UPDATE`; o `UPDATE` vira um comando novo, com
   snapshot novo, e enxerga o que commitou. (O `UPDATE` de `cancelarSemAndamento` da expiração tem o MESMO desenho e eu o havia deixado como "estado consistente, não alterado" — o passo 41 só SIMULAVA
   a corrida, chamando o `UPDATE` com ids escolhidos. A corrida real, com uma proposta nova em voo, foi provada depois (E2E 74, vermelho: o pedido terminou `CANCELADO` por cima
   da proposta que acabava de chegar, que ainda era encerrada junto). Corrigido com o mesmo conserto: `travarPedidos(lote)` (`FOR NO KEY UPDATE`, em ordem de id — a
@@ -90,6 +91,23 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   outras propostas ativas, sem adquirir a mesma trava — um `create()` correndo bem no meio de um `accept()` não foi
   endereçado aqui (não é o achado do Codex, é um risco adjacente, de menor probabilidade: a janela é bem mais estreita
   e o pior caso é uma proposta `ATIVA` sobrando num pedido `ACEITO`, não dinheiro perdido).
+
+  **Revisão cruzada do Codex (2026-10-11, PR #27) — três perguntas, conferidas no código:**
+  - **Deadlock entre exclusões de contas CRUZADAS (P2, REAL, corrigido; E2E 77):** a trava da rodada 3 cobria só os pedidos em que o usuário é PRESTADOR; os
+    pedidos dele como CLIENTE (cancelar, apagar dados) eram atualizados depois, um `UPDATE` por vez, na ordem do banco. Com papéis cruzados (A tem proposta ativa
+    no pedido de B e B no de A — possível desde a conta única) cada exclusão segurava o pedido "do outro" e pedia o seu, que a outra segurava: `deadlock detected`
+    e HTTP 500 numa das duas (reproduzido vermelho: `UPDATE ... SET status='CANCELADO' WHERE cliente_id=?` derrubado). Probabilidade ínfima (duas exclusões
+    cruzadas no mesmo instante) e recuperável (basta repetir), mas é ordem de travas inconsistente. Conserto: `travarPedidosDoUsuario` trava num comando só, em
+    ordem de id, TODOS os pedidos que a exclusão escreve (os dele como cliente em qualquer status + os em que tem proposta `ATIVA` ou `ACEITA`); as duas
+    exclusões que disputam pedidos se serializam na primeira trava, sem segurar nada antes. As propostas (linhas de `proposals`) ficam cobertas por
+    transitividade: quem as toca já travou o pedido a que pertencem (`ProposalService` e a expiração travam o pedido primeiro).
+  - **Isolamento (premissa, fixada; E2E 78):** "lock num comando + UPDATE em outro" só dá snapshot novo ao `UPDATE` em READ COMMITTED; em REPEATABLE READ o
+    snapshot é o da transação e a proposta nova seguiria invisível. Nada no app fixa o isolamento (`TransactionTemplate` e JPA usam o padrão do banco, `read
+    committed` no Postgres); o passo 78 falha se alguém mudar isso na conexão do app. Não cobre `default_transaction_isolation` mudado só no servidor de
+    produção, que o repositório não enxerga — conferir ali se um dia mexerem na configuração do banco.
+  - **"A expiração ainda chama o UPDATE sem a trava prévia" (não procede):** o Codex leu o head do branch do PR #27 (`fix/exclusao-proposta-concorrente`), que
+    é anterior à correção da expiração; na `master` (integração #28) `ServiceRequestExpirationService` já chama `travarPedidos(lote)` antes de `cancelarSemAndamento`
+    (E2E 74). Falha minha no prompt: devia apontar a `master`, não o branch antigo.
 
 ## 2ª rodada de revisão cruzada (auto-revisão, 2026-10-09)
 A correção da 1ª rodada fechou só o `cancel()` (UPDATE guardado). Dez ângulos independentes, cada achado conferido no código, mostraram

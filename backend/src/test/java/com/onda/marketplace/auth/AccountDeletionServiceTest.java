@@ -468,7 +468,7 @@ class AccountDeletionServiceTest {
         // e as linhas dos pedidos são travadas num comando À PARTE, antes do UPDATE em lote (rodada 3): o UPDATE precisa de snapshot novo
         // para enxergar uma proposta nova que commitou durante a espera da trava
         var ordem = org.mockito.Mockito.inOrder(exclusao);
-        ordem.verify(exclusao).travarPedidosPropostosDoPrestador(USER_ID);
+        ordem.verify(exclusao).travarPedidosDoUsuario(USER_ID);
         ordem.verify(exclusao).reabrirPedidosSoComPropostaDoPrestador(eq(USER_ID), any(Instant.class));
         ordem.verify(exclusao).encerrarPropostasAtivasDoPrestador(USER_ID);
         assertThat(perfil.getBio()).isNull();

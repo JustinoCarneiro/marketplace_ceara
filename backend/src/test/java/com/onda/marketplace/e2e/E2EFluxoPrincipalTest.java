@@ -3187,6 +3187,67 @@ class E2EFluxoPrincipalTest {
                 statusDoPedido(pedido), equalTo("PROPOSTO"));
     }
 
+    @Test @Order(77)
+    @DisplayName("77 · Duas exclusões CRUZADAS (cada conta tem proposta ativa no pedido da outra): sem deadlock — os pedidos do usuário são travados juntos, em ordem de id")
+    void exclusoesCruzadas_naoFormamDeadlock() throws Exception {
+        // Revisão cruzada do Codex (2026-10-11, PR #27). A exclusão travava só os pedidos em que o usuário é PRESTADOR (travarPedidosPropostosDoPrestador)
+        // e, depois, ia atualizando os pedidos dele como CLIENTE (cancelar, apagar dados) na ordem que o banco quisesse. Com contas de papéis cruzados
+        // (A tem proposta no pedido de B e B no de A), cada exclusão segura o pedido que é "do outro" e pede o seu próprio, que a outra segura: ciclo.
+        var ana = cadastrarCliente("Ana Cruzada", "ana.cruzada@onda.test");
+        var bia = cadastrarCliente("Bia Cruzada", "bia.cruzada@onda.test");
+        UUID pedidoAna = pedidoDe(ana, "Pedido da Ana, Rua R 11", "PROPOSTO");
+        UUID pedidoBia = pedidoDe(bia, "Pedido da Bia, Rua R 12", "PROPOSTO");
+        proposta(pedidoAna, bia.id(), ProposalStatus.ATIVA);   // a Bia, como prestadora, propôs no pedido da Ana
+        proposta(pedidoBia, ana.id(), ProposalStatus.ATIVA);   // e a Ana no da Bia
+
+        // a ordem do Postgres para uuid é byte a byte; a do texto canônico minúsculo é a mesma
+        boolean anaTemOMenor = pedidoAna.toString().compareTo(pedidoBia.toString()) < 0;
+        Conta quemExclui = anaTemOMenor ? ana : bia;          // a exclusão de verdade é de quem tem o pedido de MENOR id (lo)
+        UUID lo = anaTemOMenor ? pedidoAna : pedidoBia;
+        UUID hi = anaTemOMenor ? pedidoBia : pedidoAna;
+
+        var travaObtida = new java.util.concurrent.CountDownLatch(1);
+        var prosseguir  = new java.util.concurrent.CountDownLatch(1);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        // "a exclusão da OUTRA conta, em voo": ela trava o pedido `lo` (onde tem proposta ativa) primeiro — a ordem de id que a exclusão correta também segue —
+        // e, quando a primeira já estiver esperando, pede o `hi` (o pedido dela mesma, que a primeira, na versão com defeito, já segurou)
+        var outraExclusao = pool.submit(() -> transacao.executeWithoutResult(st -> {
+            jdbc.queryForList("SELECT id FROM service_requests WHERE id = ?::uuid FOR NO KEY UPDATE", lo.toString());
+            travaObtida.countDown();
+            try { prosseguir.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            jdbc.queryForList("SELECT id FROM service_requests WHERE id = ?::uuid FOR NO KEY UPDATE", hi.toString());
+        }));
+        Assertions.assertTrue(travaObtida.await(10, java.util.concurrent.TimeUnit.SECONDS), "a outra exclusão deveria ter o pedido lo");
+
+        var exclusao = pool.submit(() -> excluirConta(quemExclui.token(), SENHA_PADRAO).statusCode());
+        // espera a exclusão de verdade ficar PARADA numa trava (no código com defeito já segurando o `hi`; no corrigido, esperando o `lo` sem segurar nada)
+        boolean esperando = false;
+        for (int i = 0; i < 80 && !esperando; i++) {
+            esperando = contar("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()") > 0;
+            if (!esperando) Thread.sleep(125);
+        }
+        Assertions.assertTrue(esperando, "a exclusão deveria estar esperando uma trava do pedido que a outra segura");
+        prosseguir.countDown();
+
+        // sem ciclo: a outra termina, a exclusão termina em 204 (com ciclo, o Postgres derruba uma das duas com "deadlock detected")
+        outraExclusao.get(20, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(exclusao.get(30, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+        pool.shutdown();
+
+        assertThat("a conta foi mesmo excluída", String.valueOf(conta(quemExclui.id()).get("email")), startsWith("removido-"));
+        assertThat("o pedido dela saiu da fila", statusDoPedido(quemExclui == ana ? pedidoAna : pedidoBia), equalTo("CANCELADO"));
+    }
+
+    @Test @Order(78)
+    @DisplayName("78 · As travas por comando à parte (exclusão, expiração) assumem READ COMMITTED: as transações do app abrem nesse nível")
+    void isolamentoDasTransacoes_eReadCommitted() {
+        // Revisão cruzada do Codex (2026-10-11, PR #27): "lock num comando + UPDATE em outro" só dá snapshot novo ao UPDATE em READ COMMITTED; em
+        // REPEATABLE READ o snapshot é o da transação e a proposta nova que commitou durante a espera continuaria invisível. Nada no app fixa o
+        // isolamento (TransactionTemplate e JPA usam o padrão do banco, `read committed` no Postgres) — este passo falha se alguém mudar isso.
+        String nivel = transacao.execute(st -> jdbc.queryForObject("SHOW transaction_isolation", String.class));
+        assertThat("nível de isolamento das transações do app", nivel, equalTo("read committed"));
+    }
+
     @Test @Order(74)
     @DisplayName("74 · Expiração com uma proposta nova em voo: o pedido não é cancelado por cima da proposta que acabou de chegar")
     void expiracao_propostaNovaEmVoo_naoCancelaOPedido() throws Exception {
