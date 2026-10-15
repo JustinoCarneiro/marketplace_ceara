@@ -59,6 +59,22 @@ public class PaymentService {
     @Transactional
     public TransactionDto initiate(UUID serviceRequestId, InitiatePaymentRequest req,
                                    String idempotencyKey, UUID clienteId) {
+        // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
+        // conferia: um hit de idempotência devolvia a transação (valores + status) sem
+        // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
+        Optional<ServiceRequest> doCliente = requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId);
+
+        // Reenvio de uma requisição já atendida devolve o mesmo resultado (idempotência) — antes do portão de identidade, que
+        // vale só para CRIAR cobrança nova. Depois de uma rotação do HMAC, o retry de um cliente na versão antiga da chave
+        // recebia IDENTITY_REQUIRED em vez da transação que já existia (revisão cruzada de 2026-10-11).
+        if (doCliente.isPresent()) {
+            Optional<Transaction> existente = transactionRepository
+                    .findByServiceRequestIdAndIdempotencyKey(serviceRequestId, idempotencyKey);
+            if (existente.isPresent()) {
+                return TransactionDto.from(existente.get());
+            }
+        }
+
         userRepository.findById(clienteId).ifPresent(user -> {
             // Sem CPF confirmado, ou com o hash numa versão de chave anterior à atual (rotação do HMAC): o cliente confirma de
             // novo — é o único jeito de regravar com a chave atual, porque só ele sabe o CPF em claro.
@@ -68,16 +84,9 @@ public class PaymentService {
             }
         });
 
-        // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
-        // conferia: um hit de idempotência devolvia a transação (valores + status) sem
-        // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
-        requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId)
-                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+        doCliente.orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
-        return transactionRepository
-                .findByServiceRequestIdAndIdempotencyKey(serviceRequestId, idempotencyKey)
-                .map(TransactionDto::from)
-                .orElseGet(() -> criar(serviceRequestId, req, idempotencyKey, clienteId));
+        return criar(serviceRequestId, req, idempotencyKey, clienteId);
     }
 
     /**
@@ -89,7 +98,12 @@ public class PaymentService {
      * chega depois) — nesse instante `cancel()` não encontra transação RETIDA (ela ainda nem existe) e não cria
      * reembolso nenhum. Sem esta checagem, o dinheiro ficaria retido para sempre num pedido já CANCELADO. Este é
      * o evento confirmado que dirige o estado financeiro (princípio do CLAUDE.md), então é AQUI que a
-     * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
+     * reconciliação acontece: confirmado o pagamento de um pedido já cancelado, retém e enfileira o reembolso.
+     *
+     * <p>Revisão cruzada de 2026-10-11 (Codex): a transação fica RETIDO, como em {@code cancel()} — só vira REEMBOLSADO quando o
+     * {@code OutboxProcessor} conclui o reembolso no gateway. Gravar REEMBOLSADO aqui declarava devolvido um dinheiro que ainda
+     * não saiu: se o evento caísse em FALHA o estado mentia, e a exclusão de conta (que só enxerga "pedido CANCELADO + transação
+     * RETIDO" como reembolso pendente) deixava a conta ser apagada com o reembolso ainda por fazer.
      *
      * <p>2ª rodada (auto-revisão, 2026-10-09), duas correções na própria reconciliação:
      * <ul>
@@ -117,7 +131,6 @@ public class PaymentService {
             }
             tx.reter();
             if (sr != null && sr.getStatus() == ServiceRequestStatus.CANCELADO) {
-                tx.reembolsar();
                 outboxRepository.save(outboxEventReembolso(tx));
             }
             transactionRepository.save(tx);

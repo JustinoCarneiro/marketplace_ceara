@@ -2857,13 +2857,22 @@ class E2EFluxoPrincipalTest {
         confirmacao.get(15, java.util.concurrent.TimeUnit.SECONDS);
         pool.shutdown();
 
-        assertThat("o pedido cancelado não fica com o dinheiro retido: reconciliado como reembolsado",
-                texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", tx.getId().toString()), equalTo("REEMBOLSADO"));
         assertThat("um reembolso na fila", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED'", tx.getId().toString()), equalTo(1));
 
         // e a reentrega do MESMO webhook é no-op (antes estourava INVALID_PAYMENT_TRANSITION e o gateway reentregava para sempre)
         pagamentoService.confirmPayment("gw-e2e-55", "PAGO");
         assertThat("a reentrega não enfileira outro reembolso", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED'", tx.getId().toString()), equalTo(1));
+
+        // A transação só vira REEMBOLSADO quando o OutboxProcessor (profile e2e: varredura a cada 500ms) conclui o reembolso no gateway —
+        // a confirmação deixa RETIDO (revisão cruzada de 2026-10-11: gravar REEMBOLSADO antes de o dinheiro sair declarava devolvido
+        // o que ainda não saiu). O pedido cancelado não pode ficar com o dinheiro retido para sempre: o estado final é REEMBOLSADO.
+        String estado = texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", tx.getId().toString());
+        for (int i = 0; i < 60 && !"REEMBOLSADO".equals(estado); i++) {
+            Thread.sleep(250);
+            estado = texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", tx.getId().toString());
+        }
+        assertThat("o pedido cancelado não fica com o dinheiro retido: o outbox concluiu o reembolso", estado, equalTo("REEMBOLSADO"));
+        assertThat("o reembolso saiu uma vez só", contar("SELECT count(*) FROM outbox_events WHERE agregado_id = ?::uuid AND tipo_evento = 'PAYMENT_REFUNDED' AND status = 'PROCESSADO'", tx.getId().toString()), equalTo(1));
     }
 
     // ─── 2ª rodada de revisão cruzada (#23) ───

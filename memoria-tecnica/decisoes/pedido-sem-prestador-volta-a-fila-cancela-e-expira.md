@@ -54,7 +54,15 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
   confirmação do gateway chegando depois, `cancel()` não encontrava transação `RETIDO` (ela ainda nem existia) e não
   criava reembolso — o dinheiro ficaria retido para sempre num pedido já `CANCELADO`. Corrigido em
   `PaymentService.confirmPayment` (o evento confirmado que dirige o estado financeiro, princípio do `CLAUDE.md`):
-  confirmado o pagamento de um pedido já cancelado, retém e devolve na mesma hora.
+  confirmado o pagamento de um pedido já cancelado, retém e enfileira o reembolso.
+  **Revisão cruzada do Codex (2026-10-11), achado confirmado:** a 1ª versão gravava a transação `REEMBOLSADO` já no commit
+  do webhook, antes de o gateway devolver o dinheiro — se o evento caísse em `FALHA` o estado declarava devolvido o que
+  não saiu, e a exclusão de conta (que só vê "pedido `CANCELADO` + transação `RETIDO`" como reembolso pendente) deixava a
+  conta ser apagada com o reembolso por fazer. Agora a transação fica `RETIDO`, como em `cancel()`, e só o `OutboxProcessor`
+  a leva a `REEMBOLSADO` quando o reembolso sai. (O Codex classificou como P1; a medida do estrago — nada se perde, o evento em
+  `FALHA` aparece no painel e o reprocesso funciona porque `reembolsar()` é idempotente — é P2, mas o desvio do princípio
+  "estado financeiro dirigido por evento confirmado" era real.) Prova: `PaymentServiceTest` (vermelho antes: esperado `RETIDO`,
+  veio `REEMBOLSADO`) e o E2E 66 (espera o outbox concluir e exige um único reembolso `PROCESSADO`).
 - **P2 — a expiração em lote só reconferia o status na escrita, não o prazo nem a proposta nova.** Uma proposta nova
   podia chegar entre a consulta (que montou a lista) e o `UPDATE`; ela reinicia o prazo (é andamento), mas checar só o
   status não via isso, e o pedido expirava apesar da proposta ser recente. Corrigido reconferindo as TRÊS condições
