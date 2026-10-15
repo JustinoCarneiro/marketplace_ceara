@@ -9,6 +9,7 @@ const ALERT_CONFIG: Record<string, { label: (n: number) => string; bg: string; c
   SOS_ATIVO: { label: n => `${n} SOS ativo${n !== 1 ? 's' : ''}`, bg: '#FBE6E2', color: '#C0392B', route: '/notifications' },
   DISPUTA_ABERTA: { label: n => `${n} disputa${n !== 1 ? 's' : ''} aberta${n !== 1 ? 's' : ''}`, bg: '#F7E3D6', color: '#A94C25', route: '/disputes' },
   VERIFICACAO_INCONCLUSIVA: { label: n => `${n} verificação${n !== 1 ? 'ões' : ''} pendente${n !== 1 ? 's' : ''}`, bg: '#FDF3D6', color: '#8E6508', route: '/providers' },
+  REPASSE_ATRASADO: { label: n => `${n} repasse${n !== 1 ? 's' : ''} atrasado${n !== 1 ? 's' : ''}`, bg: '#FBE6E2', color: '#C0392B', route: '/finance' },
 };
 
 interface Metrics {

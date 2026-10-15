@@ -90,6 +90,8 @@ marketplace:
     resposta-minima-ms: 300                        # piso do tempo de resposta do pedido (não denuncia e-mail cadastrado)
   outbox:
     delay-ms: ${MARKETPLACE_OUTBOX_DELAY_MS:5000}  # intervalo do OutboxProcessor em ms
+  payout:
+    overdue-days: ${MARKETPLACE_PAYOUT_OVERDUE_DAYS:2}  # alerta do painel para repasse manual pendente
   gateway:
     # Confirma cobranças automaticamente, emulando o webhook do gateway real.
     # SEMPRE false em produção — lá quem confirma é o gateway de verdade.

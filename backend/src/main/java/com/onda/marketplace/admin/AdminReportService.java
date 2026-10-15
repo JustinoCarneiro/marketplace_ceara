@@ -5,6 +5,7 @@ import com.lowagie.text.pdf.PdfWriter;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.payment.Transaction;
+import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
 import com.onda.marketplace.provider.ProviderProfileRepository;
@@ -16,12 +17,14 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import com.onda.marketplace.sos.SosAlertRepository;
 import com.onda.marketplace.sos.SosAlertStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -82,19 +85,25 @@ public class AdminReportService {
     private final SosAlertRepository          sosRepository;
     private final UserRepository              userRepository;
     private final DisputeResolutionRepository resolutionRepository;
+    private final OutboxEventRepository       outboxRepository;
+    private final Duration                    prazoAlertaRepasse;
 
     public AdminReportService(ServiceRequestRepository srRepository,
                               TransactionRepository transactionRepository,
                               ProviderProfileRepository providerProfileRepository,
                               SosAlertRepository sosRepository,
                               UserRepository userRepository,
-                              DisputeResolutionRepository resolutionRepository) {
+                              DisputeResolutionRepository resolutionRepository,
+                              OutboxEventRepository outboxRepository,
+                              @Value("${marketplace.payout.overdue-days:2}") long diasAlertaRepasse) {
         this.srRepository              = srRepository;
         this.transactionRepository     = transactionRepository;
         this.providerProfileRepository = providerProfileRepository;
         this.sosRepository             = sosRepository;
         this.userRepository            = userRepository;
         this.resolutionRepository      = resolutionRepository;
+        this.outboxRepository          = outboxRepository;
+        this.prazoAlertaRepasse        = Duration.ofDays(diasAlertaRepasse);
     }
 
     /** Métricas sem recorte de período (todo o histórico). */
@@ -164,6 +173,10 @@ public class AdminReportService {
 
     @Transactional(readOnly = true)
     public List<OperationalAlert> alertas() {
+        return alertas(Instant.now());
+    }
+
+    List<OperationalAlert> alertas(Instant agora) {
         List<OperationalAlert> alertas = new ArrayList<>();
         addSePositivo(alertas, "SOS_ATIVO",
                 sosRepository.countByStatus(SosAlertStatus.ATIVO));
@@ -171,6 +184,8 @@ public class AdminReportService {
                 srRepository.countByStatus(ServiceRequestStatus.EM_DISPUTA));
         addSePositivo(alertas, "VERIFICACAO_INCONCLUSIVA",
                 providerProfileRepository.countByStatusVerificacao(ProviderStatus.EM_VERIFICACAO));
+        addSePositivo(alertas, "REPASSE_ATRASADO",
+                outboxRepository.contarRepassesPendentesAntesDe(agora.minus(prazoAlertaRepasse)));
         return alertas;
     }
 

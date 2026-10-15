@@ -2,6 +2,7 @@ package com.onda.marketplace.provider;
 
 import com.onda.marketplace.auth.AuthResponse;
 import com.onda.marketplace.auth.AuthService;
+import com.onda.marketplace.auth.CpfHashService;
 import com.onda.marketplace.auth.TermsAcceptance;
 import com.onda.marketplace.auth.TermsAcceptanceRepository;
 import com.onda.marketplace.auth.User;
@@ -25,6 +26,7 @@ public class ProviderService {
     private final CpfEncryptor              cpfEncryptor;
     private final BackgroundCheckService    backgroundCheckService;
     private final TermsAcceptanceRepository termsAcceptanceRepository;
+    private final CpfHashService         cpfHashService;
 
     public ProviderService(
             UserRepository userRepository,
@@ -33,7 +35,8 @@ public class ProviderService {
             PasswordEncoder passwordEncoder,
             CpfEncryptor cpfEncryptor,
             BackgroundCheckService backgroundCheckService,
-            TermsAcceptanceRepository termsAcceptanceRepository) {
+            TermsAcceptanceRepository termsAcceptanceRepository,
+            CpfHashService cpfHashService) {
         this.userRepository            = userRepository;
         this.profileRepository         = profileRepository;
         this.authService               = authService;
@@ -41,6 +44,7 @@ public class ProviderService {
         this.cpfEncryptor              = cpfEncryptor;
         this.backgroundCheckService    = backgroundCheckService;
         this.termsAcceptanceRepository = termsAcceptanceRepository;
+        this.cpfHashService          = cpfHashService;
     }
 
     @Transactional
@@ -112,7 +116,7 @@ public class ProviderService {
         // Trava do usuário como PRIMEIRA leitura (revisão cruzada, 2ª rodada): é a trava da exclusão de conta, que
         // anonimiza o perfil. Sem ela, uma exclusão que commitasse entre a leitura do perfil e o save era desfeita —
         // o save grava a linha inteira, e bio, CPF cifrado e status voltavam, com a chave Pix nova junto.
-        userRepository.findByIdComTrava(userId)
+        User dono = userRepository.findByIdComTrava(userId)
                 .filter(u -> !u.isExcluido())
                 .orElseThrow(() -> new BusinessException(
                         "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));
@@ -121,6 +125,10 @@ public class ProviderService {
                         "PROVIDER_NOT_FOUND", "Perfil de prestador não encontrado."));
         // Validada e guardada na forma canônica: é o destino de dinheiro real do repasse.
         PixKey chave = PixKey.parse(chavePixClaro);
+        if (chave.tipo() == PixKey.Tipo.CPF
+                && !cpfHashService.confere(chave.valor(), dono.getCpfHash(), dono.getCpfHashVersao())) {
+            throw new BusinessException("PIX_CPF_MISMATCH", "A chave Pix CPF deve ser o CPF desta conta.");
+        }
         perfil.setChavePixCifrada(cpfEncryptor.encrypt(chave.valor()));
         profileRepository.save(perfil);
     }

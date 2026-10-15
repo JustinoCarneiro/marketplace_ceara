@@ -3,6 +3,7 @@ package com.onda.marketplace.admin;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.payment.PaymentMethod;
+import com.onda.marketplace.payment.OutboxEventRepository;
 import com.onda.marketplace.payment.Transaction;
 import com.onda.marketplace.payment.TransactionRepository;
 import com.onda.marketplace.payment.TransactionStatus;
@@ -45,6 +46,7 @@ class AdminReportServiceTest {
     @Mock SosAlertRepository          sosRepository;
     @Mock UserRepository              userRepository;
     @Mock DisputeResolutionRepository resolutionRepository;
+    @Mock OutboxEventRepository        outboxRepository;
 
     AdminReportService service;
 
@@ -52,7 +54,7 @@ class AdminReportServiceTest {
     void setUp() {
         service = new AdminReportService(
                 srRepository, transactionRepository, providerProfileRepository, sosRepository,
-                userRepository, resolutionRepository);
+                userRepository, resolutionRepository, outboxRepository, 2L);
     }
 
     /** Linha do GROUP BY status: [ServiceRequestStatus, Long]. */
@@ -207,6 +209,16 @@ class AdminReportServiceTest {
         when(providerProfileRepository.countByStatusVerificacao(ProviderStatus.EM_VERIFICACAO)).thenReturn(0L);
 
         assertThat(service.alertas()).isEmpty();
+    }
+
+    @Test
+    void alertas_repassePendenteHaDoisDias_contaUmaVezPorTransacao() {
+        Instant agora = Instant.parse("2026-10-14T12:00:00Z");
+        Instant limite = Instant.parse("2026-10-12T12:00:00Z");
+        when(outboxRepository.contarRepassesPendentesAntesDe(limite)).thenReturn(2L);
+
+        assertThat(service.alertas(agora)).contains(new OperationalAlert("REPASSE_ATRASADO", 2L));
+        verify(outboxRepository).contarRepassesPendentesAntesDe(limite);
     }
 
     @Test

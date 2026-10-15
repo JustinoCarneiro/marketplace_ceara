@@ -1,6 +1,8 @@
 package com.onda.marketplace.payment;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,6 +12,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
+    /** Serializa confirmações manuais da mesma transação para não duplicar a auditoria. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Transaction t WHERE t.id = :id")
+    Optional<Transaction> findByIdComTrava(@Param("id") UUID id);
+
     /**
      * Idempotência escopada ao pedido — a chave sozinha é do solicitante, não global.
      * Buscar só por chave devolvia a transação de outro cliente numa colisão (V14).
