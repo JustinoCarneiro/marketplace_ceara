@@ -124,6 +124,9 @@ jobs:
           timeout 90 bash -c 'until nc -z localhost 8080; do sleep 2; done'
           echo "Backend UP"
         env:
+          # Backend do emulador sem serviços externos; e2e permite o stub explicitamente.
+          SPRING_PROFILES_ACTIVE: e2e
+          STORAGE_PROVIDER: stub
           DATABASE_URL: jdbc:postgresql://localhost:5432/onda_db
           POSTGRES_USER: onda_user
           POSTGRES_PASSWORD: onda_pass_ci
