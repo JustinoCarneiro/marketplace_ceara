@@ -24,10 +24,15 @@ interface Options {
   onState: (state: ChatConnectionState) => void;
 }
 
+// Instant do backend usa UTC e pode omitir zeros finais; normalizar preserva a ordem submilissegundo.
+function timestampKey(value: string): string {
+  return value.replace(/(?:\.(\d+))?Z$/, (_match, fraction: string | undefined) => `.${(fraction ?? '').padEnd(9, '0')}Z`);
+}
+
 export function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
   const byId = new Map(current.map(message => [message.id, message]));
   for (const message of incoming) byId.set(message.id, message);
-  return [...byId.values()].sort((one, two) => one.createdAt.localeCompare(two.createdAt) || one.id.localeCompare(two.id));
+  return [...byId.values()].sort((one, two) => timestampKey(one.createdAt).localeCompare(timestampKey(two.createdAt)) || one.id.localeCompare(two.id));
 }
 
 function isMessage(value: unknown): value is ChatMessage {

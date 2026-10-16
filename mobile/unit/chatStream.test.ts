@@ -95,3 +95,13 @@ test('silent connection loss is detected by watchdog and retried', t => {
   assert.equal(context.transports.length, 2);
   context.subscription.close();
 });
+
+test('orders timestamps chronologically with varying fractional precision', () => {
+  const items = [
+    { ...message('late'), createdAt: '2026-10-16T10:00:00.9Z' },
+    { ...message('whole'), createdAt: '2026-10-16T10:00:00Z' },
+    { ...message('micro'), createdAt: '2026-10-16T10:00:00.100001Z' },
+    { ...message('nano'), createdAt: '2026-10-16T10:00:00.1000001Z' },
+  ];
+  assert.deepEqual(mergeMessages([], items).map(item => item.id), ['whole', 'nano', 'micro', 'late']);
+});
