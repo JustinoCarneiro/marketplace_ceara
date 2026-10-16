@@ -48,3 +48,11 @@ Notas:
 `admin/reports/*.csv`, `metrics.pdf`, `admin/categories`, `admin/users`, `admin/providers`,
 `admin/audit-logs`, `transactions/{srId}`, `services/ai/suggest`.
 
+
+## M17 / SMTP — integração preparada, ativação externa pendente (2026-10-16)
+
+S3/R2 privado, URLs temporárias renováveis, remoção assíncrona durável das mídias na exclusão
+de conta e remetente SMTP independente do login implementados. A demo mantém stub explícito.
+Ainda faltam bucket/credenciais, domínio próprio, DNS e remetente verificado, além de validação
+com os provedores e política de reconciliação/retenção de objetos e versões antes de dados reais.
+Procedimento e limites: [Configuração de storage e e-mail](CONFIGURACAO_STORAGE_EMAIL.md).

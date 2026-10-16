@@ -197,6 +197,12 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     int sanearBairroForaDaListaDosPedidosDoCliente(@Param("userId") UUID userId,
                                                     @Param("validos") Collection<String> validos);
 
+    @Query("""
+           SELECT m.url FROM ServiceMedia m
+            WHERE m.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.cliente.id = :userId)
+           """)
+    java.util.List<String> referenciasMidiaDosPedidosDoCliente(@Param("userId") UUID userId);
+
     /** Fotos e áudios dos pedidos do cliente (a casa dele, a voz dele). Só a URL fica no banco. */
     @Modifying
     @Query("""

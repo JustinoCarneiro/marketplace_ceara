@@ -1,5 +1,6 @@
 package com.onda.marketplace.servicerequest;
 
+import org.springframework.http.ResponseEntity;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,6 +44,13 @@ public class ServiceRequestController {
             @RequestParam("tipo") String tipo,
             Authentication auth) {
         return service.addMedia(id, file, tipo, userId(auth));
+    }
+
+    /** Renova o acesso temporário às mídias, apenas para participantes. */
+    @GetMapping("/{id}/media")
+    public ResponseEntity<List<MediaUploadResponse>> midias(@PathVariable UUID id, Authentication auth) {
+        return ResponseEntity.ok().header("Cache-Control", "no-store")
+                .body(service.listarMidias(id, userId(auth)));
     }
 
     /** "Meus pedidos" do cliente logado (mobile). */

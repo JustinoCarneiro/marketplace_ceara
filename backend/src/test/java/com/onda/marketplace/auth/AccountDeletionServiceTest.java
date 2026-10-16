@@ -56,6 +56,7 @@ class AccountDeletionServiceTest {
     @Mock AccountDeletionRepository exclusao;
     @Mock PasswordEncoder           passwordEncoder;
     @Mock ApplicationEventPublisher eventos;
+    @Mock com.onda.marketplace.servicerequest.StorageCleanupService storageCleanup;
 
     AccountDeletionService service;
 
@@ -68,7 +69,7 @@ class AccountDeletionServiceTest {
         service = new AccountDeletionService(userRepository, profileRepository, exclusao,
                 passwordEncoder, passwordAuthenticator, eventos,
                 new org.springframework.transaction.support.TransactionTemplate(
-                        mock(org.springframework.transaction.PlatformTransactionManager.class)));
+                        mock(org.springframework.transaction.PlatformTransactionManager.class)), storageCleanup);
     }
 
     // ---------- apoio ----------
@@ -335,6 +336,22 @@ class AccountDeletionServiceTest {
         assertThat(u.getEmail()).doesNotContain(USER_ID.toString());
         assertThat(u.getSenhaHash()).isEqualTo("$2a$hash-inutilizavel");
         assertThat(u.getCpfHash()).isNull();        // conta limpa: pode voltar com o mesmo CPF
+    }
+
+    @Test
+    void exclusaoEnfileiraObjetosAntesDeRemoverReferencias() {
+        cadastrado(UserRole.ROLE_CLIENT);
+        senhaCorreta();
+        semNenhumaPendencia();
+        semPerfilDePrestador();
+        when(passwordEncoder.encode(anyString())).thenReturn("$2a$x");
+        var references = java.util.List.of("s3://private-media/key");
+        when(exclusao.referenciasMidiaDosPedidosDoCliente(USER_ID)).thenReturn(references);
+        service.excluir(USER_ID, SENHA);
+        var ordem = org.mockito.Mockito.inOrder(exclusao, storageCleanup);
+        ordem.verify(exclusao).referenciasMidiaDosPedidosDoCliente(USER_ID);
+        ordem.verify(storageCleanup).enqueue(references);
+        ordem.verify(exclusao).apagarMidiaDosPedidosDoCliente(USER_ID);
     }
 
     @Test

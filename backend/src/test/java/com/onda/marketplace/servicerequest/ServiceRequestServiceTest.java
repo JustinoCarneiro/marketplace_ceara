@@ -270,11 +270,12 @@ class ServiceRequestServiceTest {
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
         when(storageService.upload(any(), eq("service-requests/" + requestId)))
                 .thenReturn("https://storage.example.com/foto.jpg");
         when(mediaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(storageService.readUrl("https://storage.example.com/foto.jpg")).thenReturn("https://storage.example.com/foto.jpg");
 
         var file = new org.springframework.mock.web.MockMultipartFile(
                 "file", "foto.jpg", "image/jpeg", "img".getBytes());
@@ -285,12 +286,84 @@ class ServiceRequestServiceTest {
     }
 
     @Test
-    void addMedia_naoParticipante_lancaForbidden() {
+    void addMedia_persisteReferenciaEstavelERetornaUrlTemporaria() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+        String reference = "s3://private-media/service-requests/" + requestId + "/" + UUID.randomUUID();
+        when(storageService.upload(any(), any())).thenReturn(reference);
+        when(storageService.readUrl(reference)).thenReturn("https://example.org/foto?temporary=1");
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "foto.jpg", "image/jpeg", new byte[]{1});
+        assertThat(service.addMedia(requestId, file, "FOTO", userId).url()).isEqualTo("https://example.org/foto?temporary=1");
+        verify(mediaRepository).save(argThat(media -> media.getUrl().equals(reference)));
+    }
+
+    @Test
+    void listarMidias_terceiroNaoRecebeUrlNemConsultaStorage() {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
         when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
+        assertThatThrownBy(() -> service.listarMidias(requestId, userId))
+                .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verifyNoInteractions(storageService, mediaRepository);
+    }
+
+    @Test
+    void listarMidias_participanteRecebeUrlRenovada() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+        when(mediaRepository.findByServiceRequest_Id(requestId)).thenReturn(java.util.List.of(new ServiceMedia(sr, MediaType.FOTO, "s3://bucket/key")));
+        when(storageService.readUrl("s3://bucket/key")).thenReturn("https://example.org/renewed");
+        assertThat(service.listarMidias(requestId, userId)).singleElement()
+                .extracting(MediaUploadResponse::url).isEqualTo("https://example.org/renewed");
+    }
+
+    @Test
+    void addMedia_falhaStorageNaoPersisteMidia() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+        when(storageService.upload(any(), any())).thenThrow(new StorageUnavailableException());
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "foto.jpg", "image/jpeg", new byte[]{1});
+        assertThatThrownBy(() -> service.addMedia(requestId, file, "FOTO", userId)).isInstanceOf(StorageUnavailableException.class);
+        verifyNoInteractions(mediaRepository);
+    }
+
+    @Test
+    void addMedia_contaExcluidaEnquantoAguardavaTravaNaoEnviaObjeto() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var owner = mock(com.onda.marketplace.auth.User.class);
+        when(owner.isExcluido()).thenReturn(true);
+        var sr = new ServiceRequest();
+        sr.setCliente(owner);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "foto.jpg", "image/jpeg", new byte[]{1});
+        assertThatThrownBy(() -> service.addMedia(requestId, file, "FOTO", userId))
+                .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("code", "FORBIDDEN");
+        verifyNoInteractions(storageService, mediaRepository);
+    }
+
+    @Test
+    void addMedia_naoParticipante_lancaForbidden() {
+        UUID requestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        var sr = new ServiceRequest();
+        sr.setCliente(cliente);
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
 
         var file = new org.springframework.mock.web.MockMultipartFile(
@@ -308,7 +381,7 @@ class ServiceRequestServiceTest {
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
 
         var file = new org.springframework.mock.web.MockMultipartFile(
@@ -326,7 +399,7 @@ class ServiceRequestServiceTest {
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
         sr.setCliente(cliente);
-        when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
 
         // Declara FOTO mas envia um PDF — não é o que a tela de anexo se propõe a aceitar.

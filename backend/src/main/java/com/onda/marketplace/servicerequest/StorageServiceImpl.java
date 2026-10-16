@@ -2,22 +2,25 @@ package com.onda.marketplace.servicerequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
-@Service
 class StorageServiceImpl implements StorageService {
 
     private static final Logger log = LoggerFactory.getLogger(StorageServiceImpl.class);
 
     @Override
+    public void delete(String reference) {
+        if (reference.startsWith("s3://")) throw new StorageUnavailableException();
+    }
+
+    @Override
     public String upload(MultipartFile file, String folder) {
-        // Stub: substituir por S3/GCS em produção. Banco guarda apenas a URL (TS07).
-        String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        // Simulação explícita de seed/test/e2e; não armazena bytes.
+        String filename = UUID.randomUUID().toString();
         String url = "https://storage.marketplace-ceara.com/" + folder + "/" + filename;
-        log.debug("Storage stub: {} → {}", file.getOriginalFilename(), url);
+        log.debug("Upload simulado em ambiente de teste/demo.");
         return url;
     }
 }
