@@ -90,10 +90,10 @@ public class ServiceRequestService {
      */
     @Transactional
     public MediaUploadResponse addMedia(UUID requestId, MultipartFile file, String tipoStr, UUID userId) {
-        ServiceRequest sr = requestRepository.findById(requestId)
+        ServiceRequest sr = requestRepository.findByIdComTrava(requestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
-        if (!requestRepository.isParticipante(requestId, userId)) {
+        if (!requestRepository.isParticipante(requestId, userId) || sr.getCliente().isExcluido()) {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 
@@ -104,7 +104,19 @@ public class ServiceRequestService {
         ServiceMedia media = new ServiceMedia(sr, tipo, url);
         mediaRepository.save(media);
 
-        return new MediaUploadResponse(media.getId(), url, tipo.name());
+        return new MediaUploadResponse(media.getId(), storageService.readUrl(url), tipo.name());
+    }
+
+    @Transactional(readOnly = true)
+    public List<MediaUploadResponse> listarMidias(UUID requestId, UUID userId) {
+        requestRepository.findById(requestId)
+                .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
+        if (!requestRepository.isParticipante(requestId, userId)) {
+            throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
+        }
+        return mediaRepository.findByServiceRequest_Id(requestId).stream()
+                .map(media -> new MediaUploadResponse(media.getId(), storageService.readUrl(media.getUrl()), media.getTipo().name()))
+                .toList();
     }
 
     private MediaType parseTipo(String tipoStr) {

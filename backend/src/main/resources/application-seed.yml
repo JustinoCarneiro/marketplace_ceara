@@ -16,3 +16,7 @@ marketplace:
     # Mais rápido que o default de 5s: aqui a cadeia cobrança → confirmação precisa
     # fechar dentro do tempo de um clique no app (e dos testes de fluxo).
     delay-ms: 500
+
+# Demo continua sem dependência de conta externa; s3 pode ser habilitado explicitamente.
+storage:
+  provider: ${STORAGE_PROVIDER:stub}

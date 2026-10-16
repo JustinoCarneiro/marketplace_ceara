@@ -1,5 +1,6 @@
 package com.onda.marketplace.auth;
 
+import com.onda.marketplace.servicerequest.StorageCleanupService;
 import com.onda.marketplace.provider.ProviderProfile;
 import com.onda.marketplace.provider.ProviderProfileRepository;
 import com.onda.marketplace.provider.ProviderStatus;
@@ -40,6 +41,7 @@ public class AccountDeletionService {
     private final PasswordAuthenticator     passwordAuthenticator;
     private final ApplicationEventPublisher eventos;
     private final TransactionTemplate       transacao;
+    private final StorageCleanupService storageCleanup;
 
     public AccountDeletionService(UserRepository userRepository,
                                   ProviderProfileRepository profileRepository,
@@ -47,7 +49,8 @@ public class AccountDeletionService {
                                   PasswordEncoder passwordEncoder,
                                   PasswordAuthenticator passwordAuthenticator,
                                   ApplicationEventPublisher eventos,
-                                  TransactionTemplate transacao) {
+                                  TransactionTemplate transacao,
+                                  StorageCleanupService storageCleanup) {
         this.userRepository    = userRepository;
         this.profileRepository = profileRepository;
         this.exclusao          = exclusao;
@@ -55,6 +58,7 @@ public class AccountDeletionService {
         this.passwordAuthenticator = passwordAuthenticator;
         this.eventos           = eventos;
         this.transacao         = transacao;
+        this.storageCleanup    = storageCleanup;
     }
 
     /**
@@ -139,6 +143,7 @@ public class AccountDeletionService {
         exclusao.apagarDadosPessoaisDosPedidosDoCliente(userId);
         exclusao.apagarMotivoDeDisputaDosPedidosOndeEhPrestador(userId);
         exclusao.sanearBairroForaDaListaDosPedidosDoCliente(userId, com.onda.marketplace.shared.Bairro.VALIDOS);
+        storageCleanup.enqueue(exclusao.referenciasMidiaDosPedidosDoCliente(userId));
         exclusao.apagarMidiaDosPedidosDoCliente(userId);
         exclusao.removerConteudoDasMensagensDoUsuario(userId);
         exclusao.removerComentariosDasAvaliacoesDoUsuario(userId);

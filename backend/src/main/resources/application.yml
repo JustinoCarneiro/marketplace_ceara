@@ -44,6 +44,10 @@ spring:
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
 jwt:
   secret: ${JWT_SECRET}                          # obrigatório em produção (min 32 chars)
@@ -65,6 +69,7 @@ cpf:
 
 # M12: destinatário dos alertas operacionais
 notification:
+  from-email: ${MAIL_FROM:${MAIL_USERNAME:}}
   admin-email: ${ADMIN_ALERT_EMAIL:admin@marketplace-ceara.com.br}
   # SOS (US21/US30) precisa avisar fora do painel. Sem MAIL_USERNAME/MAIL_PASSWORD não há
   # canal externo, e a aplicação se recusa a subir — assim a ausência nunca passa
@@ -140,3 +145,13 @@ logging:
     root: INFO
     com.onda.marketplace: DEBUG
     org.flywaydb: INFO
+
+# S3 compatível (AWS S3 ou Cloudflare R2). Nunca tornar o bucket público.
+storage:
+  provider: ${STORAGE_PROVIDER:s3}
+  bucket: ${STORAGE_BUCKET:}
+  endpoint: ${STORAGE_ENDPOINT:}
+  region: ${STORAGE_REGION:us-east-1}
+  access-key: ${STORAGE_ACCESS_KEY:}
+  secret-key: ${STORAGE_SECRET_KEY:}
+  read-url-ttl-seconds: ${STORAGE_READ_URL_TTL_SECONDS:600}

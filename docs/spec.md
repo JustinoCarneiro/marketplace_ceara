@@ -111,7 +111,7 @@ Como **Cliente**, quero filtrar por distância e nota mínima, para refinar a es
 
 ### US04 — Abertura de pedido multimídia
 Como **Cliente**, quero abrir um pedido com texto, áudio e/ou foto, para o prestador avaliar antes de aceitar.
-- **Dado que** anexo mídia, **quando** envio, **então** o app solicita permissões nativas de Câmera/Microfone e o arquivo vai para o object storage; o banco guarda só a URL.
+- **Dado que** anexo mídia, **quando** envio, **então** o app solicita permissões nativas de Câmera/Microfone e o arquivo vai para o object storage; o banco guarda só uma referência estável; a API entrega uma URL temporária de leitura, renovável após autorização.
 - **Dado** o pedido criado via `POST /api/v1/service-requests` (JSON — categoria/descrição/localização), **então** cada mídia é anexada em seguida por `POST /api/v1/service-requests/{id}/media` (`multipart/form-data`, campos `file` + `tipo` ∈ `FOTO`/`AUDIO`/`TEXTO`); são duas chamadas, não uma — falha ao anexar não desfaz o pedido já criado.
 - **Dado** que anexo mídia a um pedido, **então** só cliente dono ou prestador com proposta aceita podem anexar (mesma regra de participação do detalhe do pedido); e o `tipo` declarado precisa bater com o content-type do arquivo (`FOTO`→`image/*`, `AUDIO`→`audio/*`).
 - Reaproveita `RateScreen` (avaliação bidirecional, Épico 7): anexar foto à avaliação usa o mesmo endpoint, contra o mesmo `requestId` já `CONCLUIDO`.
@@ -339,7 +339,7 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - **TS04 (LGPD):** CPF/dados sensíveis criptografados em repouso; DTOs (Records) ocultam entidades.
 - **TS05 (Auth):** JWT curto + refresh token; controle de acesso por role nos endpoints.
 - **TS06 (Erros):** `@ControllerAdvice` padronizando 400/404/422 em JSON.
-- **TS07 (Mídia):** upload para object storage; banco persiste apenas URL.
+- **TS07 (Mídia):** upload para bucket privado S3/R2; banco persiste referência estável e a API gera URLs temporárias após autorização.
 - **TS08 (Observabilidade):** logs estruturados + métricas dos fluxos de pagamento e disputa (entra no detalhe na Fase 3).
 - **TS09 (Admin/Auditoria):** painel web restrito a `ROLE_ADMIN` (403 para os demais); toda ação administrativa registrada em log de auditoria imutável (quem/o quê/quando). Métricas derivadas por consulta/agregação, sem duplicar a fonte da verdade financeira.
 
@@ -353,7 +353,8 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 - `background_checks` (id, provider_id, status, resultado, requested_at, completed_at) — verificação assíncrona (US02)
 - `service_categories` (id, nome, slug, ativa) — catálogo do admin (US28)
 - `service_requests` (id, cliente_id, prestador_id, descricao, status)
-- `service_media` (id, service_request_id, tipo, url, created_at) — mídia em object storage; banco só a URL (TS07)
+- `service_media` (id, service_request_id, tipo, url, created_at) — mídia em object storage privado; coluna `url` guarda referência estável (TS07)
+- `storage_deletions` (id, reference, created_at) — fila durável para remoção física das mídias após exclusão da conta (V29).
 - `proposals` (id, service_id, prestador_id, valor, prazo, status)
 - `transactions` (id, service_id, valor_total, valor_comissao, status_pagamento, gateway_transaction_id, idempotency_key)
 - `outbox_events` (id, agregado, tipo_evento, payload, status, criado_em) — motor do Escrow

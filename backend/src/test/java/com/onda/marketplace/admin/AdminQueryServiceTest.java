@@ -52,6 +52,7 @@ class AdminQueryServiceTest {
     @Mock com.onda.marketplace.provider.ProviderProfileRepository providerProfileRepository;
     @Mock com.onda.marketplace.provider.CpfEncryptor cpfEncryptor;
     @Mock AuditService auditService;
+    @Mock com.onda.marketplace.servicerequest.StorageService storageService;
 
     AdminQueryService service;
 
@@ -63,7 +64,7 @@ class AdminQueryServiceTest {
         service = new AdminQueryService(
                 srRepository, transactionRepository, outboxRepository, resolutionRepository,
                 proposalRepository, mediaRepository, userRepository,
-                providerProfileRepository, cpfEncryptor, auditService);
+                providerProfileRepository, cpfEncryptor, auditService, storageService);
     }
 
     // --- findDisputas ---
@@ -107,7 +108,13 @@ class AdminQueryServiceTest {
         when(transactionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(tx));
         when(resolutionRepository.findByServiceRequestId(SR_ID)).thenReturn(Optional.of(res));
 
+        when(mediaRepository.findByServiceRequest_Id(SR_ID)).thenReturn(List.of(
+                new com.onda.marketplace.servicerequest.ServiceMedia(sr,
+                        com.onda.marketplace.servicerequest.MediaType.FOTO, "s3://bucket/key")));
+        when(storageService.readUrl("s3://bucket/key")).thenReturn("https://example.org/signed");
         DisputaDetalheDto dto = service.findDetalheDisputa(SR_ID);
+        assertThat(dto.midias()).singleElement().extracting(DisputaDetalheDto.MidiaDto::url)
+                .isEqualTo("https://example.org/signed");
 
         assertThat(dto.serviceRequestId()).isEqualTo(SR_ID);
         assertThat(dto.valorTotal()).isEqualByComparingTo("200");

@@ -1,5 +1,6 @@
 package com.onda.marketplace.admin;
 
+import com.onda.marketplace.servicerequest.StorageService;
 import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
@@ -48,6 +49,7 @@ public class AdminQueryService {
     private final ProviderProfileRepository   providerProfileRepository;
     private final CpfEncryptor                cpfEncryptor;
     private final AuditService                auditService;
+    private final StorageService storageService;
 
     public AdminQueryService(ServiceRequestRepository srRepository,
                              TransactionRepository transactionRepository,
@@ -58,7 +60,8 @@ public class AdminQueryService {
                              UserRepository userRepository,
                              ProviderProfileRepository providerProfileRepository,
                              CpfEncryptor cpfEncryptor,
-                             AuditService auditService) {
+                             AuditService auditService,
+                             StorageService storageService) {
         this.srRepository         = srRepository;
         this.transactionRepository = transactionRepository;
         this.outboxRepository     = outboxRepository;
@@ -69,6 +72,7 @@ public class AdminQueryService {
         this.providerProfileRepository = providerProfileRepository;
         this.cpfEncryptor         = cpfEncryptor;
         this.auditService         = auditService;
+        this.storageService       = storageService;
     }
 
     @Transactional(readOnly = true)
@@ -100,7 +104,7 @@ public class AdminQueryService {
                 .orElse(null);
 
         var midias = mediaRepository.findByServiceRequest_Id(serviceRequestId).stream()
-                .map(m -> new DisputaDetalheDto.MidiaDto(m.getTipo().name(), m.getUrl()))
+                .map(m -> new DisputaDetalheDto.MidiaDto(m.getTipo().name(), storageService.readUrl(m.getUrl())))
                 .toList();
 
         return new DisputaDetalheDto(

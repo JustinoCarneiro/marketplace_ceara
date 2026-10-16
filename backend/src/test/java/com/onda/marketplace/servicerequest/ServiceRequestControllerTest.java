@@ -87,6 +87,26 @@ class ServiceRequestControllerTest {
     }
 
     @Test
+    void listarMidias_retornaUrlsTemporarias() throws Exception {
+        var id = UUID.randomUUID();
+        when(service.listarMidias(eq(id), any())).thenReturn(java.util.List.of(
+                new MediaUploadResponse(UUID.randomUUID(), "https://example.org/signed", "FOTO")));
+        mvc.perform(get("/api/v1/service-requests/{id}/media", id)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].url").value("https://example.org/signed"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    void addMedia_storageFailure_returns503() throws Exception {
+        when(service.addMedia(any(), any(), any(), any())).thenThrow(new StorageUnavailableException());
+        mvc.perform(multipart("/api/v1/service-requests/{id}/media", UUID.randomUUID())
+                .file(new MockMultipartFile("file", "foto.jpg", "image/jpeg", new byte[]{1}))
+                .param("tipo", "FOTO").with(csrf()))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("STORAGE_UNAVAILABLE"));
+    }
+
+    @Test
     void meusPedidos_retornaListaDoCliente() throws Exception {
         var dto = new MyRequestDto(UUID.randomUUID(), "ELETRICISTA", "Chuveiro sem funcionar",
                 "PROPOSTO", Instant.now(), null, 2, null);

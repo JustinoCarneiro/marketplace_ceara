@@ -39,3 +39,6 @@ marketplace:
 notification:
   # Testes não têm SMTP; a ausência de canal é declarada para o contexto subir.
   allow-missing-alert-channel: true
+
+storage:
+  provider: stub

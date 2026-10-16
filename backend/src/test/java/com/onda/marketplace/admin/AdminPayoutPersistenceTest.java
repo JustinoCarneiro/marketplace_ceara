@@ -214,7 +214,7 @@ class AdminPayoutPersistenceTest {
                                   OutboxEventRepository outbox, UserRepository users, AuditService audit) {
             return new AdminQueryService(requests, transactions, outbox, mock(DisputeResolutionRepository.class),
                     mock(ProposalRepository.class), mock(ServiceMediaRepository.class), users,
-                    mock(ProviderProfileRepository.class), mock(CpfEncryptor.class), audit);
+                    mock(ProviderProfileRepository.class), mock(CpfEncryptor.class), audit, mock(com.onda.marketplace.servicerequest.StorageService.class));
         }
     }
 }

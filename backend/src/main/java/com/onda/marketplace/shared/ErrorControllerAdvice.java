@@ -1,5 +1,6 @@
 package com.onda.marketplace.shared;
 
+import com.onda.marketplace.servicerequest.StorageUnavailableException;
 import com.onda.marketplace.shared.error.ApiError;
 import com.onda.marketplace.shared.exception.BusinessException;
 import com.onda.marketplace.shared.exception.TooManyAttemptsException;
@@ -65,6 +66,12 @@ public class ErrorControllerAdvice {
             );
         }
         throw ex;   // outra violação: não esconder um bug diferente atrás do mesmo rótulo
+    }
+
+    @ExceptionHandler(StorageUnavailableException.class)
+    ResponseEntity<ApiError> handleStorageUnavailable(HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                ApiError.of(503, "STORAGE_UNAVAILABLE", "Armazenamento temporariamente indisponível.", req.getRequestURI()));
     }
 
     @ExceptionHandler(BusinessException.class)
