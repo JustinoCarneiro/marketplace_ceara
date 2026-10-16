@@ -109,6 +109,13 @@ implementar a exclusão de conta; a decisão de produto veio do usuário (volta 
     ordem de id, TODOS os pedidos que a exclusão escreve (os dele como cliente em qualquer status + os em que tem proposta `ATIVA` ou `ACEITA`); as duas
     exclusões que disputam pedidos se serializam na primeira trava, sem segurar nada antes. As propostas (linhas de `proposals`) ficam cobertas por
     transitividade: quem as toca já travou o pedido a que pertencem (`ProposalService` e a expiração travam o pedido primeiro).
+    **Complemento de cobertura (2026-10-16):** o E2E 77 mantém a reprodução dirigida do ciclo com uma exclusão real e a outra simulada por travas SQL.
+    Os E2E 83/84 acrescentam duas exclusões completas via HTTP, alternando a dona do menor/maior pedido como primeira participante. Uma terceira
+    transação segura apenas o menor pedido até ambas alcançarem o SQL de pré-trava, confirmado pela cadeia de `pg_blocking_pids` até o PID controlado
+    pelo teste (a segunda pode esperar atrás da primeira); uma espera não relacionada no banco não libera essa barreira. Depois, ambas devem retornar 204, anonimizar as contas, remover as sessões,
+    cancelar os dois pedidos, apagar suas descrições/localizações e encerrar as propostas cruzadas. A trava é liberada em `finally`, inclusive em falha.
+    Validação local: 84 E2E PostGIS verdes; em cópia temporária com a seleção anterior de pedidos, o teste 83 falha na barreira da primeira exclusão,
+    que não adquire a pré-trava do próprio pedido. Essa mutação prova a detecção da regressão; não é uma nova reprodução do deadlock do E2E 77.
   - **Isolamento (premissa, fixada; E2E 78):** "lock num comando + UPDATE em outro" só dá snapshot novo ao `UPDATE` em READ COMMITTED; em REPEATABLE READ o
     snapshot é o da transação e a proposta nova seguiria invisível. Nada no app fixa o isolamento (`TransactionTemplate` e JPA usam o padrão do banco, `read
     committed` no Postgres); o passo 78 falha se alguém mudar isso na conexão do app. Não cobre `default_transaction_isolation` mudado só no servidor de
