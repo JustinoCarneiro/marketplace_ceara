@@ -3257,6 +3257,110 @@ class E2EFluxoPrincipalTest {
         assertThat("nível de isolamento das transações do app", nivel, equalTo("read committed"));
     }
 
+    @Test @Order(83)
+    @DisplayName("83 · Exclusões cruzadas completas: dona do menor pedido inicia primeiro, ambas terminam e limpam seus dados")
+    void exclusoesCruzadasCompletas_menorPedidoPrimeiro() throws Exception {
+        excluirDuasContasCruzadas(true);
+    }
+
+    @Test @Order(84)
+    @DisplayName("84 · Exclusões cruzadas completas: dona do maior pedido inicia primeiro, ambas terminam e limpam seus dados")
+    void exclusoesCruzadasCompletas_maiorPedidoPrimeiro() throws Exception {
+        excluirDuasContasCruzadas(false);
+    }
+
+    private void excluirDuasContasCruzadas(boolean menorPrimeiro) throws Exception {
+        String cenario = menorPrimeiro ? "menor" : "maior";
+        var ana = cadastrarCliente("Ana Cruzada Completa", "ana.cruzada." + cenario + "@onda.test");
+        var bia = cadastrarCliente("Bia Cruzada Completa", "bia.cruzada." + cenario + "@onda.test");
+        UUID pedidoAna = pedidoDe(ana, "Pedido cruzado completo da Ana", "PROPOSTO");
+        UUID pedidoBia = pedidoDe(bia, "Pedido cruzado completo da Bia", "PROPOSTO");
+        proposta(pedidoAna, bia.id(), ProposalStatus.ATIVA);
+        proposta(pedidoBia, ana.id(), ProposalStatus.ATIVA);
+
+        boolean anaTemOMenor = pedidoAna.toString().compareTo(pedidoBia.toString()) < 0;
+        UUID lo = anaTemOMenor ? pedidoAna : pedidoBia;
+        Conta primeira = anaTemOMenor == menorPrimeiro ? ana : bia;
+        Conta segunda = primeira == ana ? bia : ana;
+
+        // Uma terceira transação só segura lo para organizar a corrida. As DUAS participantes
+        // executam o endpoint inteiro, inclusive autenticação, UPDATEs, anonimização e commit.
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try (var bloqueio = jdbc.getDataSource().getConnection()) {
+            bloqueio.setAutoCommit(false);
+            try {
+                int bloqueadorPid;
+                try (var consulta = bloqueio.prepareStatement(
+                        "SELECT pg_backend_pid() FROM service_requests WHERE id = ? FOR NO KEY UPDATE")) {
+                    consulta.setObject(1, lo);
+                    try (var resultado = consulta.executeQuery()) {
+                        Assertions.assertTrue(resultado.next(), "o pedido lo deve existir");
+                        bloqueadorPid = resultado.getInt(1);
+                    }
+                }
+
+                var exclusaoPrimeira = pool.submit(() -> excluirConta(primeira.token(), SENHA_PADRAO).statusCode());
+                aguardarExclusoesBloqueadas(bloqueadorPid, 1);
+                var exclusaoSegunda = pool.submit(() -> excluirConta(segunda.token(), SENHA_PADRAO).statusCode());
+                aguardarExclusoesBloqueadas(bloqueadorPid, 2);
+
+                bloqueio.rollback(); // ambas chegaram à trava dos pedidos; agora disputam entre si
+                assertThat("a primeira exclusão terminou", exclusaoPrimeira.get(30, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+                assertThat("a segunda exclusão terminou", exclusaoSegunda.get(30, java.util.concurrent.TimeUnit.SECONDS), equalTo(204));
+            } finally {
+                bloqueio.rollback(); // libera lo também se uma espera/assertion falhar
+            }
+        } finally {
+            pool.shutdownNow();
+            Assertions.assertTrue(pool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS),
+                    "as duas requisições de exclusão devem terminar");
+        }
+
+        for (Conta removida : List.of(ana, bia)) {
+            var usuario = conta(removida.id());
+            assertThat(usuario.get("nome"), equalTo("Usuário removido"));
+            assertThat(String.valueOf(usuario.get("email")), matchesPattern("removido-[0-9a-f-]{36}@excluido\\.invalid"));
+            assertThat(usuario.get("ativo"), equalTo(false));
+            assertThat(usuario.get("excluido_em"), notNullValue());
+            assertThat(contar("SELECT count(*) FROM refresh_tokens WHERE user_id = ?::uuid", removida.id().toString()), equalTo(0));
+        }
+        for (UUID pedido : List.of(pedidoAna, pedidoBia)) {
+            assertThat(statusDoPedido(pedido), equalTo("CANCELADO"));
+            assertThat(vazio("descricao", "service_requests", pedido), is(true));
+            assertThat(vazio("localizacao", "service_requests", pedido), is(true));
+            assertThat("a proposta cruzada foi encerrada", contar(
+                    "SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid AND status = 'ENCERRADA'",
+                    pedido.toString()), equalTo(1));
+            assertThat("nenhuma proposta ficou ativa", contar(
+                    "SELECT count(*) FROM proposals WHERE service_request_id = ?::uuid AND status = 'ATIVA'",
+                    pedido.toString()), equalTo(0));
+        }
+    }
+
+    private void aguardarExclusoesBloqueadas(int bloqueadorPid, int quantidade) throws InterruptedException {
+        long limite = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        do {
+            // O segundo participante pode esperar na fila ATRÁS do primeiro, sem apontar
+            // diretamente para o bloqueador. Segue a cadeia até o PID controlado pelo teste.
+            int esperando = contar("""
+                    WITH RECURSIVE bloqueadas(pid) AS (
+                        SELECT pid FROM pg_stat_activity
+                         WHERE ? = ANY(pg_blocking_pids(pid))
+                        UNION
+                        SELECT a.pid FROM pg_stat_activity a
+                          JOIN bloqueadas b ON b.pid = ANY(pg_blocking_pids(a.pid))
+                    )
+                    SELECT count(*) FROM pg_stat_activity a JOIN bloqueadas b ON b.pid = a.pid
+                     WHERE a.datname = current_database() AND a.wait_event_type = 'Lock'
+                       AND a.query LIKE '%FROM service_requests s%'
+                       AND a.query LIKE '%FOR NO KEY UPDATE OF s%'
+                    """, bloqueadorPid);
+            if (esperando == quantidade) return;
+            Thread.sleep(50);
+        } while (System.nanoTime() < limite);
+        Assertions.fail("deveriam estar esperando a pré-trava dos pedidos " + quantidade + " exclusões completas");
+    }
+
     @Test @Order(74)
     @DisplayName("74 · Expiração com uma proposta nova em voo: o pedido não é cancelado por cima da proposta que acabou de chegar")
     void expiracao_propostaNovaEmVoo_naoCancelaOPedido() throws Exception {
