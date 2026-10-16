@@ -3470,6 +3470,7 @@ class E2EFluxoPrincipalTest {
         var cpfNaReferencia = org.junit.jupiter.api.Assertions.assertThrows(com.onda.marketplace.shared.exception.BusinessException.class,
                 () -> adminQueryService.confirmarRepasseManual(txConcluido, lia.id(), "111.444.777-35"));
         assertThat(cpfNaReferencia.getCode(), equalTo("PAYOUT_RECEIPT_INVALID"));
+        assertThat(texto("SELECT status_pagamento FROM transactions WHERE id = ?::uuid", txConcluido.toString()), equalTo("RETIDO"));
 
         assertThat("nada foi liberado nem auditado", contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id IN (?::uuid, ?::uuid)", txDisputa.toString(), txConcluido.toString()), equalTo(0));
     }

@@ -342,6 +342,8 @@ PUT  /api/v1/proposals/{id}/accept|reject  (ROLE_CLIENT) 200 ProposalDto
 ```
 
 ### M06 — Pagamento & Escrow  *(módulo crítico)*
+**Cobertura complementar do PR #38:** ✅ Concluído (2026-10-16) — testes de referência/normalização, estados do pedido e pagamento, erros HTTP com serviço real, rollback da liberação/outbox quando a auditoria falha e duas confirmações reais concorrentes com JPA/H2. E2E 82 passa a conferir explicitamente que a recusa de CPF mantém `RETIDO`; interface cobre espaços nas pontas. Validação local: backend `mvn test` com 675 testes reportados, 1 ignorado e zero falhas/erros; 2 Playwright do comprovante; admin lint/build e mobile TypeScript verdes. Retirar a trava em cópia temporária fez o novo teste de concorrência falhar. H2 usa schema financeiro isolado de teste e não valida migrations/PostGIS; E2E 82 não concluído localmente (Docker indisponível). Contrato e produção intactos; revisão cruzada do diff pendente.
+
 **Endurecimento do repasse manual (2026-10-14):** ✅ Implementado (Codex, PR #35), revisado e mergeado; implantado na demo em 2026-10-14 (`580c317`). Referência de comprovante na auditoria, chave Pix CPF vinculada à conta e alerta de atraso de 2 dias. Complemento da revisão cruzada (Claude): a referência não pode ser um CPF válido nem um UUID (`PAYOUT_RECEIPT_INVALID`) e o repasse só vale para pedido `CONCLUIDO` (`PAYOUT_NOT_DUE`).
 ```
 POST /api/v1/payments              (ROLE_CLIENT)   Header: Idempotency-Key (obrigatório)
