@@ -59,7 +59,7 @@ class ServiceRequestServiceTest {
     void create_comSugestaoIA_retornaDescricaoSugerida() {
         var suggestion = new AiSuggestion("Instalação de chuveiro elétrico", BigDecimal.valueOf(150), BigDecimal.valueOf(300));
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
-        when(aiService.suggest(any(), any())).thenReturn(Optional.of(suggestion));
+        when(aiService.suggest(any(), any(), any())).thenReturn(Optional.of(suggestion));
         when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -73,7 +73,7 @@ class ServiceRequestServiceTest {
     @Test
     void create_iaFalha_retornaSemSugestao() {
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
-        when(aiService.suggest(any(), any())).thenReturn(Optional.empty());  // IA indisponível
+        when(aiService.suggest(any(), any(), any())).thenReturn(Optional.empty());  // IA indisponível
         when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -122,7 +122,7 @@ class ServiceRequestServiceTest {
     @Test
     void create_bairroNuloOuDaLista_passa() {
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
-        when(aiService.suggest(any(), any())).thenReturn(Optional.empty());
+        when(aiService.suggest(any(), any(), any())).thenReturn(Optional.empty());
         when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 

@@ -28,7 +28,10 @@ Pontos que precisam de validação jurídica:
 
 - [ ] Indicação formal do **Encarregado de Dados (DPO)** — nome, e-mail e canal de contato
 - [ ] Base legal para cada dado coletado (art. 7º LGPD): consentimento, execução contratual, legítimo interesse
-- [ ] Detalhamento dos subprocessadores (gateway de pagamento, serviço de background check)
+- [ ] Detalhamento dos subprocessadores:
+  - Gateway de pagamento (Mercado Pago);
+  - Serviço de verificação cadastral/background check;
+  - Provedor de IA generativa para sugestão de pedidos (Google Gemini / Vertex AI): contratação com cláusula DPA de não utilização dos relatos para treinamento e não retenção. No backend, a plataforma já implementa minimização prévia (`AiInputSanitizer`) mascarando telefones, e-mails, CPFs e números de cartão antes do envio.
 - [ ] Política de retenção e prazo de exclusão por categoria de dado
 - [ ] Processo formal de atendimento a titulares (portal ou e-mail com SLA definido)
 - [ ] Comunicação de incidentes (art. 48 LGPD — prazo de 2 dias úteis à ANPD)

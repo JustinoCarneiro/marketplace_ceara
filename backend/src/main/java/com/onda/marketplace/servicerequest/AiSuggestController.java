@@ -1,6 +1,7 @@
 package com.onda.marketplace.servicerequest;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -21,9 +22,12 @@ public class AiSuggestController {
     }
 
     @PostMapping("/suggest")
-    public ResponseEntity<AiSuggestResponse> suggest(@RequestBody AiSuggestRequest request) {
+    public ResponseEntity<AiSuggestResponse> suggest(
+            @RequestBody AiSuggestRequest request,
+            Authentication auth) {
+        String userKey = (auth != null && auth.getName() != null) ? auth.getName() : "anonymous";
         return ResponseEntity.ok(
-                aiService.suggest(request.descricao(), null)
+                aiService.suggest(request.descricao(), null, userKey)
                         .map(AiSuggestResponse::fromAi)
                         .orElseGet(AiSuggestResponse::fallback));
     }

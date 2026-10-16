@@ -15,9 +15,14 @@ class AiSuggestionServiceImpl implements AiSuggestionService {
 
     @Override
     public Optional<AiSuggestion> suggest(String descricao, String categoria) {
+        return suggest(descricao, categoria, "anonymous");
+    }
+
+    @Override
+    public Optional<AiSuggestion> suggest(String descricao, String categoria, String userKey) {
         // Stub: integração com modelo de IA a ser implementada.
         // Retorna empty → fallback manual ativado no cliente (princípio: IA nunca bloqueia).
-        log.debug("IA stub chamada para categoria={}", categoria);
+        log.debug("IA stub chamada para categoria={}, userKey={}", categoria, userKey);
         return Optional.empty();
     }
 }

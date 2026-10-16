@@ -297,7 +297,7 @@ public class ServiceRequestService {
 
         // IA com fallback manual — nunca bloqueia o pedido (princípio CLAUDE.md)
         try {
-            aiService.suggest(req.descricao(), req.categoria())
+            aiService.suggest(req.descricao(), req.categoria(), clienteId.toString())
                     .ifPresent(sr::aplicarSugestaoIA);
         } catch (Exception ignored) {
             // IA indisponível — pedido prossegue sem sugestão

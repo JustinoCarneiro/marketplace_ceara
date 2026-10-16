@@ -169,5 +169,45 @@ class GeminiAiSuggestionServiceTest {
         service.suggest("x".repeat(100_000), null);
         server.verify();
     }
+
+    @Test
+    void dadosPessoais_saoSanitizadosAntesDoEnvioAoModelo() {
+        server.expect(requestTo(URL))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("[telefone removido]")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("[e-mail removido]")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("85988887777"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("joao@gmail.com"))))
+                .andRespond(withSuccess(resposta(
+                        "{\"descricao\":\"Reparo hidráulico\",\"faixaMin\":80,\"faixaMax\":150}"),
+                        MediaType.APPLICATION_JSON));
+
+        var r = service.suggest("Preciso de encanador urgente. Contato: joao@gmail.com ou 85988887777", null);
+
+        assertThat(r).isPresent();
+        assertThat(r.get().descricaoSugerida()).isEqualTo("Reparo hidráulico");
+        server.verify();
+    }
+
+    @Test
+    void rateLimitExcedido_retornaEmptySemChamarHttp() {
+        var limiter = new AiRateLimiter(1, 10, 100);
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ai.test");
+        var customServer = MockRestServiceServer.bindTo(builder).build();
+        var limitedService = new GeminiAiSuggestionService(builder.build(), limiter, "modelo-teste", "chave");
+
+        // 1ª chamada é permitida e chama HTTP
+        customServer.expect(requestTo(URL))
+                .andRespond(withSuccess(resposta(
+                        "{\"descricao\":\"Reparo ok\",\"faixaMin\":50,\"faixaMax\":100}"),
+                        MediaType.APPLICATION_JSON));
+        assertThat(limitedService.suggest("conserto", null, "user-1")).isPresent();
+        customServer.verify();
+
+        // 2ª chamada no mesmo usuário estoura o limite horário de 1 req -> retorna empty sem chamar HTTP
+        assertThat(limitedService.suggest("conserto", null, "user-1")).isEmpty();
+    }
 }
 

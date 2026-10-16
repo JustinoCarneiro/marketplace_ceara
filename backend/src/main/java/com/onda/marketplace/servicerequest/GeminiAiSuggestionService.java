@@ -57,12 +57,14 @@ class GeminiAiSuggestionService implements AiSuggestionService {
             """;
 
     private final RestClient http;
+    private final AiRateLimiter rateLimiter;
     private final String model;
     private final String apiKey;
 
     @Autowired
     GeminiAiSuggestionService(
             RestClient.Builder builder,
+            AiRateLimiter rateLimiter,
             @Value("${marketplace.ai.base-url:https://generativelanguage.googleapis.com}") String baseUrl,
             @Value("${marketplace.ai.model:gemini-2.5-flash}") String model,
             @Value("${marketplace.ai.api-key:}") String apiKey,
@@ -70,12 +72,18 @@ class GeminiAiSuggestionService implements AiSuggestionService {
         this(builder
                 .baseUrl(baseUrl)
                 .requestFactory(factory(timeoutMs))
-                .build(), model, apiKey);
+                .build(), rateLimiter, model, apiKey);
     }
 
-    /** Construtor para testes: cliente já montado (permite MockRestServiceServer). */
+    /** Construtor para testes: cliente já montado com rate limiter padrão. */
     GeminiAiSuggestionService(RestClient http, String model, String apiKey) {
+        this(http, new AiRateLimiter(100, 100, 1000), model, apiKey);
+    }
+
+    /** Construtor para testes com rate limiter customizado. */
+    GeminiAiSuggestionService(RestClient http, AiRateLimiter rateLimiter, String model, String apiKey) {
         this.http = http;
+        this.rateLimiter = rateLimiter;
         this.model = model;
         this.apiKey = apiKey;
     }
@@ -89,7 +97,20 @@ class GeminiAiSuggestionService implements AiSuggestionService {
 
     @Override
     public Optional<AiSuggestion> suggest(String descricao, String categoria) {
+        return suggest(descricao, categoria, "anonymous");
+    }
+
+    @Override
+    public Optional<AiSuggestion> suggest(String descricao, String categoria, String userKey) {
         if (descricao == null || descricao.isBlank()) {
+            return Optional.empty();
+        }
+        if (rateLimiter != null && !rateLimiter.tryAcquire(userKey)) {
+            log.warn("Limite de taxa de IA atingido para userKey={} — acionando fallback manual", userKey);
+            return Optional.empty();
+        }
+        String sanitizado = AiInputSanitizer.sanitizar(descricao);
+        if (sanitizado.isBlank()) {
             return Optional.empty();
         }
         try {
@@ -97,7 +118,7 @@ class GeminiAiSuggestionService implements AiSuggestionService {
                     .uri("/v1beta/models/{model}:generateContent", model)
                     .header("x-goog-api-key", apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(corpo(descricao, categoria))
+                    .body(corpo(sanitizado, categoria))
                     .retrieve()
                     .body(JsonNode.class);
             return interpretar(res);

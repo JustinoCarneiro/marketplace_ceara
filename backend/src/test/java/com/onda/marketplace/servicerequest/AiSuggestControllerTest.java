@@ -33,7 +33,7 @@ class AiSuggestControllerTest {
     void suggest_iaDisponivel_retornaSourceAI() throws Exception {
         var suggestion = new AiSuggestion("Consertar torneira da cozinha",
                 BigDecimal.valueOf(80), BigDecimal.valueOf(200));
-        when(aiService.suggest(any(), any())).thenReturn(Optional.of(suggestion));
+        when(aiService.suggest(any(), any(), any())).thenReturn(Optional.of(suggestion));
 
         mvc.perform(post("/api/v1/services/ai/suggest")
                         .with(csrf())
@@ -49,7 +49,7 @@ class AiSuggestControllerTest {
 
     @Test
     void suggest_iaIndisponivel_retornaFallbackManual() throws Exception {
-        when(aiService.suggest(any(), any())).thenReturn(Optional.empty());
+        when(aiService.suggest(any(), any(), any())).thenReturn(Optional.empty());
 
         mvc.perform(post("/api/v1/services/ai/suggest")
                         .with(csrf())
