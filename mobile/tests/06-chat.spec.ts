@@ -75,7 +75,10 @@ test('cliente e prestador trocam mensagens depois do aceite; telefone digitado �
   await page.getByText('Pedidos', { exact: true }).click();
   await page.getByTestId('meu-pedido-card').first().click();
   await expect(page.getByText('ACEITO', { exact: true }).last()).toBeVisible({ timeout: 8000 });
+  const streamReady = page.waitForResponse(response => response.url().endsWith('/messages/stream') && response.status() === 200);
   await page.getByTestId('btn-abrir-chat').click();
+  await streamReady;
+  await expect(page.getByTestId('chat-connection-status')).toHaveText('Conectado');
   await expect(page.getByText('Conversa', { exact: true })).toBeVisible({ timeout: 8000 });
   await page.getByTestId('input-chat-mensagem').fill('Oi! Pode vir na quinta de manhã?');
   await page.getByTestId('btn-enviar-mensagem').click();
@@ -88,20 +91,20 @@ test('cliente e prestador trocam mensagens depois do aceite; telefone digitado �
   await expect(p2.getByText('ACEITO', { exact: true })).toBeVisible({ timeout: 8000 });
   await p2.getByTestId('btn-abrir-chat').click();
   await expect(p2.getByText('Oi! Pode vir na quinta de manhã?').last()).toBeVisible({ timeout: 8000 });
+  const clientHistoryRequests: string[] = [];
+  page.on('request', request => {
+    if (request.method() === 'GET' && request.url().endsWith('/messages')) clientHistoryRequests.push(request.url());
+  });
   await p2.getByTestId('input-chat-mensagem').fill('Posso sim, me chama no (85) 99999-8888 se mudar algo');
   await p2.getByTestId('btn-enviar-mensagem').click();
 
   await expect(p2.getByText('contato removido por segurança').last()).toBeVisible({ timeout: 8000 });
   await expect(p2.getByText('99999-8888')).toHaveCount(0);
 
-  // Cliente recarrega e enxerga a mesma versão mascarada — o dado sensível nunca existiu
-  // do lado do backend, não é só escondido na tela de quem mandou.
-  await login(page, CLIENTE.email, CLIENTE.senha);
-  await page.getByText('Pedidos', { exact: true }).click();
-  await page.getByTestId('meu-pedido-card').first().click();
-  await page.getByTestId('btn-abrir-chat').click();
+  // O outro participante recebe a resposta sem recarregar a tela e sem consultar o histórico.
   await expect(page.getByText('contato removido por segurança').last()).toBeVisible({ timeout: 8000 });
   await expect(page.getByText('99999-8888')).toHaveCount(0);
+  expect(clientHistoryRequests).toEqual([]);
 
   await p2.close();
 });

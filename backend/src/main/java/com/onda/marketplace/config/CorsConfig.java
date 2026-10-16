@@ -23,7 +23,7 @@ public class CorsConfig {
         config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of(
-                "Authorization", "Content-Type",
+                "Authorization", "Content-Type", "Cache-Control", "X-Requested-With", "Last-Event-ID",
                 "X-Idempotency-Key", "X-Webhook-Secret"
         ));
         config.setExposedHeaders(List.of("Location"));

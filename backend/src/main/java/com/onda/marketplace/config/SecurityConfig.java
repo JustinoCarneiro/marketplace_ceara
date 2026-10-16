@@ -1,5 +1,9 @@
 package com.onda.marketplace.config;
 
+import jakarta.servlet.DispatcherType;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 import com.onda.marketplace.auth.JwtService;
 import com.onda.marketplace.auth.UserRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -46,6 +50,10 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
+                        // A autenticação ocorre na abertura; o SSE revalida o acesso durante a conexão.
+                        // A conclusão assíncrona não pode tentar escrever 401 num stream já enviado.
+                        .requestMatchers(new AndRequestMatcher(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC),
+                                new AntPathRequestMatcher("/api/v1/service-requests/*/messages/stream", "GET"))).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register/client",
                                 "/api/v1/auth/register/provider",

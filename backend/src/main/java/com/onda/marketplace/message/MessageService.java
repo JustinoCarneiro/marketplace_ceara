@@ -1,5 +1,6 @@
 package com.onda.marketplace.message;
 
+import org.springframework.context.ApplicationEventPublisher;
 import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.servicerequest.ServiceRequest;
@@ -29,13 +30,16 @@ public class MessageService {
     private final MessageRepository        messageRepository;
     private final ServiceRequestRepository requestRepository;
     private final UserRepository           userRepository;
+    private final ApplicationEventPublisher events;
 
     public MessageService(MessageRepository messageRepository,
                           ServiceRequestRepository requestRepository,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          ApplicationEventPublisher events) {
         this.messageRepository = messageRepository;
         this.requestRepository = requestRepository;
         this.userRepository    = userRepository;
+        this.events            = events;
     }
 
     @Transactional
@@ -54,6 +58,7 @@ public class MessageService {
         var resultado = ContactMaskingUtil.mascarar(conteudoBruto);
         var message = new Message(sr, remetenteId, resultado.texto(), resultado.mascarado());
         messageRepository.save(message);
+        events.publishEvent(new MessageCommitted(srId, message.getId()));
         return toDto(message);
     }
 

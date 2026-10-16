@@ -29,6 +29,7 @@ class MessageServiceTest {
     @Mock MessageRepository        messageRepository;
     @Mock ServiceRequestRepository requestRepository;
     @Mock UserRepository           userRepository;
+    @Mock org.springframework.context.ApplicationEventPublisher events;
 
     MessageService service;
 
@@ -39,7 +40,7 @@ class MessageServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new MessageService(messageRepository, requestRepository, userRepository);
+        service = new MessageService(messageRepository, requestRepository, userRepository, events);
     }
 
     private ServiceRequest sr(ServiceRequestStatus status) {
@@ -64,6 +65,7 @@ class MessageServiceTest {
         assertThat(dto.mascarado()).isFalse();
         assertThat(dto.remetenteNome()).isEqualTo("Cliente Teste");
         verify(messageRepository).save(any());
+        verify(events).publishEvent(any(MessageCommitted.class));
     }
 
     @Test
@@ -93,6 +95,7 @@ class MessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "FORBIDDEN");
         verify(messageRepository, never()).save(any());
+        verifyNoInteractions(events);
     }
 
     @Test
@@ -107,6 +110,7 @@ class MessageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("code", "CHAT_INDISPONIVEL");
         verify(messageRepository, never()).save(any());
+        verifyNoInteractions(events);
     }
 
     @Test

@@ -52,6 +52,10 @@ jobs:
         run: npm ci
         working-directory: mobile
 
+      - name: Testes do transporte de chat
+        run: npm run test:unit
+        working-directory: mobile
+
       - name: TypeScript check
         run: npx tsc --noEmit
         working-directory: mobile

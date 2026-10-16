@@ -3578,4 +3578,48 @@ class E2EFluxoPrincipalTest {
 
         assertThat("nada foi liberado nem auditado", contar("SELECT count(*) FROM admin_audit_log WHERE entidade_id IN (?::uuid, ?::uuid)", txDisputa.toString(), txConcluido.toString()), equalTo(0));
     }
+    @Test @Order(85)
+    @DisplayName("85 · SSE autentica participante e transmite somente a mensagem persistida e mascarada")
+    void chatSse_entregaDepoisDoCommit_semVazarContatoOuPedidoDeTerceiro() throws Exception {
+        var owner = cadastrarCliente("Lia Stream", "lia.stream@onda.test");
+        var stranger = cadastrarCliente("Theo Stream", "theo.stream@onda.test");
+        UUID request = pedidoDe(owner, "Conversa por SSE", "ACEITO");
+        String url = "http://localhost:" + port + "/api/v1/service-requests/" + request + "/messages/stream";
+        try (var http = java.net.http.HttpClient.newHttpClient()) {
+            var anonymous = http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).timeout(java.time.Duration.ofSeconds(10))
+                    .header("Accept", "text/event-stream").build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            org.junit.jupiter.api.Assertions.assertEquals(401, anonymous.statusCode());
+            var forbidden = http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).timeout(java.time.Duration.ofSeconds(10))
+                    .header("Accept", "text/event-stream").header("Authorization", "Bearer " + stranger.token()).build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofString());
+            org.junit.jupiter.api.Assertions.assertEquals(422, forbidden.statusCode());
+            var stream = http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(url)).timeout(java.time.Duration.ofSeconds(10))
+                    .header("Accept", "text/event-stream").header("Authorization", "Bearer " + owner.token()).build(),
+                    java.net.http.HttpResponse.BodyHandlers.ofInputStream());
+            org.junit.jupiter.api.Assertions.assertEquals(200, stream.statusCode());
+            org.junit.jupiter.api.Assertions.assertEquals("no", stream.headers().firstValue("X-Accel-Buffering").orElseThrow());
+            try (var input = stream.body()) {
+                var reader = new java.io.BufferedReader(new java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8));
+                var received = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            if (line.startsWith("data:") && line.contains("conteudo")) return line;
+                        }
+                        throw new IllegalStateException("Stream encerrou sem mensagem");
+                    } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+                });
+                String messageId = given().contentType(ContentType.JSON).header("Authorization", "Bearer " + owner.token())
+                        .body("{\"conteudo\":\"me chame no (85) 99999-8888\"}")
+                        .when().post("/api/v1/service-requests/" + request + "/messages")
+                        .then().statusCode(201).extract().path("id");
+                String event = received.get(5, java.util.concurrent.TimeUnit.SECONDS);
+                org.junit.jupiter.api.Assertions.assertTrue(event.contains(messageId));
+                org.junit.jupiter.api.Assertions.assertTrue(event.contains("[contato removido]"));
+                org.junit.jupiter.api.Assertions.assertFalse(event.contains("99999-8888"));
+                org.junit.jupiter.api.Assertions.assertEquals(1, contar("SELECT count(*) FROM messages WHERE id=?::uuid", messageId));
+            }
+        }
+    }
+
 }

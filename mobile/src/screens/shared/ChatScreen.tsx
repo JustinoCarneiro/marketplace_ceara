@@ -1,13 +1,16 @@
 import { API_BASE } from '../../api/config';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, FlatList,
+  View, Text, StyleSheet, FlatList, AppState,
   TextInput, TouchableOpacity, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/auth';
+import EventSource from 'react-native-sse';
+import { connectChat, mergeMessages } from '../../api/chatStream';
+import type { ChatConnectionState, ChatMessage } from '../../api/chatStream';
 
 const C = {
   bg: '#F3ECDC',
@@ -22,20 +25,11 @@ const C = {
   bubbleTheirs: '#FCF8EE',
 };
 
-interface Message {
-  id: string;
-  remetenteId: string;
-  remetenteNome: string;
-  conteudo: string;
-  mascarado: boolean;
-  createdAt: string;
-}
-
-// Chat pré-transação (docs/BOAS_PRATICAS_UX.md §1) — telefone/e-mail digitados são
-// mascarados pelo backend antes de persistir (anti-desintermediação, protege a comissão
-// que sustenta o MVP). Sem poll de tempo real no resto do app (nem WebSocket, nem SSE);
-// aqui um intervalo simples enquanto a tela está em foco é suficiente pro caso de uso.
-const POLL_MS = 4000;
+const CONNECTION_LABELS: Record<ChatConnectionState, string> = {
+  connecting: 'Conectando…', connected: 'Conectado', reconnecting: 'Reconectando…',
+  paused: 'Conversa pausada', unauthorized: 'Sessão expirada. Entre novamente.',
+  unavailable: 'Conversa indisponível.',
+};
 
 export default function ChatScreen() {
   const nav = useNavigation<any>();
@@ -44,35 +38,47 @@ export default function ChatScreen() {
   const myUserId = useAuthStore(s => s.userId);
   const requestId = route.params?.requestId;
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [texto, setTexto] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [connection, setConnection] = useState<ChatConnectionState>('connecting');
   const listRef = useRef<FlatList>(null);
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/service-requests/${requestId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
-      }
-    } catch {
-      // Poll silencioso — falha de rede aqui não deve travar a tela, só não atualiza agora.
-    } finally {
-      setLoading(false);
-    }
-  }, [requestId, token]);
-
   useFocusEffect(useCallback(() => {
-    load();
-    const interval = setInterval(() => load(true), POLL_MS);
-    return () => clearInterval(interval);
-  }, [load]));
+    setMessages([]);
+    setLoading(true);
+    setError('');
+    if (!requestId || !token) {
+      setConnection('unauthorized'); setLoading(false);
+      return;
+    }
+    const subscription = connectChat({
+      url: `${API_BASE}/service-requests/${requestId}/messages`, token,
+      createTransport(url, headers) {
+        const source = new EventSource<'ready' | 'heartbeat' | 'reconnect' | 'session-expired' | 'access-revoked'>(url, {
+          headers, pollingInterval: 0, timeout: 0, timeoutBeforeConnection: 0,
+        });
+        return {
+          on: (type, listener) => source.addEventListener(type, listener),
+          close: () => { source.removeAllEventListeners(); source.close(); },
+        };
+      },
+      onMessage: message => setMessages(current => mergeMessages(current, [message])),
+      onHistory: history => setMessages(current => mergeMessages(current, history)),
+      onState: state => {
+        setConnection(state);
+        if (state === 'connected' || state === 'unauthorized' || state === 'unavailable') setLoading(false);
+        if (state === 'unauthorized' || state === 'unavailable') setMessages([]);
+      },
+    });
+    const listener = AppState.addEventListener('change', state => {
+      if (state === 'active') subscription.resume(); else subscription.pause();
+    });
+    if (AppState.currentState && AppState.currentState !== 'active') subscription.pause();
+    return () => { listener.remove(); subscription.close(); };
+  }, [requestId, token]));
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -80,9 +86,11 @@ export default function ChatScreen() {
     }
   }, [messages.length]);
 
+  const unavailable = connection === 'unauthorized' || connection === 'unavailable';
+
   async function enviar() {
     const conteudo = texto.trim();
-    if (!conteudo) return;
+    if (!conteudo || unavailable) return;
     setSending(true);
     setError('');
     try {
@@ -95,8 +103,9 @@ export default function ChatScreen() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message ?? 'Erro ao enviar mensagem.');
       }
+      const message: ChatMessage = await res.json();
+      setMessages(current => mergeMessages(current, [message]));
       setTexto('');
-      await load(true);
     } catch (e: any) {
       setError(e.message ?? 'Erro ao enviar mensagem.');
     } finally {
@@ -120,6 +129,10 @@ export default function ChatScreen() {
           Seus dados ficam protegidos enquanto o pagamento está retido.
         </Text>
       </View>
+
+      <Text testID="chat-connection-status" accessibilityLiveRegion="polite" style={styles.connection}>
+        {CONNECTION_LABELS[connection]}
+      </Text>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <FlatList
@@ -172,13 +185,14 @@ export default function ChatScreen() {
             value={texto}
             onChangeText={setTexto}
             multiline
+            editable={!unavailable}
             maxLength={2000}
           />
           <TouchableOpacity
             testID="btn-enviar-mensagem"
-            style={[styles.sendBtn, (sending || !texto.trim()) && { opacity: 0.5 }]}
+            style={[styles.sendBtn, (sending || !texto.trim() || unavailable) && { opacity: 0.5 }]}
             onPress={enviar}
-            disabled={sending || !texto.trim()}
+            disabled={sending || !texto.trim() || unavailable}
             activeOpacity={0.8}
           >
             <Feather name="send" size={18} color="#fff" />
@@ -212,6 +226,8 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   bannerText: { flex: 1, fontSize: 12, color: C.institutional2, lineHeight: 12 * 1.4 },
+
+  connection: { color: C.textSoft, fontSize: 12, paddingHorizontal: 20, paddingBottom: 8 },
 
   list: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, flexGrow: 1 },
 
