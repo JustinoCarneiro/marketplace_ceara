@@ -175,6 +175,7 @@ Pesos: **Pequeno (1–2d)** · **Médio (3–4d)** · **Grande (5–7d)**.
 | M10 | US22, US23, US25, US26, US28 · TS09 |
 | M11 | US24, US27 · TS02 (reusa motor do M06) |
 | M12 | US29, US30 · TS04 (relatório sem CPF) · liga-se a US21/US18/US02 |
+| M15 | US39 — chat em tempo real por SSE |
 
 | História | Módulo(s) |
 |---|---|
@@ -191,6 +192,7 @@ Pesos: **Pequeno (1–2d)** · **Médio (3–4d)** · **Grande (5–7d)**.
 | US24 (mediação) | M11 (consome motor escrow do M06) |
 | US27 (reconciliação) | M11 |
 | US29 (relatórios), US30 (alertas) | M12 |
+| US39 (chat em tempo real) | M15 |
 
 ---
 
@@ -490,6 +492,14 @@ aceite ainda não existe par cliente-prestador fixo (pedido pode ter várias pro
 concorrendo). Migration `V16__messages.sql`.
 *(Adicionado depois da Fase 3 original, 2026-08-13 — mesma razão do M13: não fazia parte do
 escopo/estimativa inicial, sem M-slot na tabela de pesos da seção 2.)*
+
+### M15 — Chat em tempo real (US39)
+
+Implementação por SSE: `GET /api/v1/service-requests/{id}/messages/stream`.
+POST e GET de histórico anteriores preservados. Distribuição após commit, autorização
+por participante, reconexão com recuperação do histórico e encerramento ao sair da tela.
+Transporte local a uma instância; publicação e validação ponta a ponta acompanham o PR.
+Contrato, limites e testes em [CHAT_TEMPO_REAL.md](docs/CHAT_TEMPO_REAL.md).
 
 ### Envelope de erro padrão (`@ControllerAdvice`, TS06)
 ```

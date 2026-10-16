@@ -76,7 +76,8 @@ public class ErrorControllerAdvice {
 
     @ExceptionHandler(BusinessException.class)
     ResponseEntity<ApiError> handleBusiness(BusinessException ex, HttpServletRequest req) {
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(
                 ApiError.of(422, ex.getCode(), ex.getMessage(), req.getRequestURI())
         );
     }

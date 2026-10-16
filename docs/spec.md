@@ -331,6 +331,17 @@ Como **Admin**, quero ser alertado de eventos críticos, para agir rápido em se
 
 ---
 
+### US39 — Chat em tempo real por SSE
+Como **Cliente** ou **Prestador**, quero receber mensagens do chamado sem esperar o ciclo de polling.
+- **Dado** um participante autorizado de um pedido com chat ativo, **quando** abre `/api/v1/service-requests/{id}/messages/stream`, **então** recebe eventos SSE autenticados pelo JWT no cabeçalho, sem polling periódico do histórico.
+- **Dado** o envio de mensagem, **então** contatos são mascarados antes de persistir e a distribuição só ocorre após o commit; rollback não entrega mensagens.
+- **Dado** um usuário fora do pedido, uma conta inativa ou um token expirado, **então** a conexão é recusada ou encerrada sem entregar novas mensagens.
+- **Dada** uma interrupção de rede, **quando** o app reconecta, **então** recupera o histórico persistido e combina por id, sem mensagens duplicadas ou respostas antigas sobrescrevendo a conversa atual.
+- **Dado** o app em segundo plano ou fora da tela de chat, **então** encerra a conexão; ao retornar, reconecta e recupera o histórico.
+- Implementação e limites operacionais: [Chat em tempo real](CHAT_TEMPO_REAL.md).
+
+---
+
 ## Histórias Técnicas (Requisitos Não Funcionais)
 
 - **TS01 (Concorrência):** Virtual Threads (Java 21) para suportar picos sem custo extra de servidor.
