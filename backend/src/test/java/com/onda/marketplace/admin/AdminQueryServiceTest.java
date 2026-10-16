@@ -22,6 +22,9 @@ import com.onda.marketplace.shared.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -338,6 +341,56 @@ class AdminQueryServiceTest {
 
         assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
         verify(transactionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(outboxRepository, auditService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {" 11144477735 ", "\t111.444.777-35\n",
+            "01234567-89AB-CDEF-0123-456789ABCDEF", " 01234567-89ab-cdef-0123-456789abcdef "})
+    void confirmarRepasseManual_normalizaAntesDeRecusarDadoPessoal(String referencia) {
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), referencia))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYOUT_RECEIPT_INVALID");
+
+        verifyNoInteractions(transactionRepository, srRepository, outboxRepository, auditService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ServiceRequestStatus.class, names = "CONCLUIDO", mode = EnumSource.Mode.EXCLUDE)
+    void confirmarRepasseManual_recusaTodosOsEstadosNaoConcluidos(ServiceRequestStatus status) {
+        Transaction tx = transaction(SR_ID, BigDecimal.valueOf(100));
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+        var pedido = srMock(SR_ID, status);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(pedido));
+
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), "REF-ESTADO"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "PAYOUT_NOT_DUE");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(TransactionStatus.RETIDO);
+        verify(transactionRepository, never()).save(any());
+        verifyNoInteractions(outboxRepository, auditService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionStatus.class, names = {"PENDENTE", "REEMBOLSADO"})
+    void confirmarRepasseManual_pedidoConcluidoNaoDispensaDinheiroRetido(TransactionStatus status) {
+        var tx = new Transaction(SR_ID, BigDecimal.TEN, BigDecimal.ONE, new BigDecimal("0.10"),
+                PaymentMethod.PIX, "idem-estado");
+        if (status == TransactionStatus.REEMBOLSADO) {
+            tx.reter();
+            tx.reembolsar();
+        }
+        when(transactionRepository.findByIdComTrava(TX_ID)).thenReturn(Optional.of(tx));
+        var pedido = srMock(SR_ID, ServiceRequestStatus.CONCLUIDO);
+        when(srRepository.findById(SR_ID)).thenReturn(Optional.of(pedido));
+
+        assertThatThrownBy(() -> service.confirmarRepasseManual(TX_ID, UUID.randomUUID(), "REF-ESTADO"))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_PAYMENT_TRANSITION");
+
+        assertThat(tx.getStatusPagamento()).isEqualTo(status);
+        verify(transactionRepository, never()).save(any());
         verifyNoInteractions(outboxRepository, auditService);
     }
 

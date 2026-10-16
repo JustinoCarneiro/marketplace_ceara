@@ -5,6 +5,9 @@ import com.onda.marketplace.audit.AuditService;
 import com.onda.marketplace.notification.NotificationService;
 import com.onda.marketplace.shared.TestSecurityConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -26,6 +29,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -286,6 +290,51 @@ class AdminControllerTest {
                         .content("{\"comprovanteReferencia\":\" \"}"))
                 .andExpect(status().is4xxClientError());
         verifyNoInteractions(adminQueryService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PAYOUT_RECEIPT_INVALID", "PAYOUT_NOT_DUE"})
+    void confirmarRepasseManual_traduzRecusaDoServicoPara422(String code) throws Exception {
+        UUID txId = UUID.randomUUID();
+        doThrow(new BusinessException(code, "Repasse recusado."))
+                .when(adminQueryService).confirmarRepasseManual(eq(txId), any(), eq("REF-HTTP"));
+
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new ConfirmarRepasseManualRequest("REF-HTTP"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value(code));
+        verifyNoInteractions(auditService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REF com espaco", "REF@PIX", " REF-123 ", ""})
+    void confirmarRepasseManual_formatoInvalidoNaoChegaAoServico(String referencia) throws Exception {
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", UUID.randomUUID()).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new ConfirmarRepasseManualRequest(referencia))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(adminQueryService, auditService);
+    }
+
+    @Test
+    void confirmarRepasseManual_respeitaLimiteDe120Caracteres() throws Exception {
+        String limite = "R".repeat(120);
+        UUID txId = UUID.randomUUID();
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new ConfirmarRepasseManualRequest(limite))))
+                .andExpect(status().isOk());
+        verify(adminQueryService).confirmarRepasseManual(eq(txId), any(), eq(limite));
+        org.mockito.Mockito.clearInvocations(adminQueryService);
+
+        mvc.perform(post("/api/v1/admin/transactions/{id}/confirmar-repasse-manual", txId).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(new ConfirmarRepasseManualRequest(limite + "R"))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(adminQueryService, auditService);
     }
 
     // --- novos endpoints: notificações, usuários e prestadores ---
