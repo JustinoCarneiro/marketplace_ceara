@@ -88,6 +88,12 @@ marketplace:
   webhook:
     secret: ${MARKETPLACE_WEBHOOK_SECRET}          # obrigatório em produção — segredo compartilhado com gateway
   comissao: ${MARKETPLACE_COMISSAO:0.10}           # percentual padrão (10% no piloto; sai do repasse ao prestador)
+  ai:                                              # US14 — sugestão de descrição/orçamento; IA nunca bloqueia (fallback manual)
+    enabled: ${MARKETPLACE_AI_ENABLED:false}       # false (padrão) = stub → sempre fallback manual
+    base-url: ${MARKETPLACE_AI_BASE_URL:https://generativelanguage.googleapis.com}
+    model: ${MARKETPLACE_AI_MODEL:gemini-2.5-flash}
+    api-key: ${MARKETPLACE_AI_API_KEY:}            # segredo — só .env/secret do Coolify, nunca no Git
+    timeout-ms: ${MARKETPLACE_AI_TIMEOUT_MS:8000}  # estourou → fallback manual
   password-reset:                                  # US35 — recuperação de senha por código no e-mail
     validade-minutos: 30                           # vida do código
     max-por-hora: 3                                # códigos por usuário por hora (não inunda caixa alheia)

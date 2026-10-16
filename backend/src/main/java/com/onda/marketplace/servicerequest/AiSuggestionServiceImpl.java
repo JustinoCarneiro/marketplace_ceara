@@ -2,11 +2,13 @@ package com.onda.marketplace.servicerequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
 @Service
+@ConditionalOnProperty(name = "marketplace.ai.enabled", havingValue = "false", matchIfMissing = true)
 class AiSuggestionServiceImpl implements AiSuggestionService {
 
     private static final Logger log = LoggerFactory.getLogger(AiSuggestionServiceImpl.class);
