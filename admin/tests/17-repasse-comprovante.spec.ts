@@ -4,8 +4,17 @@ for (const referencia of ['E2E-12345', '  E2E-12345  ']) {
   test(`confirmação de repasse exige referência e normaliza ${JSON.stringify(referencia)}`, async ({ page }) => {
     const txId = '99999999-9999-4999-8999-999999999999';
     let enviado: unknown;
+    const rotasSemSimulacao: string[] = [];
     // Toda a API deste teste é simulada; não depende de login/backend em execução.
     await page.addInitScript(() => sessionStorage.setItem('onda_admin_token', 'sessao-simulada-de-teste'));
+    // Uma rota esquecida deve falhar também sem backend local, como ocorreria no CI.
+    await page.route('**/api/v1/**', route => {
+      rotasSemSimulacao.push(route.request().url());
+      return route.fulfill({ status: 401, json: { message: 'Rota sem simulação no teste' } });
+    });
+    for (const recurso of ['disputes', 'notifications']) {
+      await page.route(`**/api/v1/admin/${recurso}`, route => route.fulfill({ json: [] }));
+    }
     await page.route('**/api/v1/admin/transactions?status=*', route =>
       route.fulfill({ json: [] }));
     await page.route('**/api/v1/admin/outbox?status=FALHA', route =>
@@ -34,5 +43,6 @@ for (const referencia of ['E2E-12345', '  E2E-12345  ']) {
     await confirmar.click();
     await resposta;
     expect(enviado).toEqual({ comprovanteReferencia: 'E2E-12345' });
+    expect(rotasSemSimulacao).toEqual([]);
   });
 }
