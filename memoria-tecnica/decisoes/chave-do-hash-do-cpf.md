@@ -124,6 +124,18 @@ e a subida recusa se sobrar conta mais antiga.
   existente da recusa pela anterior já partia da versão atual gravada e por isso nunca exercitou o caminho real do deploy. Agora `conferirVerificador`
   só decide (devolve o que gravar) e `verificar()` grava no fim, se nenhuma das duas recusou. Teste vermelho antes (`NeverWantedButInvoked`), verde depois,
   e a contraparte (com a confirmação do operador as duas são gravadas) guarda contra o excesso de correção.
+- **Atomicidade da gravação (Codex, 2026-10-16, complemento do PR #37):** adiar os dois `save` até o fim evitava gravação
+  antes de uma recusa de validação, mas não desfazia a atual se a gravação da anterior falhasse. Agora o lote aprovado é
+  persistido por uma única chamada ao `JpaRepository.saveAll`, na transação do repositório; a falha desfaz o lote inteiro.
+  Não depende de `@Transactional` no callback de inicialização, chamado pela própria instância. As regras de validação e o
+  alcance de `CPF_HASH_KEY_CONFIRMED` continuam os mesmos. `CpfHashKeyCheckPersistenceTest` usa JPA e H2 reais, sem transação
+  externa do teste: rejeitar a segunda versão deixava uma linha antes da correção (vermelho); agora deixa zero (verde).
+  A contraparte verifica os dois valores persistidos quando há confirmação e a gravação conclui. Validação local:
+  `mvn -f backend/pom.xml -Dtest=CpfHashKeyCheckTest,CpfHashKeyCheckPersistenceTest test --no-transfer-progress` —
+  25 testes, zero falhas/erros. Suíte completa e E2E não reexecutados. Revisão cruzada por subagente independente,
+  somente leitura, autorizada pelo dono em 2026-10-16: sem achados P1/P2/P3. Conferiu o diff, os logs vermelho/verde e
+  a transação de `SimpleJpaRepository.saveAll` no Spring Data JPA local. Limite: a integração nova usa H2; PostgreSQL e
+  o ciclo completo de inicialização não foram reexecutados nesta correção.
 - **Lacuna de teste achada no caminho:** o `application.yml` de teste liga `cpf-backfill.enabled=false` (por causa do H2) e o perfil `e2e`
   herdava isso, então o bean do E2E **nunca** fazia o cruzamento com âncora: a consulta `comHashNaVersao` só tinha rodado contra mocks.
   O passo 69 monta as instâncias à mão com o cruzamento ligado e cobre, no Postgres real, as três situações (sem âncora, âncora que

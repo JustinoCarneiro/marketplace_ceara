@@ -50,8 +50,9 @@ Nunca foi registrado antes — a linha `(est. retroativa)` abaixo é a estimativ
 | Data | Fase (0–5) | Horas | Nota |
 |---|---|---|---|
 | 2026-10-14 | 4 | 0,2 | Endurecimento do repasse manual: comprovante, chave Pix CPF e alerta de atraso; testes locais e revisão do diff. |
+| 2026-10-16 | 4 | ~0,1 (estimativa) | Complemento do PR #37: gravação atômica dos verificadores; regressão vermelho/verde com JPA/H2 e 25 testes direcionados verdes. Revisão cruzada por subagente independente: sem achados P1/P2/P3. |
 
-Σ real registrada: **0,2 h**
+Σ registrada: **~0,3 h** (inclui estimativa da sessão de 2026-10-16)
 Σ **(est. retroativa por proxy de commit)**: **~52 h piso · ~65–75 h central · ~103 h teto** — 111 commits, 28 sessões
 
 ## 4. Log de espera / impedimento (Fase 4)

@@ -123,7 +123,11 @@ public class CpfHashKeyCheck implements SmartInitializingSingleton {
         if (cpfHashService.temChaveAnterior()) {
             conferirVerificador(versaoAtual - 1, cpfHashService.verificadorChaveAnterior(), "CPF_HASH_KEY_PREVIOUS").ifPresent(aGravar::add);
         }
-        aGravar.forEach(verificacaoRepository::save);
+        // Uma única transação do repositório: falhar na anterior também desfaz a atual.
+        // Não depende de @Transactional no callback de inicialização (chamado pela própria instância).
+        if (!aGravar.isEmpty()) {
+            verificacaoRepository.saveAll(aGravar);
+        }
     }
 
     /** Recusa (exceção) ou devolve o verificador a gravar; vazio quando a versão já tem um verificador igual. Não grava nada. */

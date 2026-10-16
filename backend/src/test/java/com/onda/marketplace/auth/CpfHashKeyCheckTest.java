@@ -38,6 +38,13 @@ class CpfHashKeyCheckTest {
     @Mock ProviderProfileRepository      profileRepository;
     @Mock CpfEncryptor                   cpfEncryptor;
     @Mock CpfHashKeyVerificacaoRepository verificacaoRepository;
+    @org.mockito.Captor org.mockito.ArgumentCaptor<List<CpfHashKeyVerificacao>> loteGravado;
+
+    private void assertVersoesGravadas(Integer... versoes) {
+        org.mockito.Mockito.verify(verificacaoRepository).saveAll(loteGravado.capture());
+        org.assertj.core.api.Assertions.assertThat(loteGravado.getValue())
+                .extracting(CpfHashKeyVerificacao::getVersao).containsExactly(versoes);
+    }
 
     /** Sem conta na versão (rollback) e sem âncora: as checagens novas ficam inertes, só a de versão conta. */
     private void semNadaDeNovo(int... versoes) {
@@ -164,10 +171,9 @@ class CpfHashKeyCheckTest {
 
         assertThatCode(check::verificar).doesNotThrowAnyException();
 
-        var captor = org.mockito.ArgumentCaptor.forClass(CpfHashKeyVerificacao.class);
-        org.mockito.Mockito.verify(verificacaoRepository).save(captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVersao()).isEqualTo(2);
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVerificador()).isEqualTo(cpfHashService.verificadorChaveAtual());
+        assertVersoesGravadas(2);
+        org.assertj.core.api.Assertions.assertThat(loteGravado.getValue().getFirst().getVerificador())
+                .isEqualTo(cpfHashService.verificadorChaveAtual());
     }
 
     @Test
@@ -191,8 +197,7 @@ class CpfHashKeyCheckTest {
         when(userRepository.findById(prestadorId)).thenReturn(Optional.of(prestador));
 
         assertThatCode(check::verificar).doesNotThrowAnyException();
-        org.mockito.Mockito.verify(verificacaoRepository).save(
-                org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 1));
+        assertVersoesGravadas(1);
     }
 
     @Test
@@ -254,6 +259,7 @@ class CpfHashKeyCheckTest {
         // continua sem consultar o perfil (a tabela pode nem existir) e sem gravar nada
         org.mockito.Mockito.verifyNoInteractions(profileRepository, cpfEncryptor);
         org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
@@ -266,7 +272,7 @@ class CpfHashKeyCheckTest {
         when(userRepository.countByCpfHashIsNotNullAndCpfHashVersao(2)).thenReturn(4L);
 
         assertThatCode(check::verificar).doesNotThrowAnyException();
-        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
+        assertVersoesGravadas(2);
         org.mockito.Mockito.verifyNoInteractions(profileRepository, cpfEncryptor);
     }
 
@@ -289,6 +295,7 @@ class CpfHashKeyCheckTest {
                 .hasMessageContaining("CPF_HASH_KEY_CONFIRMED");
         // recusar antes de gravar: nada vira "referência", e a próxima subida recomeça deste ponto
         org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
@@ -309,10 +316,9 @@ class CpfHashKeyCheckTest {
                     org.assertj.core.api.Assertions.assertThat(e.getFormattedMessage())
                             .contains("7 conta(s)").contains("versão 2").contains("SEM prova").contains("CPF_HASH_KEY");
                 });
-        var captor = org.mockito.ArgumentCaptor.forClass(CpfHashKeyVerificacao.class);
-        org.mockito.Mockito.verify(verificacaoRepository).save(captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVersao()).isEqualTo(2);
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().getVerificador()).isEqualTo(cpfHashService.verificadorChaveAtual());
+        assertVersoesGravadas(2);
+        org.assertj.core.api.Assertions.assertThat(loteGravado.getValue().getFirst().getVerificador())
+                .isEqualTo(cpfHashService.verificadorChaveAtual());
     }
 
     @Test
@@ -334,6 +340,7 @@ class CpfHashKeyCheckTest {
                 .hasMessageContaining("versão 1")
                 .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
         org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
@@ -357,6 +364,7 @@ class CpfHashKeyCheckTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
         org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
@@ -375,8 +383,7 @@ class CpfHashKeyCheckTest {
 
         check.verificar();
 
-        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 2));
-        org.mockito.Mockito.verify(verificacaoRepository).save(org.mockito.ArgumentMatchers.argThat(v -> v.getVersao() == 1));
+        assertVersoesGravadas(2, 1);
     }
 
     @Test
@@ -402,6 +409,7 @@ class CpfHashKeyCheckTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CPF_HASH_KEY_PREVIOUS");
         org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(verificacaoRepository, org.mockito.Mockito.never()).saveAll(any());
     }
 
     @Test
