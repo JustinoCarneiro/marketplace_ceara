@@ -29,6 +29,8 @@ cpf:
   hash-key-previous: test-cpf-aes256-key-32-chars-here!
 
 marketplace:
+  background-check:
+    delay-ms: 3600000 # Os testes disparam o worker explicitamente, sem corrida com o scheduler.
   webhook:
     secret: test-webhook-secret
   comissao: 0.15

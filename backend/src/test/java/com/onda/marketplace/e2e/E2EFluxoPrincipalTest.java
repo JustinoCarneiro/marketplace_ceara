@@ -116,6 +116,16 @@ class E2EFluxoPrincipalTest {
     static class CaixaDeEntrada {
         record Email(String para, String assunto, String corpo) {}
         static final List<Email> EMAILS = new CopyOnWriteArrayList<>();
+        static final java.util.concurrent.atomic.AtomicReference<java.util.function.Supplier<com.onda.marketplace.provider.BackgroundCheckGateway.Result>> CHECK_CALLBACK = new java.util.concurrent.atomic.AtomicReference<>();
+
+        @Bean @Primary
+        com.onda.marketplace.provider.BackgroundCheckGateway gatewayControlado() {
+            return (id, cpf) -> {
+                org.junit.jupiter.api.Assertions.assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                var callback = CHECK_CALLBACK.getAndSet(null);
+                return callback == null ? com.onda.marketplace.provider.BackgroundCheckGateway.Result.INCONCLUSIVO : callback.get();
+            };
+        }
 
         @Bean @Primary
         UserMailSender remetenteDeTeste() {
@@ -3620,6 +3630,118 @@ class E2EFluxoPrincipalTest {
                 org.junit.jupiter.api.Assertions.assertEquals(1, contar("SELECT count(*) FROM messages WHERE id=?::uuid", messageId));
             }
         }
+    }
+
+    @Autowired com.onda.marketplace.provider.BackgroundCheckService backgroundChecks;
+    @Autowired com.onda.marketplace.provider.BackgroundCheckProcessor backgroundProcessor;
+
+    private UUID criarVerificacao(String suffix) {
+        return transacao.execute(s -> {
+            User u = userRepository.save(User.builder().nome("Fixture de verificação")
+                    .email("background-" + suffix + "@onda.test").senhaHash("fixture-disabled")
+                    .role(UserRole.ROLE_PROVIDER).build());
+            var p = profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(
+                    u, "eletrica", new CpfEncryptor("test-cpf-aes256-key-32-chars-here!").encrypt("11144477735")));
+            backgroundChecks.scheduleCheck(p);
+            return p.getId();
+        });
+    }
+
+    @Test @Order(86)
+    @DisplayName("86 · Fila durável encaminha consulta inconclusiva uma única vez ao admin")
+    void backgroundCheckManualPersistido() {
+        UUID profile = criarVerificacao("manual");
+        UUID job = jdbc.queryForObject("SELECT id FROM background_checks WHERE provider_id = ?", UUID.class, profile);
+        org.junit.jupiter.api.Assertions.assertEquals("PENDENTE", jdbc.queryForObject(
+                "SELECT status FROM background_checks WHERE id = ?", String.class, job));
+        backgroundProcessor.process(job);
+        backgroundProcessor.process(job);
+        org.junit.jupiter.api.Assertions.assertEquals("INCONCLUSIVO", jdbc.queryForObject(
+                "SELECT status FROM background_checks WHERE id = ?", String.class, job));
+        org.junit.jupiter.api.Assertions.assertEquals("EM_VERIFICACAO", jdbc.queryForObject(
+                "SELECT status_verificacao FROM providers_profile WHERE id = ?", String.class, profile));
+        org.junit.jupiter.api.Assertions.assertEquals(1, contar(
+                "SELECT count(*) FROM admin_notifications WHERE tipo='VERIFICACAO' AND ref_id=?::uuid", profile.toString()));
+        org.junit.jupiter.api.Assertions.assertEquals("REVISAO_MANUAL", jdbc.queryForObject(
+                "SELECT resultado FROM background_checks WHERE id = ?", String.class, job));
+    }
+
+    @Test @Order(87)
+    @DisplayName("87 · Rollback do cadastro também desfaz a tarefa de verificação")
+    void backgroundCheckRollbackDoCadastro() {
+        int before = contar("SELECT count(*) FROM background_checks");
+        transacao.executeWithoutResult(s -> {
+            criarVerificacao("rollback");
+            s.setRollbackOnly();
+        });
+        org.junit.jupiter.api.Assertions.assertEquals(before, contar("SELECT count(*) FROM background_checks"));
+        org.junit.jupiter.api.Assertions.assertEquals(0, contar("SELECT count(*) FROM users WHERE email='background-rollback@onda.test'"));
+    }
+
+    @Test @Order(88)
+    @DisplayName("88 · Workers concorrentes recuperam lease expirado sem duplicar alerta")
+    void backgroundCheckConcorrenciaERecuperacao() throws Exception {
+        UUID profile = criarVerificacao("recovery");
+        UUID job = jdbc.queryForObject("SELECT id FROM background_checks WHERE provider_id = ?", UUID.class, profile);
+        jdbc.update("UPDATE background_checks SET status='PROCESSANDO', attempts=1, available_at=NOW()-INTERVAL '5 minutes', claim_token=? WHERE id=?",
+                UUID.randomUUID(), job);
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.Callable<Void> task = () -> { start.await(); backgroundProcessor.process(job); return null; };
+            var first = executor.submit(task);
+            var second = executor.submit(task);
+            start.countDown();
+            first.get(10, java.util.concurrent.TimeUnit.SECONDS);
+            second.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals("INCONCLUSIVO", jdbc.queryForObject(
+                "SELECT status FROM background_checks WHERE id=?", String.class, job));
+        org.junit.jupiter.api.Assertions.assertEquals(2, jdbc.queryForObject(
+                "SELECT attempts FROM background_checks WHERE id=?", Integer.class, job));
+        org.junit.jupiter.api.Assertions.assertEquals(1, contar(
+                "SELECT count(*) FROM admin_notifications WHERE tipo='VERIFICACAO' AND ref_id=?::uuid", profile.toString()));
+    }
+
+    @Test @Order(89)
+    @DisplayName("89 · Aprovação tardia não desfaz moderação confirmada em outra transação")
+    void backgroundCheckNaoDesfazModeracao() {
+        UUID profile = criarVerificacao("moderation");
+        UUID job = jdbc.queryForObject("SELECT id FROM background_checks WHERE provider_id=?", UUID.class, profile);
+        CaixaDeEntrada.CHECK_CALLBACK.set(() -> {
+            transacao.executeWithoutResult(s -> {
+                UUID userId = jdbc.queryForObject("SELECT user_id FROM providers_profile WHERE id=?", UUID.class, profile);
+                userRepository.findByIdComTrava(userId).orElseThrow();
+                profileRepository.findById(profile).orElseThrow().suspender();
+            });
+            return com.onda.marketplace.provider.BackgroundCheckGateway.Result.APROVADO;
+        });
+        backgroundProcessor.process(job);
+        org.junit.jupiter.api.Assertions.assertEquals("CANCELADO", jdbc.queryForObject(
+                "SELECT status FROM background_checks WHERE id=?", String.class, job));
+        org.junit.jupiter.api.Assertions.assertEquals("SUSPENSO", jdbc.queryForObject(
+                "SELECT status_verificacao FROM providers_profile WHERE id=?", String.class, profile));
+    }
+
+    @Test @Order(90)
+    @DisplayName("90 · Aprovação tardia preserva anonimização confirmada em outra transação")
+    void backgroundCheckNaoDesfazAnonimizacao() {
+        UUID profile = criarVerificacao("deletion");
+        UUID job = jdbc.queryForObject("SELECT id FROM background_checks WHERE provider_id=?", UUID.class, profile);
+        CaixaDeEntrada.CHECK_CALLBACK.set(() -> {
+            transacao.executeWithoutResult(s -> {
+                UUID userId = jdbc.queryForObject("SELECT user_id FROM providers_profile WHERE id=?", UUID.class, profile);
+                userRepository.findByIdComTrava(userId).orElseThrow().anonimizar("background-deleted@onda.test", "disabled", false);
+                profileRepository.findById(profile).orElseThrow().anonimizar();
+            });
+            return com.onda.marketplace.provider.BackgroundCheckGateway.Result.APROVADO;
+        });
+        backgroundProcessor.process(job);
+        org.junit.jupiter.api.Assertions.assertEquals("CANCELADO", jdbc.queryForObject(
+                "SELECT status FROM background_checks WHERE id=?", String.class, job));
+        org.junit.jupiter.api.Assertions.assertNull(jdbc.queryForObject(
+                "SELECT cpf_cifrado FROM providers_profile WHERE id=?", String.class, profile));
+        org.junit.jupiter.api.Assertions.assertEquals("SUSPENSO", jdbc.queryForObject(
+                "SELECT status_verificacao FROM providers_profile WHERE id=?", String.class, profile));
     }
 
 }
