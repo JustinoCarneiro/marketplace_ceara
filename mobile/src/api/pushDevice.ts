@@ -41,6 +41,9 @@ async function revoke(binding: Binding): Promise<boolean> {
 async function register(jwt: string, userId: string, token: string, isCurrent: () => boolean): Promise<boolean> {
   if (!isCurrent() || !await flushPending()) return false;
   const store = await storage();
+  const previous = JSON.parse(await store.getItemAsync(activeKey) ?? 'null') as Binding | null;
+  // Nunca perder a capacidade anterior se a tentativa seguinte falhar ou repetir o token.
+  if (previous && !await revoke(previous)) return false;
   const revocationKey = await reservePush(jwt, token);
   if (!revocationKey) return false;
   const binding: Binding = { userId, token, revocationKey, createdAt: Date.now() };
