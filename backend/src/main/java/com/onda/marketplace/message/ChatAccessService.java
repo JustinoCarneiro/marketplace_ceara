@@ -23,7 +23,7 @@ class ChatAccessService {
         if (!users.existsByIdAndAtivoTrue(userId)) throw new BusinessException("FORBIDDEN", "Conversa indisponível.");
         var request = requests.findById(requestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
-        if (!requests.isParticipante(requestId, userId) || !request.getCliente().isAtivo()) {
+        if (!requests.isParticipante(requestId, userId) || !users.existsByIdAndAtivoTrue(request.getClienteId())) {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
         if (!EnumSet.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO,

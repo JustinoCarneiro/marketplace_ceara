@@ -65,7 +65,7 @@ public class PaymentService {
         // Posse verificada SEMPRE, antes de qualquer ramo. Antes só o caminho de criação
         // conferia: um hit de idempotência devolvia a transação (valores + status) sem
         // checar dono nenhum, então uma colisão de chave vazava dados de outro cliente.
-        Optional<ServiceRequest> doCliente = requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId);
+        Optional<ServiceRequest> doCliente = requestRepository.findByIdAndClienteId(serviceRequestId, clienteId);
 
         // Reenvio de uma requisição já atendida devolve o mesmo resultado (idempotência) — antes do portão de identidade, que
         // vale só para CRIAR cobrança nova. Depois de uma rotação do HMAC, o retry de um cliente na versão antiga da chave
@@ -150,8 +150,8 @@ public class PaymentService {
 
     private TransactionDto criar(UUID serviceRequestId, InitiatePaymentRequest req,
                                   String idempotencyKey, UUID clienteId) {
-        // C-2: findByIdAndCliente_Id garante ownership — SR de outro cliente retorna 404
-        ServiceRequest sr = requestRepository.findByIdAndCliente_Id(serviceRequestId, clienteId)
+        // C-2: findByIdAndClienteId garante ownership — SR de outro cliente retorna 404
+        ServiceRequest sr = requestRepository.findByIdAndClienteId(serviceRequestId, clienteId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.ACEITO) {

@@ -1,0 +1,35 @@
+name: Desempenho isolado
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths: ['backend/**', '.github/workflows/performance.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    name: Geobusca, SSE e filas — carga sintética
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Executar benchmark em PostGIS descartável
+        run: mvn -f backend/pom.xml test -Dtest=PerformanceBaselineTest --no-transfer-progress
+        env:
+          TESTCONTAINERS_REUSE_ENABLE: 'false'
+      - name: Publicar métricas e relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline
+          path: |
+            backend/target/performance/
+            backend/target/surefire-reports/

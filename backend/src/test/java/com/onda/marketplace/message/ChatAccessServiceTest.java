@@ -16,7 +16,8 @@ class ChatAccessServiceTest {
 
     private void request(ServiceRequestStatus status, boolean ownerActive, boolean participant) {
         var request = new ServiceRequest(); request.setStatus(status);
-        var owner = mock(User.class); when(owner.isAtivo()).thenReturn(ownerActive); request.setCliente(owner);
+        var ownerId=UUID.randomUUID(); request.setClienteId(ownerId);
+        when(users.existsByIdAndAtivoTrue(ownerId)).thenReturn(ownerActive);
         when(users.existsByIdAndAtivoTrue(userId)).thenReturn(true);
         when(requests.findById(requestId)).thenReturn(Optional.of(request));
         when(requests.isParticipante(requestId, userId)).thenReturn(participant);

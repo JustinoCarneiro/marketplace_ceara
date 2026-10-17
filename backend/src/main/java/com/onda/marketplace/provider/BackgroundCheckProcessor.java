@@ -58,12 +58,12 @@ public class BackgroundCheckProcessor {
             if (job == null || !job.eligible(Instant.now())) return null;
             ProviderProfile p = profiles.findById(job.getProviderId()).orElse(null);
             if (p == null) return null; // FK normalmente elimina a tarefa junto com o perfil.
-            if (!p.getUser().isAtivo() || p.getStatusVerificacao() != ProviderStatus.EM_VERIFICACAO) {
+            if (!users.existsByIdAndAtivoTrue(p.getUserId()) || p.getStatusVerificacao() != ProviderStatus.EM_VERIFICACAO) {
                 job.complete("CANCELADO", "CADASTRO_INDISPONIVEL", Instant.now());
                 return null;
             }
             UUID token = job.claim(Instant.now());
-            return new Claim(id, token, p.getUser().getId(), p.getId(), p.getCpfCifrado(), job.getAttempts());
+            return new Claim(id, token, p.getUserId(), p.getId(), p.getCpfCifrado(), job.getAttempts());
         });
         if (claim == null) return;
 

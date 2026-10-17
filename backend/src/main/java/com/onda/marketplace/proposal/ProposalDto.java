@@ -29,7 +29,7 @@ public record ProposalDto(
                             BigDecimal prestadorNota, int prestadorAvaliacoes) {
         return new ProposalDto(
                 p.getId(),
-                p.getServiceRequest().getId(),
+                p.getServiceRequestId(),
                 p.getPrestadorId(),
                 prestadorNome,
                 prestadorNota,

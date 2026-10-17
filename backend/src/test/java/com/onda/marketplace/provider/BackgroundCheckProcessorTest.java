@@ -35,12 +35,13 @@ class BackgroundCheckProcessorTest {
         processor = new BackgroundCheckProcessor(jobs, profiles, users, gateway, encryptor, notifications, manager);
         user = User.builder().nome("Teste").email("fixture@example.test").senhaHash("hash").role(UserRole.ROLE_PROVIDER).build();
         ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
-        profile = new ProviderProfile(user, "PINTOR", encryptor.encrypt("11144477735"));
+        profile = new ProviderProfile(user.getId(), "PINTOR", encryptor.encrypt("11144477735"));
         ReflectionTestUtils.setField(profile, "id", UUID.randomUUID());
         job = new BackgroundCheck(profile.getId());
         ReflectionTestUtils.setField(job, "id", UUID.randomUUID());
     }
     void available() {
+        when(users.existsByIdAndAtivoTrue(user.getId())).thenAnswer(i -> user.isAtivo());
         when(manager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         when(jobs.locked(job.getId())).thenReturn(Optional.of(job));
         when(profiles.findById(profile.getId())).thenReturn(Optional.of(profile));
@@ -140,7 +141,9 @@ class BackgroundCheckProcessorTest {
         user.anonimizar("removed@example.test", "disabled", false);
         processor.process(job.getId());
         assertThat(job.getStatus()).isEqualTo("CANCELADO");
-        verifyNoInteractions(gateway, users);
+        verifyNoInteractions(gateway);
+        verify(users).existsByIdAndAtivoTrue(user.getId());
+        verify(users, never()).findByIdComTrava(any());
     }
     @Test void duplicateCpfCannotBeApprovedAutomatically() {
         finishable();

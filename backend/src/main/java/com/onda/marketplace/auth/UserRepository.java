@@ -9,6 +9,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
+    @Query("SELECT new com.onda.marketplace.auth.UserName(u.id,u.nome) FROM User u WHERE u.id IN :ids")
+    java.util.List<UserName> findNamesByIdIn(@Param("ids") java.util.Collection<UUID> ids);
+
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
 

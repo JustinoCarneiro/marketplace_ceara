@@ -163,7 +163,10 @@ class ChatStreamService {
             connections.remove(id);
             pending.clear();
             if (writer != null && Thread.currentThread() != writerThread) writer.cancel(true);
-            if (complete) emitter.complete();
+            if (complete) {
+                try { emitter.complete(); }
+                catch (IllegalStateException recycled) { /* O servlet já encerrou/reciclou a resposta. */ }
+            }
         }
     }
 }

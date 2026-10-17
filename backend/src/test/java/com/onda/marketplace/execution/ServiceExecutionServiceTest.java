@@ -367,8 +367,8 @@ class ServiceExecutionServiceTest {
     @Test
     void cancel_proposto_encerraAsPropostasAtivas_paraNaoFicaremAbertasEmPedidoCancelado() {
         var sr = sr(ServiceRequestStatus.PROPOSTO);
-        var p1 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(100), 1, null, ProposalStatus.ATIVA);
-        var p2 = new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(120), 1, null, ProposalStatus.ATIVA);
+        var p1 = new Proposal(sr.getId(), UUID.randomUUID(), BigDecimal.valueOf(100), 1, null, ProposalStatus.ATIVA);
+        var p2 = new Proposal(sr.getId(), UUID.randomUUID(), BigDecimal.valueOf(120), 1, null, ProposalStatus.ATIVA);
         when(srRepository.findById(SR_ID)).thenReturn(Optional.of(sr));
         when(srRepository.isParticipante(SR_ID, CLIENTE_ID)).thenReturn(true);
         when(srRepository.cancelarSeEmEstadoCancelavel(eq(SR_ID), any(), any())).thenReturn(1);
@@ -420,13 +420,13 @@ class ServiceExecutionServiceTest {
         var cliente = com.onda.marketplace.auth.User.builder().nome("Cliente").email("c@x.com").senhaHash("$2a$x")
                 .role(com.onda.marketplace.auth.UserRole.ROLE_CLIENT).build();
         org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", CLIENTE_ID);
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         return sr;
     }
 
     private Proposal proposta(UUID prestadorId) {
         var sr = sr(ServiceRequestStatus.ACEITO);
-        return new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 3, null, ProposalStatus.ACEITA);
+        return new Proposal(sr.getId(), prestadorId, BigDecimal.valueOf(200), 3, null, ProposalStatus.ACEITA);
     }
 
     private Transaction transaction(TransactionStatus status) {

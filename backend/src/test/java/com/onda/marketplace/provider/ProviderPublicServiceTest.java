@@ -4,6 +4,7 @@ import com.onda.marketplace.auth.User;
 import com.onda.marketplace.auth.UserRepository;
 import com.onda.marketplace.auth.UserRole;
 import com.onda.marketplace.proposal.Proposal;
+import com.onda.marketplace.proposal.ProposalTiming;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
 import com.onda.marketplace.review.Review;
@@ -42,6 +43,10 @@ class ProviderPublicServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(userRepository.findNamesByIdIn(any())).thenAnswer(i -> {
+            java.util.Collection<UUID> ids=i.getArgument(0);
+            return ids.stream().map(id -> new com.onda.marketplace.auth.UserName(id,"Zé Elétrica")).toList();
+        });
         service = new ProviderPublicService(profileRepository, reviewRepository, userRepository,
                 proposalRepository, TOLERANCIA_MIN);
     }
@@ -54,7 +59,7 @@ class ProviderPublicServiceTest {
         var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
         setId(prestador, userId);
-        var perfil = new ProviderProfile(prestador, "Elétrica", "cpf-cifrado");
+        var perfil = new ProviderProfile(prestador.getId(), "Elétrica", "cpf-cifrado");
         perfil.setNotaMedia(BigDecimal.valueOf(4.8));
 
         var review = mock(Review.class);
@@ -69,9 +74,9 @@ class ProviderPublicServiceTest {
         when(reviewRepository.findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
                 userId, ReviewType.CLIENTE_AVALIA_PRESTADOR))
                 .thenReturn(List.of(review));
-        when(userRepository.findById(avaliadorId)).thenReturn(Optional.of(cliente));
+        doReturn(List.of(new com.onda.marketplace.auth.UserName(userId,prestador.getNome()),new com.onda.marketplace.auth.UserName(avaliadorId,cliente.getNome()))).when(userRepository).findNamesByIdIn(any());
         when(proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA)).thenReturn(3L);
-        when(proposalRepository.findByPrestadorId(userId)).thenReturn(List.of());
+        when(proposalRepository.findTimingsByPrestadorId(userId)).thenReturn(List.of());
 
         ProviderPublicDto dto = service.buscarPorUserId(userId);
 
@@ -94,23 +99,23 @@ class ProviderPublicServiceTest {
         var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
         setId(prestador, userId);
-        var perfil = new ProviderProfile(prestador, "Elétrica", "cpf-cifrado");
+        var perfil = new ProviderProfile(prestador.getId(), "Elétrica", "cpf-cifrado");
 
         var sr1 = new ServiceRequest();
         setCreatedAt(sr1, Instant.parse("2026-08-01T10:00:00Z"));
-        var p1 = new Proposal(sr1, userId, new BigDecimal("150.00"), 2, null, ProposalStatus.ATIVA);
+        var p1 = new Proposal(sr1.getId(), userId, new BigDecimal("150.00"), 2, null, ProposalStatus.ATIVA);
         setCreatedAt(p1, Instant.parse("2026-08-01T10:10:00Z")); // 10 min de resposta
 
         var sr2 = new ServiceRequest();
         setCreatedAt(sr2, Instant.parse("2026-08-02T09:00:00Z"));
-        var p2 = new Proposal(sr2, userId, new BigDecimal("300.00"), 1, null, ProposalStatus.ACEITA);
+        var p2 = new Proposal(sr2.getId(), userId, new BigDecimal("300.00"), 1, null, ProposalStatus.ACEITA);
         setCreatedAt(p2, Instant.parse("2026-08-02T09:20:00Z")); // 20 min de resposta
 
         when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
         when(reviewRepository.findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
                 userId, ReviewType.CLIENTE_AVALIA_PRESTADOR)).thenReturn(List.of());
         when(proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA)).thenReturn(1L);
-        when(proposalRepository.findByPrestadorId(userId)).thenReturn(List.of(p1, p2));
+        when(proposalRepository.findTimingsByPrestadorId(userId)).thenReturn(List.of(timing(p1,sr1), timing(p2,sr2)));
 
         ProviderPublicDto dto = service.buscarPorUserId(userId);
 
@@ -127,37 +132,37 @@ class ProviderPublicServiceTest {
         var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
         setId(prestador, userId);
-        var perfil = new ProviderProfile(prestador, "Elétrica", "cpf-cifrado");
+        var perfil = new ProviderProfile(prestador.getId(), "Elétrica", "cpf-cifrado");
 
         // Pontual: começou 10 min depois do combinado — dentro da tolerância de 30 min.
         var srPontual = new ServiceRequest();
         srPontual.setIniciadoEm(Instant.parse("2026-08-01T14:10:00Z"));
-        var pPontual = new Proposal(srPontual, userId, BigDecimal.TEN, 1,
+        var pPontual = new Proposal(srPontual.getId(), userId, BigDecimal.TEN, 1,
                 Instant.parse("2026-08-01T14:00:00Z"), ProposalStatus.ACEITA);
 
         // Atrasado: começou 45 min depois do combinado — fora da tolerância.
         var srAtrasado = new ServiceRequest();
         srAtrasado.setIniciadoEm(Instant.parse("2026-08-02T09:45:00Z"));
-        var pAtrasado = new Proposal(srAtrasado, userId, BigDecimal.TEN, 1,
+        var pAtrasado = new Proposal(srAtrasado.getId(), userId, BigDecimal.TEN, 1,
                 Instant.parse("2026-08-02T09:00:00Z"), ProposalStatus.ACEITA);
 
         // Sem horarioProposto (proposta anterior à feature) — não entra na conta nem pra
         // um lado nem pro outro.
         var srSemHorario = new ServiceRequest();
         srSemHorario.setIniciadoEm(Instant.parse("2026-08-03T09:00:00Z"));
-        var pSemHorario = new Proposal(srSemHorario, userId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
+        var pSemHorario = new Proposal(srSemHorario.getId(), userId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         // ATIVA (não aceita, nunca chegou a começar de verdade) — também não conta.
         var srNaoIniciado = new ServiceRequest();
-        var pNaoIniciado = new Proposal(srNaoIniciado, userId, BigDecimal.TEN, 1,
+        var pNaoIniciado = new Proposal(srNaoIniciado.getId(), userId, BigDecimal.TEN, 1,
                 Instant.parse("2026-08-04T09:00:00Z"), ProposalStatus.ATIVA);
 
         when(profileRepository.findByUserId(userId)).thenReturn(Optional.of(perfil));
         when(reviewRepository.findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
                 userId, ReviewType.CLIENTE_AVALIA_PRESTADOR)).thenReturn(List.of());
         when(proposalRepository.countByPrestadorIdAndStatus(userId, ProposalStatus.ACEITA)).thenReturn(3L);
-        when(proposalRepository.findByPrestadorId(userId))
-                .thenReturn(List.of(pPontual, pAtrasado, pSemHorario, pNaoIniciado));
+        when(proposalRepository.findTimingsByPrestadorId(userId))
+                .thenReturn(List.of(timing(pPontual,srPontual), timing(pAtrasado,srAtrasado), timing(pSemHorario,srSemHorario), timing(pNaoIniciado,srNaoIniciado)));
 
         ProviderPublicDto dto = service.buscarPorUserId(userId);
 
@@ -175,6 +180,9 @@ class ProviderPublicServiceTest {
                 .hasMessageContaining("não encontrado");
     }
 
+    private static ProposalTiming timing(Proposal p, ServiceRequest sr) {
+        return new ProposalTiming(p.getValor(),p.getStatus(),p.getHorarioProposto(),p.getCreatedAt(),sr.getCreatedAt(),sr.getIniciadoEm());
+    }
     private static void setId(User user, UUID id) {
         try {
             var field = User.class.getDeclaredField("id");

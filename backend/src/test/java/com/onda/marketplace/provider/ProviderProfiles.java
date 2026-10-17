@@ -12,7 +12,7 @@ public final class ProviderProfiles {
         User user = User.builder()
                 .nome("Prestador Teste").email("prestador@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
-        ProviderProfile perfil = new ProviderProfile(user, "Elétrica", "cpf-cifrado");
+        ProviderProfile perfil = new ProviderProfile(user.getId(), "Elétrica", "cpf-cifrado");
         switch (status) {
             case VERIFICADO -> perfil.aprovar();
             case REPROVADO  -> perfil.reprovar();

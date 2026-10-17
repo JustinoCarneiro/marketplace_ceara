@@ -1,6 +1,5 @@
 package com.onda.marketplace.proposal;
 
-import com.onda.marketplace.servicerequest.ServiceRequest;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -15,9 +14,8 @@ public class Proposal {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_request_id", nullable = false)
-    private ServiceRequest serviceRequest;
+    @Column(name = "service_request_id", nullable = false)
+    private UUID serviceRequestId;
 
     // FK armazenada como UUID para evitar carregamento do User (consultado via JWT)
     @Column(name = "prestador_id", nullable = false)
@@ -44,9 +42,9 @@ public class Proposal {
 
     protected Proposal() {}
 
-    public Proposal(ServiceRequest serviceRequest, UUID prestadorId, BigDecimal valor, int prazoDias,
+    public Proposal(UUID serviceRequestId, UUID prestadorId, BigDecimal valor, int prazoDias,
                      Instant horarioProposto, ProposalStatus status) {
-        this.serviceRequest  = serviceRequest;
+        this.serviceRequestId  = serviceRequestId;
         this.prestadorId     = prestadorId;
         this.valor           = valor;
         this.prazoDias       = prazoDias;
@@ -55,7 +53,7 @@ public class Proposal {
     }
 
     public UUID getId()                     { return id; }
-    public ServiceRequest getServiceRequest() { return serviceRequest; }
+    public UUID getServiceRequestId() { return serviceRequestId; }
     public UUID getPrestadorId()            { return prestadorId; }
     public BigDecimal getValor()            { return valor; }
     public int getPrazoDias()               { return prazoDias; }

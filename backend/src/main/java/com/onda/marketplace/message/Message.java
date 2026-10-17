@@ -1,6 +1,5 @@
 package com.onda.marketplace.message;
 
-import com.onda.marketplace.servicerequest.ServiceRequest;
 import jakarta.persistence.*;
 
 import java.time.Instant;
@@ -20,9 +19,8 @@ public class Message {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "service_request_id", nullable = false)
-    private ServiceRequest serviceRequest;
+    @Column(name = "service_request_id", nullable = false)
+    private UUID serviceRequestId;
 
     @Column(name = "remetente_id", nullable = false)
     private UUID remetenteId;
@@ -38,15 +36,15 @@ public class Message {
 
     protected Message() {}
 
-    public Message(ServiceRequest serviceRequest, UUID remetenteId, String conteudo, boolean mascarado) {
-        this.serviceRequest = serviceRequest;
+    public Message(UUID serviceRequestId, UUID remetenteId, String conteudo, boolean mascarado) {
+        this.serviceRequestId = serviceRequestId;
         this.remetenteId    = remetenteId;
         this.conteudo       = conteudo;
         this.mascarado      = mascarado;
     }
 
     public UUID getId()                       { return id; }
-    public ServiceRequest getServiceRequest()  { return serviceRequest; }
+    public UUID getServiceRequestId()  { return serviceRequestId; }
     public UUID getRemetenteId()               { return remetenteId; }
     public String getConteudo()                { return conteudo; }
     public boolean isMascarado()               { return mascarado; }

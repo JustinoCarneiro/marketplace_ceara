@@ -1,6 +1,5 @@
 package com.onda.marketplace.provider;
 
-import com.onda.marketplace.auth.User;
 import jakarta.persistence.*;
 import org.locationtech.jts.geom.Point;
 
@@ -16,9 +15,8 @@ public class ProviderProfile {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    private User user;
+    @Column(name = "user_id", nullable = false, unique = true)
+    private UUID userId;
 
     @Column(nullable = false)
     private String categoria;
@@ -66,14 +64,14 @@ public class ProviderProfile {
 
     protected ProviderProfile() {}
 
-    public ProviderProfile(User user, String categoria, String cpfCifrado) {
-        this.user         = user;
+    public ProviderProfile(UUID userId, String categoria, String cpfCifrado) {
+        this.userId         = userId;
         this.categoria    = categoria;
         this.cpfCifrado   = cpfCifrado;
     }
 
     public UUID getId()                    { return id; }
-    public User getUser()                  { return user; }
+    public UUID getUserId()                  { return userId; }
     public String getCategoria()           { return categoria; }
     public String getBio()                 { return bio; }
     public void   setBio(String bio)       { this.bio = bio; }

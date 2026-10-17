@@ -27,6 +27,16 @@ class ChatStreamServiceTest {
     }
     @AfterEach void close() { streams.close(); executor.shutdownNow(); }
 
+    @Test void recycledEmitterDoesNotAbortCleanupOfOtherConnections() throws Exception {
+        var first=streams.connect(request,user,Instant.now().plusSeconds(60));
+        var second=streams.connect(request,user,Instant.now().plusSeconds(60));
+        verify(first,timeout(2000).atLeastOnce()).send(any(SseEmitter.SseEventBuilder.class));
+        verify(second,timeout(2000).atLeastOnce()).send(any(SseEmitter.SseEventBuilder.class));
+        doThrow(new IllegalStateException("response already recycled")).when(first).complete();
+        assertThatCode(streams::close).doesNotThrowAnyException();
+        verify(second).complete();
+    }
+
     @Test void unauthorizedUserCannotOpenStream() {
         doThrow(new com.onda.marketplace.shared.exception.BusinessException("FORBIDDEN", "Sem acesso"))
                 .when(access).requireAccess(request, user);

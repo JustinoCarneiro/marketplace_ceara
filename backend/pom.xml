@@ -189,6 +189,7 @@
         <configuration>
           <excludes>
             <exclude>**/e2e/**</exclude>
+            <exclude>**/performance/**</exclude>
           </excludes>
           <!-- Docker Desktop (Linux) exige API >= 1.44; docker-java negocia versão
                antiga e leva 400. 'api.version' é a system property que docker-java

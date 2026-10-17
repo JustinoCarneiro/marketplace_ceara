@@ -1,7 +1,7 @@
 package com.onda.marketplace.provider;
 
 import com.onda.marketplace.auth.UserRepository;
-import com.onda.marketplace.proposal.Proposal;
+import com.onda.marketplace.proposal.ProposalTiming;
 import com.onda.marketplace.proposal.ProposalRepository;
 import com.onda.marketplace.proposal.ProposalStatus;
 import com.onda.marketplace.review.Review;
@@ -52,25 +52,28 @@ public class ProviderPublicService {
                 .findByAvaliadoIdAndTipoAndReveladaTrueOrderByCriadoEmDesc(
                         userId, ReviewType.CLIENTE_AVALIA_PRESTADOR);
 
+        var ids = new java.util.HashSet<UUID>(); ids.add(userId);
+        reviews.forEach(r -> ids.add(r.getAvaliadorId()));
+        var nomes = userRepository.findNamesByIdIn(ids).stream().collect(java.util.stream.Collectors.toMap(
+                com.onda.marketplace.auth.UserName::id, com.onda.marketplace.auth.UserName::nome));
+
         List<ProviderPublicDto.Avaliacao> avaliacoes = reviews.stream()
                 .map(r -> new ProviderPublicDto.Avaliacao(
                         r.getId(),
-                        userRepository.findById(r.getAvaliadorId())
-                                .map(u -> u.getNome())
-                                .orElse("Cliente"),
+                        nomes.getOrDefault(r.getAvaliadorId(), "Cliente"),
                         r.getNota(),
                         r.getComentario()))
                 .toList();
 
-        List<Proposal> propostas = proposalRepository.findByPrestadorId(userId);
-        BigDecimal precoMin = propostas.stream().map(Proposal::getValor).min(Comparator.naturalOrder()).orElse(null);
-        BigDecimal precoMax = propostas.stream().map(Proposal::getValor).max(Comparator.naturalOrder()).orElse(null);
+        List<ProposalTiming> propostas = proposalRepository.findTimingsByPrestadorId(userId);
+        BigDecimal precoMin = propostas.stream().map(ProposalTiming::valor).min(Comparator.naturalOrder()).orElse(null);
+        BigDecimal precoMax = propostas.stream().map(ProposalTiming::valor).max(Comparator.naturalOrder()).orElse(null);
 
         Integer tempoRespostaMin = null;
         if (!propostas.isEmpty()) {
             long mediaMinutos = Math.round(propostas.stream()
                     .mapToLong(pr -> Duration.between(
-                            pr.getServiceRequest().getCreatedAt(), pr.getCreatedAt()).toMinutes())
+                            pr.requestCreatedAt(), pr.createdAt()).toMinutes())
                     .average()
                     .orElse(0));
             // O front trata 0 como "sem dado" (`profile.tempoRespostaMin ? ... : '—'`) — um
@@ -82,24 +85,24 @@ public class ProviderPublicService {
         // uma proposta aceita que tinha horário combinado (horarioProposto) — propostas sem
         // esse dado (anteriores à feature) ou pedidos nunca iniciados não contam pra nenhum
         // dos dois lados, não puxam a média nem pra cima nem pra baixo.
-        List<Proposal> atendimentosIniciados = propostas.stream()
-                .filter(pr -> pr.getStatus() == ProposalStatus.ACEITA)
-                .filter(pr -> pr.getHorarioProposto() != null)
-                .filter(pr -> pr.getServiceRequest().getIniciadoEm() != null)
+        List<ProposalTiming> atendimentosIniciados = propostas.stream()
+                .filter(pr -> pr.status() == ProposalStatus.ACEITA)
+                .filter(pr -> pr.horarioProposto() != null)
+                .filter(pr -> pr.iniciadoEm() != null)
                 .toList();
 
         Integer pontualidadePct = null;
         if (!atendimentosIniciados.isEmpty()) {
             long pontuais = atendimentosIniciados.stream()
-                    .filter(pr -> !pr.getServiceRequest().getIniciadoEm()
-                            .isAfter(pr.getHorarioProposto().plusSeconds(toleranciaPontualidadeMin * 60)))
+                    .filter(pr -> !pr.iniciadoEm()
+                            .isAfter(pr.horarioProposto().plusSeconds(toleranciaPontualidadeMin * 60)))
                     .count();
             pontualidadePct = (int) Math.round(100.0 * pontuais / atendimentosIniciados.size());
         }
 
         return new ProviderPublicDto(
-                p.getUser().getId(),
-                p.getUser().getNome(),
+                p.getUserId(),
+                nomes.getOrDefault(p.getUserId(), "Prestador"),
                 p.getCategoria(),
                 p.getBio(),
                 p.getNotaMedia(),

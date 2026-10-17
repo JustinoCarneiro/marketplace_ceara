@@ -138,8 +138,8 @@ class MessageServiceTest {
     @Test
     void listar_participante_devolveMensagensEmOrdemCronologica() {
         var sr = sr(ServiceRequestStatus.EM_ANDAMENTO);
-        var msg1 = new Message(sr, clienteId, "primeira", false);
-        var msg2 = new Message(sr, prestadorId, "segunda", false);
+        var msg1 = new Message(sr.getId(), clienteId, "primeira", false);
+        var msg2 = new Message(sr.getId(), prestadorId, "segunda", false);
         when(requestRepository.findById(srId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(srId, clienteId)).thenReturn(true);
         when(messageRepository.findByServiceRequestIdOrderByCreatedAtAsc(srId))

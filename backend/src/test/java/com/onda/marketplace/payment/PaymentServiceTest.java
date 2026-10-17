@@ -65,7 +65,7 @@ class PaymentServiceTest {
     void initiate_criaTransacaoEOutboxAtomicamente() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(250))));
@@ -88,7 +88,7 @@ class PaymentServiceTest {
                 userRepository, cpfHashService, new BigDecimal("0.10"), mock(org.springframework.context.ApplicationEventPublisher.class));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(200))));
@@ -111,7 +111,7 @@ class PaymentServiceTest {
                 userRepository, cpfHashService, new BigDecimal(percentual), mock(org.springframework.context.ApplicationEventPublisher.class));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, new BigDecimal(valorProposta))));
@@ -141,7 +141,7 @@ class PaymentServiceTest {
     void initiate_outboxTipoEStatusCorretos() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(200))));
@@ -184,7 +184,7 @@ class PaymentServiceTest {
     void initiate_idempotente_retornaExistente() {
         // (o cliente nem é consultado num hit de idempotência: o portão de identidade vale só para criar cobrança nova)
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         var existing = new Transaction(sr.getId(), BigDecimal.valueOf(250),
                 BigDecimal.valueOf(37.5), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-dup");
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(sr.getId(), "idem-dup"))
@@ -208,7 +208,7 @@ class PaymentServiceTest {
         // mas o código certo nem chega a consultá-lo num hit
         lenient().when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         var existing = new Transaction(sr.getId(), BigDecimal.valueOf(250),
                 BigDecimal.valueOf(37.5), BigDecimal.valueOf(0.15), PaymentMethod.PIX, "idem-rot-retry");
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(sr.getId(), "idem-rot-retry"))
@@ -228,7 +228,7 @@ class PaymentServiceTest {
         u.vincularCpf("hash-da-chave-antiga", cpfHashService.versaoAtual() - 1);
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(u));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.initiate(sr.getId(), new InitiatePaymentRequest("PIX"), "idem-rot-nova", CLIENTE_ID))
@@ -245,7 +245,7 @@ class PaymentServiceTest {
         // colisão de chave entregava os dados financeiros de outro cliente.
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         UUID pedidoAlheio = UUID.randomUUID();
-        when(requestRepository.findByIdAndCliente_Id(pedidoAlheio, CLIENTE_ID))
+        when(requestRepository.findByIdAndClienteId(pedidoAlheio, CLIENTE_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.initiate(
@@ -260,7 +260,7 @@ class PaymentServiceTest {
     void initiate_pedidoNaoAceito_lancaBusinessException() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
@@ -273,7 +273,7 @@ class PaymentServiceTest {
     void initiate_clienteErrado_retornaNotFound() {
         when(userRepository.findById(any())).thenReturn(Optional.of(clienteVerificado()));
         // Sem stub de idempotência: a posse é checada ANTES, então a busca nem é alcançada.
-        when(requestRepository.findByIdAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdAndClienteId(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                 service.initiate(UUID.randomUUID(), new InitiatePaymentRequest("PIX"), "idem-6", UUID.randomUUID()))
@@ -422,7 +422,7 @@ class PaymentServiceTest {
     void initiate_comCartao_salvaCamposDeCartaoEOutbox() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(300))));
@@ -454,7 +454,7 @@ class PaymentServiceTest {
     void initiate_comCartao_parcelasInvalidas_lancaBusinessException() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.initiate(sr.getId(),
@@ -474,7 +474,7 @@ class PaymentServiceTest {
     void initiate_comCartao_semParcelasOuBandeira_assumeValoresPadrao() {
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
-        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(requestRepository.findByIdAndClienteId(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
         when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
         when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
                 .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(150))));
@@ -504,6 +504,6 @@ class PaymentServiceTest {
     }
 
     private Proposal proposalAceita(ServiceRequest sr, BigDecimal valor) {
-        return new Proposal(sr, UUID.randomUUID(), valor, 3, null, ProposalStatus.ACEITA);
+        return new Proposal(sr.getId(), UUID.randomUUID(), valor, 3, null, ProposalStatus.ACEITA);
     }
 }

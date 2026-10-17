@@ -414,7 +414,9 @@ class AdminQueryServiceTest {
         lenient().when(sr.getStatus()).thenReturn(status);
         lenient().when(sr.getCategoria()).thenReturn("ENCANADOR");
         lenient().when(sr.getCreatedAt()).thenReturn(Instant.now());
-        lenient().when(sr.getCliente()).thenReturn(cliente);
+        var clienteId=UUID.randomUUID();
+        lenient().when(sr.getClienteId()).thenReturn(clienteId);
+        lenient().when(userRepository.findById(clienteId)).thenReturn(Optional.of(cliente));
         return sr;
     }
 

@@ -51,6 +51,8 @@ class ServiceRequestServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(cliente,"id",UUID.randomUUID());
+        lenient().when(userRepository.findById(cliente.getId())).thenReturn(Optional.of(cliente));
         service = new ServiceRequestService(requestRepository, mediaRepository, userRepository, aiService,
                 storageService, proposalRepository, transactionRepository);
     }
@@ -60,7 +62,7 @@ class ServiceRequestServiceTest {
         var suggestion = new AiSuggestion("Instalação de chuveiro elétrico", BigDecimal.valueOf(150), BigDecimal.valueOf(300));
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
         when(aiService.suggest(any(), any(), any())).thenReturn(Optional.of(suggestion));
-        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndClienteId(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var req = new CreateServiceRequestRequest("ELETRICISTA", "Chuveiro sem funcionar", -3.7319, -38.5267, null);
@@ -74,7 +76,7 @@ class ServiceRequestServiceTest {
     void create_iaFalha_retornaSemSugestao() {
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
         when(aiService.suggest(any(), any(), any())).thenReturn(Optional.empty());  // IA indisponível
-        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndClienteId(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         var req = new CreateServiceRequestRequest("ENCANADOR", null, -3.7319, -38.5267, null);
@@ -123,7 +125,7 @@ class ServiceRequestServiceTest {
     void create_bairroNuloOuDaLista_passa() {
         when(userRepository.findById(any())).thenReturn(Optional.of(cliente));
         when(aiService.suggest(any(), any(), any())).thenReturn(Optional.empty());
-        when(requestRepository.findByIdempotencyKeyAndCliente_Id(any(), any())).thenReturn(Optional.empty());
+        when(requestRepository.findByIdempotencyKeyAndClienteId(any(), any())).thenReturn(Optional.empty());
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         assertThatCode(() -> service.create(UUID.randomUUID(),
@@ -140,7 +142,7 @@ class ServiceRequestServiceTest {
         var existing = new ServiceRequest();
         existing.setCategoria("ELETRICISTA");
         existing.setStatus(ServiceRequestStatus.PENDENTE);
-        when(requestRepository.findByIdempotencyKeyAndCliente_Id("idem-dup", clienteId))
+        when(requestRepository.findByIdempotencyKeyAndClienteId("idem-dup", clienteId))
                 .thenReturn(Optional.of(existing));
 
         var req = new CreateServiceRequestRequest("ELETRICISTA", null, -3.7, -38.5, null);
@@ -156,7 +158,7 @@ class ServiceRequestServiceTest {
         // colide entre usuários no mesmo milissegundo — o segundo cliente recebia de volta
         // o pedido do primeiro (id + descrição do problema, dado pessoal).
         UUID outroCliente = UUID.randomUUID();
-        when(requestRepository.findByIdempotencyKeyAndCliente_Id("idem-colidida", outroCliente))
+        when(requestRepository.findByIdempotencyKeyAndClienteId("idem-colidida", outroCliente))
                 .thenReturn(Optional.empty());
         when(userRepository.findById(outroCliente)).thenReturn(Optional.of(cliente));
         when(requestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -176,12 +178,12 @@ class ServiceRequestServiceTest {
         UUID prestadorId = UUID.randomUUID();
 
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria("ELETRICISTA");
         sr.setDescricao("Chuveiro sem funcionar");
         sr.setStatus(ServiceRequestStatus.ACEITO);
 
-        var proposta = new Proposal(sr, prestadorId, BigDecimal.valueOf(150), 2, null, ProposalStatus.ACEITA);
+        var proposta = new Proposal(sr.getId(), prestadorId, BigDecimal.valueOf(150), 2, null, ProposalStatus.ACEITA);
         var prestador = User.builder().nome("Zé Elétrica").email("ze@test.com")
                 .senhaHash("$2a$hash").role(UserRole.ROLE_PROVIDER).build();
 
@@ -205,7 +207,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
 
@@ -220,7 +222,7 @@ class ServiceRequestServiceTest {
         UUID clienteId = UUID.randomUUID();
         org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria("ELETRICISTA");
         sr.setDescricao("sugestão da IA");
         sr.setStatus(ServiceRequestStatus.PENDENTE);
@@ -239,7 +241,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", UUID.randomUUID());
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setStatus(ServiceRequestStatus.PENDENTE);
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
 
@@ -255,7 +257,7 @@ class ServiceRequestServiceTest {
         UUID clienteId = UUID.randomUUID();
         org.springframework.test.util.ReflectionTestUtils.setField(cliente, "id", clienteId);
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setStatus(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
 
@@ -269,7 +271,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
         when(storageService.upload(any(), eq("service-requests/" + requestId)))
@@ -290,7 +292,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
         String reference = "s3://private-media/service-requests/" + requestId + "/" + UUID.randomUUID();
@@ -306,7 +308,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findById(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
         assertThatThrownBy(() -> service.listarMidias(requestId, userId))
@@ -332,7 +334,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
         when(storageService.upload(any(), any())).thenThrow(new StorageUnavailableException());
@@ -347,8 +349,9 @@ class ServiceRequestServiceTest {
         UUID userId = UUID.randomUUID();
         var owner = mock(com.onda.marketplace.auth.User.class);
         when(owner.isExcluido()).thenReturn(true);
+        when(userRepository.findById(null)).thenReturn(Optional.of(owner));
         var sr = new ServiceRequest();
-        sr.setCliente(owner);
+        sr.setClienteId(owner.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
         var file = new org.springframework.mock.web.MockMultipartFile("file", "foto.jpg", "image/jpeg", new byte[]{1});
@@ -362,7 +365,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(false);
 
@@ -380,7 +383,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
 
@@ -398,7 +401,7 @@ class ServiceRequestServiceTest {
         UUID requestId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         when(requestRepository.findByIdComTrava(requestId)).thenReturn(Optional.of(sr));
         when(requestRepository.isParticipante(requestId, userId)).thenReturn(true);
 
@@ -415,7 +418,7 @@ class ServiceRequestServiceTest {
     @Test
     void listarDisponiveis_retornaPedidosPendentes() {
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria("ELETRICISTA");
         sr.setDescricao("Tomada soltando faísca");
         sr.setStatus(ServiceRequestStatus.PENDENTE);
@@ -438,11 +441,11 @@ class ServiceRequestServiceTest {
         org.springframework.test.util.ReflectionTestUtils.setField(eu, "id", UUID.randomUUID());
         org.springframework.test.util.ReflectionTestUtils.setField(outro, "id", UUID.randomUUID());
         var meu = new ServiceRequest();
-        meu.setCliente(eu);
+        meu.setClienteId(eu.getId());
         meu.setCategoria("ELETRICISTA");
         meu.setStatus(ServiceRequestStatus.PENDENTE);
         var deOutro = new ServiceRequest();
-        deOutro.setCliente(outro);
+        deOutro.setClienteId(outro.getId());
         deOutro.setCategoria("HIDRAULICA");
         deOutro.setStatus(ServiceRequestStatus.PENDENTE);
         when(requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE))
@@ -458,7 +461,7 @@ class ServiceRequestServiceTest {
         UUID clienteId = UUID.randomUUID();
         UUID requestId = UUID.randomUUID();
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria("ENCANADOR");
         sr.setStatus(ServiceRequestStatus.PROPOSTO);
 
@@ -484,16 +487,16 @@ class ServiceRequestServiceTest {
         UUID prestadorId = UUID.randomUUID();
 
         var srAntigo = new ServiceRequest();
-        srAntigo.setCliente(cliente);
+        srAntigo.setClienteId(cliente.getId());
         srAntigo.setStatus(ServiceRequestStatus.ACEITO);
         setId(srAntigo, UUID.randomUUID());
-        var propostaAntiga = new Proposal(srAntigo, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
+        var propostaAntiga = new Proposal(srAntigo.getId(), prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         var srRecente = new ServiceRequest();
-        srRecente.setCliente(cliente);
+        srRecente.setClienteId(cliente.getId());
         srRecente.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
         setId(srRecente, UUID.randomUUID());
-        var propostaRecente = new Proposal(srRecente, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
+        var propostaRecente = new Proposal(srRecente.getId(), prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
                 .thenReturn(List.of(propostaAntiga, propostaRecente));
@@ -510,10 +513,10 @@ class ServiceRequestServiceTest {
     void buscarPedidoAtivoDoPrestador_semAtendimentoElegivel_retornaNull() {
         UUID prestadorId = UUID.randomUUID();
         var srConcluido = new ServiceRequest();
-        srConcluido.setCliente(cliente);
+        srConcluido.setClienteId(cliente.getId());
         srConcluido.setStatus(ServiceRequestStatus.CONCLUIDO);
         setId(srConcluido, UUID.randomUUID());
-        var proposta = new Proposal(srConcluido, prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
+        var proposta = new Proposal(srConcluido.getId(), prestadorId, BigDecimal.TEN, 1, null, ProposalStatus.ACEITA);
 
         when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
                 .thenReturn(List.of(proposta));
@@ -527,21 +530,23 @@ class ServiceRequestServiceTest {
         UUID prestadorId = UUID.randomUUID();
 
         var srConcluido = new ServiceRequest();
-        srConcluido.setCliente(cliente);
+        srConcluido.setClienteId(cliente.getId());
         srConcluido.setCategoria("Elétrica");
         srConcluido.setStatus(ServiceRequestStatus.CONCLUIDO);
         setId(srConcluido, UUID.randomUUID());
-        var pConcluido = new Proposal(srConcluido, prestadorId, BigDecimal.valueOf(150), 1, null, ProposalStatus.ACEITA);
+        var pConcluido = new Proposal(srConcluido.getId(), prestadorId, BigDecimal.valueOf(150), 1, null, ProposalStatus.ACEITA);
 
         var srEmAndamento = new ServiceRequest();
-        srEmAndamento.setCliente(cliente);
+        srEmAndamento.setClienteId(cliente.getId());
         srEmAndamento.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
         setId(srEmAndamento, UUID.randomUUID());
-        var pAtivo = new Proposal(srEmAndamento, prestadorId, BigDecimal.valueOf(300), 1, null, ProposalStatus.ACEITA);
+        var pAtivo = new Proposal(srEmAndamento.getId(), prestadorId, BigDecimal.valueOf(300), 1, null, ProposalStatus.ACEITA);
 
         when(proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA))
                 .thenReturn(List.of(pConcluido, pAtivo));
 
+        when(requestRepository.findAllById(any())).thenReturn(List.of(srConcluido,srEmAndamento));
+        when(userRepository.findNamesByIdIn(any())).thenReturn(List.of(new com.onda.marketplace.auth.UserName(cliente.getId(),cliente.getNome())));
         List<ProviderHistoryDto> historico = service.listarHistoricoDoPrestador(prestadorId);
 
         assertThat(historico).hasSize(1);

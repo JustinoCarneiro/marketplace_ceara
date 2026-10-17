@@ -78,7 +78,7 @@ public class ServiceRequestService {
         // Escopada ao cliente: a chave vem do app (`req-<timestamp>`) e colide de verdade
         // entre usuários diferentes no mesmo milissegundo. Buscando só pela chave, o segundo
         // cliente recebia de volta o pedido do primeiro — id e descrição do problema (V14).
-        return requestRepository.findByIdempotencyKeyAndCliente_Id(idempotencyKey, clienteId)
+        return requestRepository.findByIdempotencyKeyAndClienteId(idempotencyKey, clienteId)
                 .map(ServiceRequestDto::from)
                 .orElseGet(() -> criarNovo(clienteId, req, idempotencyKey));
     }
@@ -93,7 +93,7 @@ public class ServiceRequestService {
         ServiceRequest sr = requestRepository.findByIdComTrava(requestId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
-        if (!requestRepository.isParticipante(requestId, userId) || sr.getCliente().isExcluido()) {
+        if (!requestRepository.isParticipante(requestId, userId) || userRepository.findById(sr.getClienteId()).map(User::isExcluido).orElse(true)) {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 
@@ -178,7 +178,7 @@ public class ServiceRequestService {
                 sr.getStatus().name(),
                 sr.getCategoria(),
                 sr.getDescricao(),
-                sr.getCliente().getId(),
+                sr.getClienteId(),
                 prestadorId,
                 prestadorNome(requestId),
                 sr.getCreatedAt(),
@@ -197,7 +197,7 @@ public class ServiceRequestService {
     @Transactional(readOnly = true)
     public UUID buscarPedidoAtivoDoPrestador(UUID prestadorId) {
         return proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA).stream()
-                .map(p -> p.getServiceRequest().getId())
+                .map(p -> p.getServiceRequestId())
                 .map(id -> requestRepository.findById(id).orElse(null))
                 .filter(sr -> sr != null && (sr.getStatus() == ServiceRequestStatus.ACEITO
                         || sr.getStatus() == ServiceRequestStatus.EM_ANDAMENTO))
@@ -214,15 +214,20 @@ public class ServiceRequestService {
 
     @Transactional(readOnly = true)
     public List<ProviderHistoryDto> listarHistoricoDoPrestador(UUID prestadorId) {
-        return proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA).stream()
-                .filter(p -> HISTORICO_PRESTADOR.contains(p.getServiceRequest().getStatus()))
-                .sorted(Comparator.comparing((Proposal p) -> p.getServiceRequest().getUpdatedAt()).reversed())
+        var propostas = proposalRepository.findByPrestadorIdAndStatus(prestadorId, ProposalStatus.ACEITA);
+        var pedidos = requestRepository.findAllById(propostas.stream().map(Proposal::getServiceRequestId).toList());
+        var porId = pedidos.stream().collect(java.util.stream.Collectors.toMap(ServiceRequest::getId, p -> p));
+        var nomes = userRepository.findNamesByIdIn(pedidos.stream().map(ServiceRequest::getClienteId).distinct().toList())
+                .stream().collect(java.util.stream.Collectors.toMap(com.onda.marketplace.auth.UserName::id, com.onda.marketplace.auth.UserName::nome));
+        return propostas.stream()
+                .filter(p -> porId.containsKey(p.getServiceRequestId()))
+                .filter(p -> HISTORICO_PRESTADOR.contains(porId.get(p.getServiceRequestId()).getStatus()))
+                .sorted(Comparator.comparing((Proposal p) -> porId.get(p.getServiceRequestId()).getUpdatedAt()).reversed())
                 .map(p -> {
-                    ServiceRequest sr = p.getServiceRequest();
+                    ServiceRequest sr = porId.get(p.getServiceRequestId());
                     return new ProviderHistoryDto(sr.getId(), sr.getCategoria(), sr.getStatus().name(),
-                            sr.getUpdatedAt(), sr.getCliente().getNome(), p.getValor());
-                })
-                .toList();
+                            sr.getUpdatedAt(), nomes.getOrDefault(sr.getClienteId(), "Cliente"), p.getValor());
+                }).toList();
     }
 
     /** Sugestão da IA já persistida (nula quando indisponível — fallback manual na tela). */
@@ -238,7 +243,7 @@ public class ServiceRequestService {
         // trava, uma proposta que chegasse no meio (PENDENTE → PROPOSTO) era desfeita pelo status antigo, e o pedido ficava
         // PENDENTE com uma proposta ATIVA escondida. Pedido de outro cliente: mesma resposta de "não existe".
         ServiceRequest sr = requestRepository.findByIdComTrava(requestId)
-                .filter(r -> r.getCliente().getId().equals(clienteId))
+                .filter(r -> r.getClienteId().equals(clienteId))
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.PENDENTE) {
@@ -259,7 +264,7 @@ public class ServiceRequestService {
     public List<AvailableRequestDto> listarDisponiveis(UUID prestadorId) {
         return requestRepository.findByStatusOrderByCreatedAtDesc(ServiceRequestStatus.PENDENTE)
                 .stream()
-                .filter(pedido -> !prestadorId.equals(pedido.getCliente().getId()))
+                .filter(pedido -> !prestadorId.equals(pedido.getClienteId()))
                 .map(AvailableRequestDto::from)
                 .toList();
     }
@@ -267,7 +272,7 @@ public class ServiceRequestService {
     // --- privado ---
 
     private ServiceRequest carregarDoCliente(UUID requestId, UUID clienteId) {
-        return requestRepository.findByIdAndCliente_Id(requestId, clienteId)
+        return requestRepository.findByIdAndClienteId(requestId, clienteId)
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
     }
 
@@ -288,7 +293,7 @@ public class ServiceRequestService {
                 .orElseThrow(() -> new BusinessException("USER_NOT_FOUND", "Usuário não encontrado."));
 
         var sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria(req.categoria());
         sr.setDescricao(req.descricao());
         sr.setLocalizacao(GEO.createPoint(new Coordinate(req.lng(), req.lat())));

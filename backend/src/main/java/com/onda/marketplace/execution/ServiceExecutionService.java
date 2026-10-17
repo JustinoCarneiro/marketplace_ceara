@@ -106,7 +106,7 @@ public class ServiceExecutionService {
     public void confirmCompletion(UUID srId, UUID clienteId) {
         // pedido de outro cliente: mesma resposta de "não existe" (não confirma a existência do pedido alheio)
         ServiceRequest sr = srRepository.findByIdComTrava(srId)
-                .filter(r -> r.getCliente().getId().equals(clienteId))
+                .filter(r -> r.getClienteId().equals(clienteId))
                 .orElseThrow(() -> new BusinessException("REQUEST_NOT_FOUND", "Pedido não encontrado."));
 
         if (sr.getStatus() != ServiceRequestStatus.EM_ANDAMENTO) {
