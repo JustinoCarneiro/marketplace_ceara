@@ -53,8 +53,9 @@ Nunca foi registrado antes — a linha `(est. retroativa)` abaixo é a estimativ
 | 2026-10-16 | 4 | ~0,1 (estimativa) | Complemento do PR #37: gravação atômica dos verificadores; regressão vermelho/verde com JPA/H2 e 25 testes direcionados verdes. Revisão cruzada por subagente independente: sem achados P1/P2/P3. |
 | 2026-10-16 | 4 | ~0,3 (estimativa) | Cobertura complementar do PR #38: validação de referência/estados/HTTP, rollback e concorrência com JPA/H2, interface com espaços. Mutação de trava em cópia temporária detectada; sem alteração de produção. Resultados e limitação PostGIS no ROADMAP M06; revisão independente sem achados P1/P2/P3. |
 | 2026-10-16 | 4 | ~0,3 (estimativa) | Complemento do PR #36: dois E2E de exclusões cruzadas completas, com espera por cadeia de bloqueios e verificação de ambas as contas. Validação isolada: 653 unitários (1 ignorado), 84 E2E PostGIS verdes e seleção antiga detectada por mutação temporária. Sem alteração de produção; diff para revisão. |
+| 2026-10-16 | 4 | ~0,4 (estimativa) | Implementação de pagamento via Cartão de Crédito (US05, M06): tokenização PCI-DSS, parcelas (1..12), bandeira, card_last4, migration V30, integração Mercado Pago e stub. Suíte completa com 753 testes unitários/slice verdes, mobile tsc/unit e admin lint/build verdes. |
 
-Σ registrada: **~0,9 h** (inclui estimativas das sessões de 2026-10-16)
+Σ registrada: **~1,3 h** (inclui estimativas das sessões de 2026-10-16)
 Σ **(est. retroativa por proxy de commit)**: **~52 h piso · ~65–75 h central · ~103 h teto** — 111 commits, 28 sessões
 
 ## 4. Log de espera / impedimento (Fase 4)

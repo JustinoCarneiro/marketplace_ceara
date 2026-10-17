@@ -23,6 +23,14 @@ class GatewayServiceImpl implements GatewayService {
     @Override
     public String cobrar(Transaction transaction) {
         String gwId = "gw-stub-" + UUID.randomUUID();
+        if (transaction.getMetodo() == PaymentMethod.CARTAO) {
+            if (transaction.getCardLast4() == null) {
+                transaction.setCardLast4("4821");
+            }
+            if (transaction.getBandeira() == null) {
+                transaction.setBandeira("master");
+            }
+        }
         log.info("Gateway stub: cobrando R${} via {} → id={}", transaction.getValorTotal(),
                 transaction.getMetodo(), gwId);
         return gwId;

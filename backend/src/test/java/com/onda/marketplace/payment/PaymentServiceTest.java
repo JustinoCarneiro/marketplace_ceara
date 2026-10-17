@@ -418,6 +418,83 @@ class PaymentServiceTest {
         verify(transactionRepository, never()).save(any());
     }
 
+    @Test
+    void initiate_comCartao_salvaCamposDeCartaoEOutbox() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
+                .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(300))));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var req = new InitiatePaymentRequest("CARTAO", "tok_test_abc123", 3, "visa");
+        var dto = service.initiate(sr.getId(), req, "idem-cartao-1", CLIENTE_ID);
+
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(captor.capture());
+        Transaction saved = captor.getValue();
+
+        assertThat(saved.getMetodo()).isEqualTo(PaymentMethod.CARTAO);
+        assertThat(saved.getCardToken()).isEqualTo("tok_test_abc123");
+        assertThat(saved.getParcelas()).isEqualTo(3);
+        assertThat(saved.getBandeira()).isEqualTo("visa");
+
+        assertThat(dto.metodo()).isEqualTo("CARTAO");
+        assertThat(dto.parcelas()).isEqualTo(3);
+        assertThat(dto.bandeira()).isEqualTo("visa");
+
+        ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(outboxCaptor.capture());
+        assertThat(outboxCaptor.getValue().getTipoEvento()).isEqualTo("PAYMENT_INITIATED");
+    }
+
+    @Test
+    void initiate_comCartao_parcelasInvalidas_lancaBusinessException() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.initiate(sr.getId(),
+                new InitiatePaymentRequest("CARTAO", "tok_123", 0, "master"), "idem-p0", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_INSTALLMENTS");
+
+        assertThatThrownBy(() -> service.initiate(sr.getId(),
+                new InitiatePaymentRequest("CARTAO", "tok_123", 13, "master"), "idem-p13", CLIENTE_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", "INVALID_INSTALLMENTS");
+
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void initiate_comCartao_semParcelasOuBandeira_assumeValoresPadrao() {
+        when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
+        var sr = serviceRequest(ServiceRequestStatus.ACEITO);
+        when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
+        when(transactionRepository.findByServiceRequestIdAndIdempotencyKey(any(), any())).thenReturn(Optional.empty());
+        when(proposalRepository.findByServiceRequestIdAndStatus(any(), eq(ProposalStatus.ACEITA)))
+                .thenReturn(List.of(proposalAceita(sr, BigDecimal.valueOf(150))));
+        when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var req = new InitiatePaymentRequest("CARTAO");
+        var dto = service.initiate(sr.getId(), req, "idem-cartao-default", CLIENTE_ID);
+
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(captor.capture());
+        Transaction saved = captor.getValue();
+
+        assertThat(saved.getMetodo()).isEqualTo(PaymentMethod.CARTAO);
+        assertThat(saved.getParcelas()).isEqualTo(1);
+        assertThat(saved.getCardToken()).isNull();
+        assertThat(saved.getBandeira()).isNull();
+        assertThat(dto.parcelas()).isEqualTo(1);
+    }
+
     // helpers
     private ServiceRequest serviceRequest(ServiceRequestStatus status) {
         var sr = new ServiceRequest();

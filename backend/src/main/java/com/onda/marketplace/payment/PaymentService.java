@@ -155,6 +155,14 @@ public class PaymentService {
                     "Pagamento só pode ser iniciado em pedido ACEITO.");
         }
 
+        PaymentMethod metodo = PaymentMethod.valueOf(req.metodo().toUpperCase());
+        if (metodo == PaymentMethod.CARTAO && req.parcelas() != null) {
+            if (req.parcelas() < 1 || req.parcelas() > 12) {
+                throw new BusinessException("INVALID_INSTALLMENTS",
+                        "Número de parcelas inválido. Permitido de 1 a 12.");
+            }
+        }
+
         BigDecimal valorTotal = proposalRepository
                 .findByServiceRequestIdAndStatus(serviceRequestId, ProposalStatus.ACEITA)
                 .stream().findFirst()
@@ -166,11 +174,20 @@ public class PaymentService {
         // regra que o app do prestador usa pra mostrar "Você recebe" (valorAposComissao).
         BigDecimal valorComissao = valorTotal.multiply(percentualComissao)
                 .setScale(2, RoundingMode.HALF_UP);
-        PaymentMethod metodo     = PaymentMethod.valueOf(req.metodo().toUpperCase());
 
         // Escrita atômica: Transaction + OutboxEvent na mesma transação de banco
         Transaction tx = new Transaction(serviceRequestId, valorTotal, valorComissao,
                 percentualComissao, metodo, idempotencyKey);
+        if (metodo == PaymentMethod.CARTAO) {
+            int parcelas = (req.parcelas() != null && req.parcelas() > 0) ? req.parcelas() : 1;
+            tx.setParcelas(parcelas);
+            if (req.cardToken() != null && !req.cardToken().isBlank()) {
+                tx.setCardToken(req.cardToken().trim());
+            }
+            if (req.bandeira() != null && !req.bandeira().isBlank()) {
+                tx.setBandeira(req.bandeira().trim().toLowerCase());
+            }
+        }
         transactionRepository.save(tx);
 
         // C-3: String.format ao invés de concatenação manual para evitar JSON mal-formado

@@ -51,6 +51,58 @@ class MercadoPagoGatewayServiceTest {
                 new BigDecimal("0.15"), PaymentMethod.PIX, "idem-key-123");
     }
 
+    private Transaction cartaoTx() {
+        Transaction tx = new Transaction(SR_ID, new BigDecimal("250.00"), new BigDecimal("37.50"),
+                new BigDecimal("0.15"), PaymentMethod.CARTAO, "idem-card-123");
+        tx.setCardToken("tok_test_card_xyz");
+        tx.setParcelas(2);
+        tx.setBandeira("visa");
+        return tx;
+    }
+
+    @Test
+    void cobrar_comCartao_enviaTokenEParcelasAoMercadoPago_ePreencheCardLast4() {
+        server.expect(requestTo("https://api.mercadopago.com/v1/payments"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", "Bearer TEST-TOKEN"))
+                .andExpect(header("X-Idempotency-Key", "idem-card-123"))
+                .andExpect(jsonPath("$.transaction_amount").value(250.00))
+                .andExpect(jsonPath("$.token").value("tok_test_card_xyz"))
+                .andExpect(jsonPath("$.installments").value(2))
+                .andExpect(jsonPath("$.payment_method_id").value("visa"))
+                .andExpect(jsonPath("$.payer.email").value("cliente@example.com"))
+                .andExpect(jsonPath("$.external_reference").exists())
+                .andRespond(withSuccess("""
+                        {
+                          "id": 987654321,
+                          "status": "approved",
+                          "payment_method_id": "visa",
+                          "card": {
+                            "last_four_digits": "1234"
+                          }
+                        }""", MediaType.APPLICATION_JSON));
+
+        Transaction tx = cartaoTx();
+        String gatewayId = service.cobrar(tx);
+
+        assertThat(gatewayId).isEqualTo("987654321");
+        assertThat(tx.getCardLast4()).isEqualTo("1234");
+        assertThat(tx.getBandeira()).isEqualTo("visa");
+        assertThat(tx.getPixQrCode()).isNull();
+        server.verify();
+    }
+
+    @Test
+    void cobrar_comCartao_semCardToken_lancaIllegalStateException() {
+        Transaction tx = new Transaction(SR_ID, new BigDecimal("250.00"), new BigDecimal("37.50"),
+                new BigDecimal("0.15"), PaymentMethod.CARTAO, "idem-no-token");
+
+        assertThatThrownBy(() -> service.cobrar(tx))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("card_token");
+        server.verify();
+    }
+
     @Test
     void cobrar_criaPagamentoPixNoMercadoPago_eDevolveOId() {
         server.expect(requestTo("https://api.mercadopago.com/v1/payments"))
