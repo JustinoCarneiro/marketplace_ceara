@@ -233,4 +233,10 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Modifying
     @Query("DELETE FROM PasswordResetCode c WHERE c.userId = :userId")
     int apagarCodigosDeRecuperacaoDoUsuario(@Param("userId") UUID userId);
+    @Modifying
+    @Query(value="DELETE FROM push_devices WHERE user_id=:userId",nativeQuery=true)
+    int apagarDispositivosPush(@Param("userId") UUID userId);
+    @Modifying
+    @Query(value="DELETE FROM push_registration_fences WHERE user_id=:userId",nativeQuery=true)
+    int apagarReservasPush(@Param("userId") UUID userId);
 }

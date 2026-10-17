@@ -389,3 +389,11 @@ Como **Cliente** ou **Prestador**, quero receber mensagens do chamado sem espera
 
 ## Itens fora do MVP (registrados para v2)
 Leilão dinâmico em tempo real · Assinaturas SaaS (Profissional/Elite) · Boost de visibilidade · Taxa de urgência/noturna · Filtros avançados · Modo Plantão 24h · Selo Verificado avançado · IA de orçamento automático end-to-end · Monitoramento de trajeto por GPS · Crédito/seguros · Expansão multi-região.
+
+
+### Notificações push Android — escopo incremental (M12)
+- **Dado** o FCM habilitado e um build Android configurado, **quando** o usuário escolhe Perfil → Notificações → Ativar e concede permissão, **então** o token é vinculado à conta autenticada, cifrado em repouso e renovado ao retomar o app. Recusa não bloqueia o uso.
+- **Dado** dispositivo cadastrado, **quando** uma proposta/mensagem/aceite/início/conclusão/confirmação de pagamento é confirmada, **então** a tarefa é persistida na mesma transação e enviada fora dela, com conteúdo genérico sem dados pessoais. Rollback não envia aviso.
+- **Dado** logout, desativação ou troca de conta, **então** a revogação é coordenada com registros pendentes e pode ser concluída com capacidade própria mesmo sem JWT. Sem rede, a intenção é persistida e retomada ao reconectar; cadastros expiram em 24h sem renovação. Uma entrega já em trânsito pode chegar e não contém dados pessoais.
+- **Dado** FCM indisponível, **então** há tentativas limitadas e recuperação por lease; token comprovadamente não registrado é removido. Não há promessa de leitura/entrega ao aparelho nem de aviso exatamente uma vez.
+- **Dado** FCM desativado (padrão), **então** não há busca de credenciais nem envio externo, e a ativação informa indisponibilidade. Integração real exige configuração e build nativo; iOS e web push não fazem parte desta etapa. Contrato completo em `docs/NOTIFICACOES_PUSH.md`.

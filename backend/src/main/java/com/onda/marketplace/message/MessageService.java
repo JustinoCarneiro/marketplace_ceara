@@ -59,6 +59,7 @@ public class MessageService {
         var message = new Message(sr, remetenteId, resultado.texto(), resultado.mascarado());
         messageRepository.save(message);
         events.publishEvent(new MessageCommitted(srId, message.getId()));
+        events.publishEvent(new com.onda.marketplace.notification.PushRequested(srId, remetenteId, "NOVA_MENSAGEM", message.getId()));
         return toDto(message);
     }
 

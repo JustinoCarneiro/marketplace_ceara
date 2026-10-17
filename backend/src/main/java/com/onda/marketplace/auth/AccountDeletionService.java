@@ -148,6 +148,8 @@ public class AccountDeletionService {
         exclusao.removerConteudoDasMensagensDoUsuario(userId);
         exclusao.removerComentariosDasAvaliacoesDoUsuario(userId);
         exclusao.apagarSessoesDoUsuario(userId);
+        exclusao.apagarReservasPush(userId);
+        exclusao.apagarDispositivosPush(userId);
         exclusao.apagarCodigosDeRecuperacaoDoUsuario(userId);
     }
 

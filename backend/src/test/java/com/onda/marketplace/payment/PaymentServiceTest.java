@@ -50,7 +50,7 @@ class PaymentServiceTest {
         service = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, cpfHashService, BigDecimal.valueOf(0.15));
+                userRepository, cpfHashService, BigDecimal.valueOf(0.15), mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     /** Retorna um usuário com CPF hash registrado (identidade verificada). */
@@ -85,7 +85,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, cpfHashService, new BigDecimal("0.10"));
+                userRepository, cpfHashService, new BigDecimal("0.10"), mock(org.springframework.context.ApplicationEventPublisher.class));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));
@@ -108,7 +108,7 @@ class PaymentServiceTest {
         var servico = new PaymentService(
                 transactionRepository, outboxRepository,
                 requestRepository, proposalRepository,
-                userRepository, cpfHashService, new BigDecimal(percentual));
+                userRepository, cpfHashService, new BigDecimal(percentual), mock(org.springframework.context.ApplicationEventPublisher.class));
         when(userRepository.findById(CLIENTE_ID)).thenReturn(Optional.of(clienteVerificado()));
         var sr = serviceRequest(ServiceRequestStatus.ACEITO);
         when(requestRepository.findByIdAndCliente_Id(any(), eq(CLIENTE_ID))).thenReturn(Optional.of(sr));

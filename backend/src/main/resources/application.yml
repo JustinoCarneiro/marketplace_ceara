@@ -165,3 +165,8 @@ storage:
   access-key: ${STORAGE_ACCESS_KEY:}
   secret-key: ${STORAGE_SECRET_KEY:}
   read-url-ttl-seconds: ${STORAGE_READ_URL_TTL_SECONDS:600}
+
+# Credenciais FCM via Application Default Credentials (arquivo montado no servidor).
+notification.push:
+  enabled: ${FCM_ENABLED:false}
+  project-id: ${FCM_PROJECT_ID:}
