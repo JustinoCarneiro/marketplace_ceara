@@ -15,6 +15,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.utility.DockerImageName;
+import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
@@ -47,9 +48,9 @@ class E2EDomainProjectionTest {
     UUID request(UUID owner,UUID provider,String status,int hour,int responseMinutes,int lateMinutes,int value) {
         var id=UUID.randomUUID();var created=Instant.parse("2026-01-01T00:00:00Z").plusSeconds(hour*3600L);
         jdbc.update("insert into service_requests(id,cliente_id,categoria,status,idempotency_key,created_at,updated_at,iniciado_em) values (?,?,'Elétrica',?,?,?, ?,?)",
-                id,owner,status,id.toString(),created,created,created.plusSeconds(lateMinutes*60L));
+                id,owner,status,id.toString(),Timestamp.from(created),Timestamp.from(created),Timestamp.from(created.plusSeconds(lateMinutes*60L)));
         jdbc.update("insert into proposals(service_request_id,prestador_id,valor,prazo_dias,status,created_at,horario_proposto) values (?,?,?,1,'ACEITA',?,?)",
-                id,provider,value,created.plusSeconds(responseMinutes*60L),created);
+                id,provider,value,Timestamp.from(created.plusSeconds(responseMinutes*60L)),Timestamp.from(created));
         return id;
     }
     @Test void resumoAdminTemIdentidadeStatusENomeEmUmaConsulta() {
