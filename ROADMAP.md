@@ -288,8 +288,11 @@ POST /api/v1/auth/register/provider          # projetado como POST /api/v1/provi
   422:  { code:"EMAIL_IN_USE" } | { code:"VALIDATION_ERROR" }   # sem aceite dos termos
 GET  /api/v1/providers/{userId}   200 { userId, nome, categoria, bio, notaMedia,
                                         totalAvaliacoes, totalServicos, statusVerificacao, avaliacoes[] }
-# hoje só o admin muda o status (verify/reject/moderate) — o callback automático do
-# background check ainda não existe (BackgroundCheckServiceImpl é stub).
+# Fila background_checks persistida na transação de cadastro (V31); worker com
+# lease, recuperação e três tentativas. Sem fornecedor: INCONCLUSIVO + alerta admin,
+# perfil permanece EM_VERIFICACAO para revisão manual. Porta BackgroundCheckGateway
+# preparada; conector externo/callback real pendente de fornecedor e documentação.
+# Detalhes: docs/VERIFICACAO_PRESTADORES.md.
 ```
 
 ### M03 — Descoberta & Geobusca

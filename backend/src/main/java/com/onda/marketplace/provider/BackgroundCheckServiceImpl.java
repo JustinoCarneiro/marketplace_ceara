@@ -1,20 +1,18 @@
 package com.onda.marketplace.provider;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 class BackgroundCheckServiceImpl implements BackgroundCheckService {
+    private final BackgroundCheckRepository checks;
+    BackgroundCheckServiceImpl(BackgroundCheckRepository checks) { this.checks = checks; }
 
-    private static final Logger log = LoggerFactory.getLogger(BackgroundCheckServiceImpl.class);
-
-    @Async
+    /** A fila nasce na MESMA transação do cadastro: rollback não deixa trabalho órfão. */
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void scheduleCheck(ProviderProfile profile) {
-        // Stub: integração com bureau externo a ser implementada em fase operacional.
-        // O prestador começa como EM_VERIFICACAO; webhook externo atualiza para VERIFICADO/REPROVADO.
-        log.info("Background check agendado para provider {}", profile.getId());
+        checks.save(new BackgroundCheck(profile.getId()));
     }
 }
