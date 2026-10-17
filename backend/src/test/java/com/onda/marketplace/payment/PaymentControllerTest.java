@@ -54,6 +54,29 @@ class PaymentControllerTest {
     }
 
     @Test
+    void initiatePayment_cardRequest_returns201() throws Exception {
+        var dto = new TransactionDto(
+                UUID.randomUUID(), SR_ID, BigDecimal.valueOf(300), BigDecimal.valueOf(45.00),
+                "CARTAO", "PENDENTE", Instant.now(), null, null, null,
+                3, "visa", "1234");
+        when(paymentService.initiate(any(), any(), any(), any())).thenReturn(dto);
+
+        var req = new InitiatePaymentRequest("CARTAO", "tok_test_card", 3, "visa");
+
+        mvc.perform(post("/api/v1/service-requests/{id}/payment", SR_ID)
+                        .with(csrf())
+                        .header("X-Idempotency-Key", IDEM_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(req)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statusPagamento").value("PENDENTE"))
+                .andExpect(jsonPath("$.metodo").value("CARTAO"))
+                .andExpect(jsonPath("$.parcelas").value(3))
+                .andExpect(jsonPath("$.bandeira").value("visa"))
+                .andExpect(jsonPath("$.cardLast4").value("1234"));
+    }
+
+    @Test
     void initiatePayment_missingIdempotencyKey_returns400() throws Exception {
         mvc.perform(post("/api/v1/service-requests/{id}/payment", SR_ID)
                         .with(csrf())

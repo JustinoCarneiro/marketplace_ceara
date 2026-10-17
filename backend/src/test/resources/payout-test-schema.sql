@@ -13,6 +13,10 @@ CREATE TABLE transactions (
     pix_qr_code_base64 TEXT,
     pix_ticket_url VARCHAR(500),
     idempotency_key VARCHAR(255) NOT NULL,
+    card_token VARCHAR(255),
+    parcelas INTEGER DEFAULT 1,
+    bandeira VARCHAR(30),
+    card_last4 VARCHAR(4),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL
 );

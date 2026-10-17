@@ -54,6 +54,18 @@ public class Transaction {
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
 
+    @Column(name = "card_token")
+    private String cardToken;
+
+    @Column(name = "parcelas")
+    private Integer parcelas = 1;
+
+    @Column(name = "bandeira", length = 30)
+    private String bandeira;
+
+    @Column(name = "card_last4", length = 4)
+    private String cardLast4;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -87,6 +99,10 @@ public class Transaction {
     public String getPixQrCodeBase64()       { return pixQrCodeBase64; }
     public String getPixTicketUrl()          { return pixTicketUrl; }
     public String getIdempotencyKey()        { return idempotencyKey; }
+    public String getCardToken()             { return cardToken; }
+    public Integer getParcelas()             { return parcelas != null ? parcelas : 1; }
+    public String getBandeira()              { return bandeira; }
+    public String getCardLast4()             { return cardLast4; }
     public Instant getCreatedAt()            { return createdAt; }
 
     /*
@@ -131,4 +147,8 @@ public class Transaction {
     public void setPixQrCode(String v)         { this.pixQrCode = v; }
     public void setPixQrCodeBase64(String v)   { this.pixQrCodeBase64 = v; }
     public void setPixTicketUrl(String v)      { this.pixTicketUrl = v; }
+    public void setCardToken(String v)         { this.cardToken = v; }
+    public void setParcelas(Integer v)         { this.parcelas = v != null ? v : 1; }
+    public void setBandeira(String v)          { this.bandeira = v; }
+    public void setCardLast4(String v)         { this.cardLast4 = v; }
 }

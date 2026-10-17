@@ -81,6 +81,13 @@ class MercadoPagoGatewayService implements GatewayService {
      */
     @Override
     public String cobrar(Transaction transaction) {
+        if (transaction.getMetodo() == PaymentMethod.CARTAO) {
+            return cobrarCartao(transaction);
+        }
+        return cobrarPix(transaction);
+    }
+
+    private String cobrarPix(Transaction transaction) {
         String payerEmail = serviceRequestRepository
                 .findClienteEmailBySrId(transaction.getServiceRequestId())
                 .orElseThrow(() -> new IllegalStateException(
@@ -134,6 +141,67 @@ class MercadoPagoGatewayService implements GatewayService {
             // Propaga: o OutboxProcessor marca o evento como FALHA e re-tenta (idempotente
             // pela X-Idempotency-Key). Erro que move dinheiro nunca é engolido.
             log.warn("Mercado Pago recusou a cobrança Pix (HTTP {}) sr={}: {}",
+                    e.getStatusCode().value(), transaction.getServiceRequestId(),
+                    e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    private String cobrarCartao(Transaction transaction) {
+        String payerEmail = serviceRequestRepository
+                .findClienteEmailBySrId(transaction.getServiceRequestId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Sem e-mail do cliente para a cobrança com Cartão — sr="
+                                + transaction.getServiceRequestId()));
+
+        if (transaction.getCardToken() == null || transaction.getCardToken().isBlank()) {
+            throw new IllegalStateException(
+                    "Sem card_token para a cobrança com Cartão no Mercado Pago — sr="
+                            + transaction.getServiceRequestId());
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("transaction_amount", transaction.getValorTotal());
+        body.put("token", transaction.getCardToken());
+        body.put("description", "Onda — pedido " + transaction.getServiceRequestId());
+        body.put("installments", transaction.getParcelas() != null ? transaction.getParcelas() : 1);
+        if (transaction.getBandeira() != null && !transaction.getBandeira().isBlank()) {
+            body.put("payment_method_id", transaction.getBandeira());
+        }
+        body.put("payer", Map.of("email", payerEmail));
+        body.put("external_reference", transaction.getServiceRequestId().toString());
+        if (notificationUrl != null && !notificationUrl.isBlank()) {
+            body.put("notification_url", notificationUrl);
+        }
+
+        try {
+            JsonNode res = http.post()
+                    .uri("/v1/payments")
+                    .header("X-Idempotency-Key", transaction.getIdempotencyKey())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            String id = res != null ? res.path("id").asText(null) : null;
+            if (id == null || id.isBlank()) {
+                throw new IllegalStateException("Resposta do Mercado Pago sem id de pagamento");
+            }
+
+            String last4 = res.path("card").path("last_four_digits").asText(null);
+            if (last4 != null && !last4.isBlank()) {
+                transaction.setCardLast4(last4);
+            }
+            String mpPaymentMethodId = res.path("payment_method_id").asText(null);
+            if (mpPaymentMethodId != null && !mpPaymentMethodId.isBlank() && transaction.getBandeira() == null) {
+                transaction.setBandeira(mpPaymentMethodId);
+            }
+
+            log.info("Mercado Pago: cobrança Cartão criada id={} status={} sr={}",
+                    id, res.path("status").asText("?"), transaction.getServiceRequestId());
+            return id;
+        } catch (RestClientResponseException e) {
+            log.warn("Mercado Pago recusou a cobrança Cartão (HTTP {}) sr={}: {}",
                     e.getStatusCode().value(), transaction.getServiceRequestId(),
                     e.getResponseBodyAsString());
             throw e;
