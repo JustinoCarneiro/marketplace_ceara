@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /** Dois workers independentes usam o mesmo banco e os proxies transacionais reais. */
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers
 @ActiveProfiles("e2e")
 @SpringBootTest(properties = "marketplace.outbox.delay-ms=3600000")
@@ -68,7 +69,7 @@ class E2EOutboxConcurrencyTest {
         return events.saveAndFlush(new OutboxEvent("transaction", tx.getId(), type, "{}"));
     }
     OutboxProcessor worker(GatewayService gateway) {
-        return new OutboxProcessor(events, transactions, gateway, mock(NotificationService.class), writer);
+        return new OutboxProcessor(transactions, gateway, mock(NotificationService.class), writer);
     }
     void outsideTransaction() { assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse(); }
     static void await(CountDownLatch latch) {

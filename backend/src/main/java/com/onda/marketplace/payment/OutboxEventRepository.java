@@ -12,8 +12,6 @@ import org.springframework.data.jpa.repository.Lock;
 import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
-    List<OutboxEvent> findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus status);
-
     /** Trava primeiro a transação financeira; outro nó pula a linha ocupada. */
     @Query(value = """
             SELECT e.id FROM outbox_events e JOIN transactions t ON t.id=e.agregado_id

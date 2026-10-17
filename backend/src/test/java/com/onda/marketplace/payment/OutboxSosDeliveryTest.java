@@ -5,14 +5,11 @@ import com.onda.marketplace.notification.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -40,7 +37,7 @@ class OutboxSosDeliveryTest {
 
     @BeforeEach
     void setUp() {
-        processor = new OutboxProcessor(outboxRepository, transactionRepository,
+        processor = new OutboxProcessor(transactionRepository,
                 gatewayService, notificationService, eventWriter);
     }
 

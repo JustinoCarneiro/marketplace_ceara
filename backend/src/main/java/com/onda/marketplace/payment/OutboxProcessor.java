@@ -24,8 +24,7 @@ public class OutboxProcessor {
     private final NotificationService   notificationService;
     private final OutboxEventWriter     eventWriter;
 
-    public OutboxProcessor(OutboxEventRepository outboxRepository,
-                           TransactionRepository transactionRepository,
+    public OutboxProcessor(TransactionRepository transactionRepository,
                            GatewayService gatewayService,
                            NotificationService notificationService,
                            OutboxEventWriter eventWriter) {
