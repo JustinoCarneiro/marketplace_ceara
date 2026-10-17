@@ -102,6 +102,9 @@ Para ativar, o responsável precisa:
 2. Habilitar Cloud Messaging HTTP v1 e preparar identidade do servidor com
    permissão mínima de envio. Montar credenciais fora do Git e da imagem, usando
    `GOOGLE_APPLICATION_CREDENTIALS`; preferir identidade de workload quando disponível.
+   No Coolify/Compose, montar o arquivo protegido no backend por volume/secret;
+   definir o caminho no ambiente não monta o arquivo. O compose repassa essas
+   variáveis com FCM desligado por padrão.
 3. Configurar `FCM_ENABLED=true` e `FCM_PROJECT_ID` no servidor. Configuração
    incompleta deve falhar na inicialização; não há fallback silencioso quando ligado.
 4. Fornecer o arquivo `google-services.json` ao build Android pelo caminho em
