@@ -1,49 +1,79 @@
 package com.onda.marketplace.payment;
 
+import com.onda.marketplace.shared.exception.BusinessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Persistência dos resultados de processamento do Outbox, isolada em bean próprio.
- *
- * <p>{@code @Transactional} só é aplicado pelo proxy do Spring em chamadas vindas de FORA
- * do bean — {@link OutboxProcessor} chamando estes métodos via {@code this.} (mesma classe)
- * bypassaria o proxy e a transação nunca existiria de fato. Por isso os métodos moram aqui,
- * num componente separado injetado no processor.
- */
+/** Transações curtas de reserva/conclusão; nenhum acesso ao gateway neste bean. */
 @Component
-@SuppressWarnings("null")
 public class OutboxEventWriter {
-
     private final OutboxEventRepository outboxRepository;
     private final TransactionRepository transactionRepository;
 
-    public OutboxEventWriter(OutboxEventRepository outboxRepository,
-                             TransactionRepository transactionRepository) {
-        this.outboxRepository      = outboxRepository;
+    public OutboxEventWriter(OutboxEventRepository outboxRepository, TransactionRepository transactionRepository) {
+        this.outboxRepository = outboxRepository;
         this.transactionRepository = transactionRepository;
     }
 
-    @Transactional
-    public void salvarResultadoPagamento(Transaction tx, OutboxEvent event, boolean sucesso) {
-        if (sucesso) {
-            transactionRepository.save(tx);
-            event.marcarProcessado();
-        } else {
-            event.marcarFalha();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public OutboxEvent reservarProximo() {
+        for (var event : outboxRepository.candidatoNaoFinanceiroComTrava()) {
+            event.reservar();
+            return outboxRepository.saveAndFlush(event);
         }
+        for (var id : outboxRepository.candidatoFinanceiroComTrava()) {
+            // Nova consulta após adquirir a trava da Transaction: reavalia snapshot SQL concorrente.
+            var event = outboxRepository.findByIdComTrava(id).orElseThrow();
+            if (event.getStatus() == OutboxStatus.PENDENTE && !outboxRepository
+                    .existsByAgregadoAndAgregadoIdAndStatus(event.getAgregado(), event.getAgregadoId(), OutboxStatus.PROCESSANDO)) {
+                event.reservar();
+                return outboxRepository.saveAndFlush(event);
+            }
+        }
+        return null;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void salvarResultadoPagamento(Transaction snapshot, OutboxEvent claim, boolean sucesso) {
+        // Ordem única também no admin: Transaction -> OutboxEvent.
+        var current = transactionRepository.findByIdComTrava(claim.getAgregadoId()).orElseThrow();
+        var event = outboxRepository.findByIdComTrava(claim.getId()).orElseThrow();
+        if (!event.pertenceAoClaim(claim)) return;
+        if (sucesso) {
+            switch (event.getTipoEvento()) {
+                case "PAYMENT_INITIATED" -> {
+                    if (current.getGatewayTransactionId() != null && !current.getGatewayTransactionId().equals(snapshot.getGatewayTransactionId())) {
+                        throw new BusinessException("GATEWAY_RESULT_CONFLICT", "Resultado financeiro exige reconciliação.");
+                    }
+                    current.setGatewayTransactionId(snapshot.getGatewayTransactionId());
+                    current.setPixQrCode(snapshot.getPixQrCode());
+                    current.setPixQrCodeBase64(snapshot.getPixQrCodeBase64());
+                    current.setPixTicketUrl(snapshot.getPixTicketUrl());
+                    current.setBandeira(snapshot.getBandeira());
+                    current.setCardLast4(snapshot.getCardLast4());
+                }
+                case "PAYMENT_RELEASED" -> current.liberar();
+                case "PAYMENT_REFUNDED" -> current.reembolsar();
+                default -> throw new IllegalStateException("Evento financeiro inválido");
+            }
+            // Dirty checking somente da entidade fresca; nunca merge do snapshot do gateway.
+            event.marcarProcessado();
+        } else event.marcarFalha();
         outboxRepository.save(event);
     }
 
-    @Transactional
-    public void salvarFalha(OutboxEvent event) {
-        event.marcarFalha();
-        outboxRepository.save(event);
-    }
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void salvarFalha(OutboxEvent claim) { concluir(claim, false); }
 
-    @Transactional
-    public void marcarProcessado(OutboxEvent event) {
-        event.marcarProcessado();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void marcarProcessado(OutboxEvent claim) { concluir(claim, true); }
+
+    private void concluir(OutboxEvent claim, boolean sucesso) {
+        // Usado para SOS, eventos desconhecidos e referência financeira inexistente.
+        var event = outboxRepository.findByIdComTrava(claim.getId()).orElseThrow();
+        if (!event.pertenceAoClaim(claim)) return;
+        if (sucesso) event.marcarProcessado(); else event.marcarFalha();
         outboxRepository.save(event);
     }
 }

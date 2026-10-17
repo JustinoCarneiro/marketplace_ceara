@@ -15,5 +15,6 @@ public record OutboxAdminDto(
         UUID agregadoId,
         String tipoEvento,
         int tentativas,
-        OutboxStatus status
+        OutboxStatus status,
+        java.time.Instant processamentoEm
 ) {}

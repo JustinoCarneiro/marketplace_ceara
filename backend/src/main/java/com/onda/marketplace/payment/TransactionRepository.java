@@ -25,6 +25,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
                                                                   String idempotencyKey);
     Optional<Transaction> findByGatewayTransactionId(String gatewayTransactionId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Transaction t WHERE t.gatewayTransactionId=:id")
+    Optional<Transaction> findByGatewayTransactionIdComTrava(@Param("id") String id);
+
     /** O pedido da transação pelo id do gateway, sem carregar a entidade (para travar o pedido antes de ler a transação). */
     @Query("SELECT t.serviceRequestId FROM Transaction t WHERE t.gatewayTransactionId = :id")
     Optional<UUID> findServiceRequestIdByGatewayTransactionId(@Param("id") String gatewayTransactionId);

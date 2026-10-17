@@ -29,6 +29,8 @@ CREATE TABLE outbox_events (
     status VARCHAR(32) NOT NULL,
     tentativas INTEGER NOT NULL,
     criado_em TIMESTAMP WITH TIME ZONE NOT NULL,
+    claim_token UUID,
+    processamento_em TIMESTAMP WITH TIME ZONE,
     processado_em TIMESTAMP WITH TIME ZONE
 );
 CREATE TABLE admin_audit_log (

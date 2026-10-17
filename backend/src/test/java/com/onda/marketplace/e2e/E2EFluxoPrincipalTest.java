@@ -82,6 +82,7 @@ import static org.hamcrest.Matchers.*;
  * Depois do fluxo: relatórios (US29), recuperação de senha (US35), suspensão com corte imediato do token
  * (US26) e exclusão de conta (US36) — cada tabela conferida no Postgres real.
  */
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("e2e")

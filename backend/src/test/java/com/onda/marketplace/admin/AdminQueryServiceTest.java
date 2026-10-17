@@ -167,7 +167,7 @@ class AdminQueryServiceTest {
     void reprocessarOutbox_falha_resetaParaPendente() {
         var ev = new OutboxEvent("transaction", TX_ID, "PAYMENT_RELEASED", "{}");
         ev.marcarFalha();
-        when(outboxRepository.findById(any())).thenReturn(Optional.of(ev));
+        when(outboxRepository.findByIdComTrava(any())).thenReturn(Optional.of(ev));
         when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.reprocessarOutbox(UUID.randomUUID());
@@ -180,7 +180,7 @@ class AdminQueryServiceTest {
     void reprocessarOutbox_processado_lancaException() {
         var ev = new OutboxEvent("transaction", TX_ID, "PAYMENT_RELEASED", "{}");
         ev.marcarProcessado();
-        when(outboxRepository.findById(any())).thenReturn(Optional.of(ev));
+        when(outboxRepository.findByIdComTrava(any())).thenReturn(Optional.of(ev));
 
         assertThatThrownBy(() -> service.reprocessarOutbox(UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
@@ -189,7 +189,7 @@ class AdminQueryServiceTest {
 
     @Test
     void reprocessarOutbox_naoEncontrado_lancaException() {
-        when(outboxRepository.findById(any())).thenReturn(Optional.empty());
+        when(outboxRepository.findByIdComTrava(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.reprocessarOutbox(UUID.randomUUID()))
                 .isInstanceOf(BusinessException.class)
