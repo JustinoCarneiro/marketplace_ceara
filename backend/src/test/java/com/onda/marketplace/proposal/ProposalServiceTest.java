@@ -50,7 +50,7 @@ class ProposalServiceTest {
         // qualquer prestador e esses testes não provariam nada.
         service = new ProposalService(proposalRepository, requestRepository,
                 userRepository, profileRepository, reviewRepository,
-                new ProviderVerificationGuard(profileRepository));
+                new ProviderVerificationGuard(profileRepository), mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private void prestadorCom(UUID prestadorId, ProviderStatus status) {

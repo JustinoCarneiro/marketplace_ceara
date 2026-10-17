@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import NetInfo from '@react-native-community/netinfo';
 import RootNavigator from './src/navigation/RootNavigator';
+import PushSession from './src/components/PushSession';
 import OfflineScreen from './src/components/OfflineScreen';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
+        <PushSession />
         {isOnline ? (
           <NavigationContainer>
             <RootNavigator />

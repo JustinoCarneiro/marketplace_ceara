@@ -2,7 +2,6 @@ package com.onda.marketplace.notification;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
@@ -11,7 +10,6 @@ import java.util.UUID;
  * Substitua por {@code FcmPushSender} (Firebase Cloud Messaging) quando o
  * app mobile for publicado na loja.
  */
-@Component
 public class NoOpPushSender implements PushSender {
 
     private static final Logger log = LoggerFactory.getLogger(NoOpPushSender.class);

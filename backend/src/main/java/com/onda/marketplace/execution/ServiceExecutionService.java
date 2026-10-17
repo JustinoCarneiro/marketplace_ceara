@@ -23,6 +23,7 @@ import java.util.UUID;
 @Service
 @SuppressWarnings("null")
 public class ServiceExecutionService {
+    private final org.springframework.context.ApplicationEventPublisher pushEvents;
 
     private static final Set<ServiceRequestStatus> CANCELAVEIS =
             Set.of(ServiceRequestStatus.ACEITO, ServiceRequestStatus.EM_ANDAMENTO);
@@ -42,7 +43,9 @@ public class ServiceExecutionService {
                                    TransactionRepository transactionRepository,
                                    OutboxEventRepository outboxRepository,
                                    NotificationService notificationService,
-                                   ProviderVerificationGuard verificationGuard) {
+                                   ProviderVerificationGuard verificationGuard,
+            org.springframework.context.ApplicationEventPublisher pushEvents) {
+        this.pushEvents=pushEvents;
         this.srRepository          = srRepository;
         this.proposalRepository    = proposalRepository;
         this.transactionRepository = transactionRepository;
@@ -95,6 +98,7 @@ public class ServiceExecutionService {
         sr.setStatus(ServiceRequestStatus.EM_ANDAMENTO);
         sr.setIniciadoEm(Instant.now());
         srRepository.save(sr);
+        pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(srId, prestadorId, "SERVICO_INICIADO", srId));
     }
 
     /** EM_ANDAMENTO → CONCLUIDO. Escrita atômica: status + OutboxEvent(PAYMENT_RELEASED). */
@@ -112,6 +116,7 @@ public class ServiceExecutionService {
 
         sr.setStatus(ServiceRequestStatus.CONCLUIDO);
         srRepository.save(sr);
+        pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(srId, clienteId, "SERVICO_CONCLUIDO", srId));
 
         // Só libera o que de fato está retido (mesma defesa já aplicada em cancel()):
         // emitir PAYMENT_RELEASED sobre transação PENDENTE mandaria o gateway repassar

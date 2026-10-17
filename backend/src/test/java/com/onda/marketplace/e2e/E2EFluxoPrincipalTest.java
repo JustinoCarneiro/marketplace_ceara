@@ -114,6 +114,14 @@ class E2EFluxoPrincipalTest {
      */
     @TestConfiguration
     static class CaixaDeEntrada {
+        @Bean @Primary
+        com.onda.marketplace.notification.PushSender adminPushDeTeste() {
+            return new com.onda.marketplace.notification.NoOpPushSender();
+        }
+
+        @Bean @Primary
+        com.onda.marketplace.notification.PushGateway pushDeTeste() { return new FakePushGateway(); }
+
         record Email(String para, String assunto, String corpo) {}
         static final List<Email> EMAILS = new CopyOnWriteArrayList<>();
         static final java.util.concurrent.atomic.AtomicReference<java.util.function.Supplier<com.onda.marketplace.provider.BackgroundCheckGateway.Result>> CHECK_CALLBACK = new java.util.concurrent.atomic.AtomicReference<>();
@@ -3742,6 +3750,171 @@ class E2EFluxoPrincipalTest {
                 "SELECT cpf_cifrado FROM providers_profile WHERE id=?", String.class, profile));
         org.junit.jupiter.api.Assertions.assertEquals("SUSPENSO", jdbc.queryForObject(
                 "SELECT status_verificacao FROM providers_profile WHERE id=?", String.class, profile));
+    }
+
+    static class FakePushGateway implements com.onda.marketplace.notification.PushGateway {
+        static final java.util.List<String> SENT = new java.util.concurrent.CopyOnWriteArrayList<>();
+        static volatile Result result = Result.SENT;
+        public boolean enabled() { return true; }
+        public Result send(String token,String kind,UUID ref,UUID delivery) {
+            org.junit.jupiter.api.Assertions.assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            SENT.add(token); return result;
+        }
+    }
+    @Autowired com.onda.marketplace.notification.PushStore pushStore;
+    @Autowired com.onda.marketplace.notification.PushWorker pushWorker;
+    @Autowired org.springframework.context.ApplicationEventPublisher pushEvents;
+    static final String PUSH_TOKEN = "fixture-android-token-01234567890123456789";
+    static final String PUSH_KEY = "a".repeat(64);
+
+    @Test @Order(91)
+    @DisplayName("91 · Cadastro push autenticado, cifrado e revogação com capacidade sem sessão")
+    void pushCadastroERevogacao() {
+        Conta owner=cadastrarCliente("Push Owner","push-owner@onda.test");
+        Conta other=cadastrarCliente("Push Other","push-other@onda.test");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        given().contentType(ContentType.JSON).body("{\"token\":\""+PUSH_TOKEN+"\",\"revocationKey\":\""+key+"\"}")
+            .when().put("/api/v1/push/devices").then().statusCode(401);
+        given().header("Authorization","Bearer "+owner.token()).contentType(ContentType.JSON)
+            .body("{\"token\":\""+PUSH_TOKEN+"\",\"revocationKey\":\""+key+"\"}")
+            .when().put("/api/v1/push/devices").then().statusCode(204);
+        String encrypted=jdbc.queryForObject("SELECT token_cipher FROM push_devices WHERE user_id=?",String.class,owner.id());
+        org.junit.jupiter.api.Assertions.assertNotEquals(PUSH_TOKEN,encrypted);
+        org.junit.jupiter.api.Assertions.assertFalse(encrypted.contains(PUSH_TOKEN));
+        pushStore.unregister(other.id(),PUSH_TOKEN);
+        org.junit.jupiter.api.Assertions.assertEquals(1,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+        given().contentType(ContentType.JSON).body("{\"token\":\""+PUSH_TOKEN+"\",\"revocationKey\":\""+"b".repeat(64)+"\"}")
+            .when().post("/api/v1/push/revoke").then().statusCode(204);
+        org.junit.jupiter.api.Assertions.assertEquals(1,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+        given().contentType(ContentType.JSON).body("{\"token\":\""+PUSH_TOKEN+"\",\"revocationKey\":\""+key+"\"}")
+            .when().post("/api/v1/push/revoke").then().statusCode(204);
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+    }
+    @Test @Order(92)
+    @DisplayName("92 · Push atômico, deduplicado e enviado fora da transação")
+    void pushAtomicidadeEDedupe() {
+        Conta owner=cadastrarCliente("Push Queue","push-queue@onda.test");
+        UUID request=pedidoDe(owner,"Fixture de push","ACEITO");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        pushStore.register(owner.id(),PUSH_TOKEN,key);
+        var event=new com.onda.marketplace.notification.PushRequested(request,null,"NOVA_MENSAGEM",UUID.randomUUID());
+        transacao.executeWithoutResult(t->{ pushEvents.publishEvent(event); t.setRollbackOnly(); });
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_deliveries"));
+        transacao.executeWithoutResult(t->{ pushEvents.publishEvent(event);pushEvents.publishEvent(event); });
+        org.junit.jupiter.api.Assertions.assertEquals(1,contar("SELECT count(*) FROM push_deliveries"));
+        FakePushGateway.SENT.clear(); FakePushGateway.result=com.onda.marketplace.notification.PushGateway.Result.SENT;
+        org.junit.jupiter.api.Assertions.assertTrue(pushWorker.processOne());
+        org.junit.jupiter.api.Assertions.assertFalse(pushWorker.processOne());
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of(PUSH_TOKEN),FakePushGateway.SENT);
+        org.junit.jupiter.api.Assertions.assertEquals("SENT",jdbc.queryForObject("SELECT status FROM push_deliveries",String.class));
+        pushStore.revoke(PUSH_TOKEN,key);
+    }
+    @Test @Order(93)
+    @DisplayName("93 · Rebind de conta cancela entrega antiga e revogação antiga não afeta novo dono")
+    void pushTrocaDeConta() throws Exception {
+        Conta first=cadastrarCliente("Push First","push-first@onda.test");
+        Conta second=cadastrarCliente("Push Second","push-second@onda.test");
+        UUID request=pedidoDe(first,"Fixture de troca","ACEITO");
+        String key=pushStore.reserve(first.id(),PUSH_TOKEN);
+        pushStore.register(first.id(),PUSH_TOKEN,key);
+        transacao.executeWithoutResult(t->pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(request,null,"NOVA_MENSAGEM",UUID.randomUUID())));
+        String secondKey=pushStore.reserve(second.id(),PUSH_TOKEN);
+        pushStore.register(second.id(),PUSH_TOKEN,secondKey);
+        pushStore.revoke(PUSH_TOKEN,key);
+        FakePushGateway.SENT.clear();
+        pushWorker.processOne();
+        org.junit.jupiter.api.Assertions.assertTrue(FakePushGateway.SENT.isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(second.id(),jdbc.queryForObject("SELECT user_id FROM push_devices WHERE token_hash=?",UUID.class,
+            java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(PUSH_TOKEN.getBytes(java.nio.charset.StandardCharsets.UTF_8)))));
+        pushStore.revoke(PUSH_TOKEN,secondKey);
+    }
+    @Test @Order(94)
+    @DisplayName("94 · Token inválido é removido e tentativas transitórias têm limite")
+    void pushInvalidoERetry() {
+        Conta owner=cadastrarCliente("Push Retry","push-retry@onda.test");
+        UUID request=pedidoDe(owner,"Fixture de retry","ACEITO");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        pushStore.register(owner.id(),PUSH_TOKEN,key);
+        transacao.executeWithoutResult(t->pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(request,null,"NOVA_PROPOSTA",UUID.randomUUID())));
+        FakePushGateway.result=com.onda.marketplace.notification.PushGateway.Result.RETRY;
+        for(int i=0;i<5;i++) {
+            jdbc.update("UPDATE push_deliveries SET available_at=NOW()-INTERVAL '1 minute'");
+            org.junit.jupiter.api.Assertions.assertTrue(pushWorker.processOne());
+        }
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED",jdbc.queryForObject("SELECT status FROM push_deliveries",String.class));
+        org.junit.jupiter.api.Assertions.assertEquals(5,jdbc.queryForObject("SELECT attempts FROM push_deliveries",Integer.class));
+        transacao.executeWithoutResult(t->pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(request,null,"PAGAMENTO_CONFIRMADO",UUID.randomUUID())));
+        FakePushGateway.result=com.onda.marketplace.notification.PushGateway.Result.UNREGISTERED;
+        pushWorker.processOne();
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_deliveries"));
+        FakePushGateway.result=com.onda.marketplace.notification.PushGateway.Result.SENT;
+    }
+    @Test @Order(95)
+    @DisplayName("95 · Conta excluída remove dispositivos e entregas pendentes")
+    void pushExclusaoDeConta() {
+        Conta owner=cadastrarCliente("Push Delete","push-delete@onda.test");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        pushStore.register(owner.id(),PUSH_TOKEN,key);
+        excluirConta(owner.token(),SENHA_PADRAO).then().statusCode(204);
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+    }
+
+    @Test @Order(96)
+    @DisplayName("96 · Revogação concorrente espera enfileiramento sem abortar a operação de origem")
+    void pushRevogacaoConcorrente() throws Exception {
+        Conta owner=cadastrarCliente("Push Concurrent","push-concurrent@onda.test");
+        UUID request=pedidoDe(owner,"Fixture concorrente","ACEITO");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        pushStore.register(owner.id(),PUSH_TOKEN,key);
+        var ready=new java.util.concurrent.CountDownLatch(1);
+        var commit=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var enqueue=executor.submit(()->transacao.executeWithoutResult(t->{
+                pushStore.enqueue(new com.onda.marketplace.notification.PushRequested(request,null,"NOVA_MENSAGEM",UUID.randomUUID()));
+                ready.countDown();
+                try { if(!commit.await(10,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("commit latch timed out"); }
+                catch(InterruptedException ex) { Thread.currentThread().interrupt();throw new IllegalStateException(ex); }
+            }));
+            org.junit.jupiter.api.Assertions.assertTrue(ready.await(10,java.util.concurrent.TimeUnit.SECONDS));
+            var revoke=executor.submit(()->pushStore.revoke(PUSH_TOKEN,key));
+            try {
+                org.junit.jupiter.api.Assertions.assertThrows(java.util.concurrent.TimeoutException.class,
+                    ()->revoke.get(300,java.util.concurrent.TimeUnit.MILLISECONDS));
+            } finally { commit.countDown(); }
+            enqueue.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            revoke.get(10,java.util.concurrent.TimeUnit.SECONDS);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
+    }
+
+    @Test @Order(97)
+    @DisplayName("97 · Revogação confirmada impede PUT atrasado que aguardava trava de usuário")
+    void pushFenceRevogacaoAntesDoPut() throws Exception {
+        Conta owner=cadastrarCliente("Push Fence","push-fence@onda.test");
+        String key=pushStore.reserve(owner.id(),PUSH_TOKEN);
+        var locked=new java.util.concurrent.CountDownLatch(1);
+        var release=new java.util.concurrent.CountDownLatch(1);
+        try(var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var hold=executor.submit(()->transacao.executeWithoutResult(t->{
+                userRepository.findByIdComTrava(owner.id()).orElseThrow();
+                locked.countDown();
+                try { if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("release timed out"); }
+                catch(InterruptedException ex) { Thread.currentThread().interrupt();throw new IllegalStateException(ex); }
+            }));
+            org.junit.jupiter.api.Assertions.assertTrue(locked.await(10,java.util.concurrent.TimeUnit.SECONDS));
+            var late=executor.submit(()->pushStore.register(owner.id(),PUSH_TOKEN,key));
+            try {
+                org.junit.jupiter.api.Assertions.assertThrows(java.util.concurrent.TimeoutException.class,
+                    ()->late.get(200,java.util.concurrent.TimeUnit.MILLISECONDS));
+                pushStore.revoke(PUSH_TOKEN,key);
+            } finally { release.countDown(); }
+            hold.get(10,java.util.concurrent.TimeUnit.SECONDS);
+            var error=org.junit.jupiter.api.Assertions.assertThrows(java.util.concurrent.ExecutionException.class,
+                ()->late.get(10,java.util.concurrent.TimeUnit.SECONDS));
+            org.junit.jupiter.api.Assertions.assertInstanceOf(com.onda.marketplace.shared.exception.BusinessException.class,error.getCause());
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(0,contar("SELECT count(*) FROM push_devices WHERE user_id=?::uuid",owner.id().toString()));
     }
 
 }

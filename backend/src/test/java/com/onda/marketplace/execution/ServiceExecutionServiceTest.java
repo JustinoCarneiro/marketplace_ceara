@@ -61,7 +61,7 @@ class ServiceExecutionServiceTest {
         service = new ServiceExecutionService(
                 srRepository, proposalRepository, transactionRepository,
                 outboxRepository, notificationService,
-                new ProviderVerificationGuard(profileRepository));
+                new ProviderVerificationGuard(profileRepository), mock(org.springframework.context.ApplicationEventPublisher.class));
     }
 
     private void prestadorCom(ProviderStatus status) {

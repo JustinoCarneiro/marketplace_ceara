@@ -31,3 +31,8 @@ __pycache__/
 .ondadev/handoff/current.md
 .ondadev/handoff/archive-*.md
 .env.homolog
+
+# Firebase: configuração de build e credenciais privadas
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json

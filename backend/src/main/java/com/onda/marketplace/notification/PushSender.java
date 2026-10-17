@@ -4,8 +4,8 @@ import java.util.UUID;
 
 /**
  * Contrato para envio de push notification ao admin (M12).
- * Implementação de produção: Firebase FCM (v2+) — adicionada quando o app
- * mobile for publicado.
+ * Implementação de produção: FCM HTTP v1, ativada por configuração e cadastro
+ * de dispositivo administrativo.
  * Implementação de MVP: {@link NoOpPushSender} (stub sem efeito externo).
  */
 public interface PushSender {

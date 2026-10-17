@@ -20,6 +20,7 @@ import java.util.UUID;
 @Service
 @SuppressWarnings("null")
 public class PaymentService {
+    private final org.springframework.context.ApplicationEventPublisher pushEvents;
 
     private final TransactionRepository    transactionRepository;
     private final OutboxEventRepository    outboxRepository;
@@ -36,7 +37,9 @@ public class PaymentService {
             ProposalRepository proposalRepository,
             UserRepository userRepository,
             CpfHashService cpfHashService,
-            @Value("${marketplace.comissao:0.10}") BigDecimal percentualComissao) {
+            @Value("${marketplace.comissao:0.10}") BigDecimal percentualComissao,
+            org.springframework.context.ApplicationEventPublisher pushEvents) {
+        this.pushEvents=pushEvents;
         this.transactionRepository = transactionRepository;
         this.outboxRepository      = outboxRepository;
         this.requestRepository     = requestRepository;
@@ -134,6 +137,7 @@ public class PaymentService {
                 outboxRepository.save(outboxEventReembolso(tx));
             }
             transactionRepository.save(tx);
+            if(sr != null) pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(sr.getId(), null, "PAGAMENTO_CONFIRMADO", tx.getId()));
         });
     }
 

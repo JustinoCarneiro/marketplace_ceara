@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { color, font, space, radius } from '../../theme';
 import { useAuthStore } from '../../store/auth';
 import Button from '../../components/Button';
+import { enablePush, disablePush } from '../../api/pushDevice';
 import { alternarPapel } from '../../api/papeis';
 
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
@@ -70,7 +71,11 @@ export default function ProfileScreen() {
     {
       icon: 'bell',
       label: 'Notificações',
-      onPress: () => Alert.alert('Em breve', 'Central de notificações estará disponível na próxima versão.'),
+      onPress: () => Alert.alert('Notificações', 'Receba avisos de propostas, mensagens e serviços neste celular.', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Desativar', onPress: () => { if (token) void disablePush(token).then(message => Alert.alert('Notificações', message)); } },
+        { text: 'Ativar', onPress: () => { if (token) void enablePush(token).then(message => Alert.alert('Notificações', message)); } },
+      ]),
     },
     {
       icon: 'shield',

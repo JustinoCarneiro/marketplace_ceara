@@ -21,6 +21,7 @@ import java.util.UUID;
 @Service
 @SuppressWarnings("null")
 public class ProposalService {
+    private final org.springframework.context.ApplicationEventPublisher pushEvents;
 
     private final ProposalRepository        proposalRepository;
     private final ServiceRequestRepository  requestRepository;
@@ -34,7 +35,9 @@ public class ProposalService {
                            UserRepository userRepository,
                            ProviderProfileRepository profileRepository,
                            ReviewRepository reviewRepository,
-                           ProviderVerificationGuard verificationGuard) {
+                           ProviderVerificationGuard verificationGuard,
+            org.springframework.context.ApplicationEventPublisher pushEvents) {
+        this.pushEvents=pushEvents;
         this.proposalRepository = proposalRepository;
         this.requestRepository  = requestRepository;
         this.userRepository     = userRepository;
@@ -95,6 +98,7 @@ public class ProposalService {
             requestRepository.save(sr);
         }
 
+        pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(sr.getId(), prestadorId, "NOVA_PROPOSTA", proposal.getId()));
         return toDto(proposal);
     }
 
@@ -141,6 +145,7 @@ public class ProposalService {
 
         sr.setStatus(ServiceRequestStatus.ACEITO);
         requestRepository.save(sr);
+        pushEvents.publishEvent(new com.onda.marketplace.notification.PushRequested(sr.getId(), clienteId, "PROPOSTA_ACEITA", proposal.getId()));
 
         return toDto(proposal);
     }

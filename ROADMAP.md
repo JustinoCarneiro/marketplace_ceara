@@ -561,3 +561,11 @@ Fórmula (metodologia Onda): `Fase 2 + Σ(pesos Fases 3 e 4) + 2d (Fase 5)`
 - Histórias e critérios BDD: `docs/spec.md`
 - Regras de negócio e princípios: `CLAUDE.md`
 - Identidade visual (a gerar na Fase 2): `design/tokens.css` + `design/DESIGN.md`
+
+
+### M12 — Push Android / FCM (etapa incremental)
+Cadastro autenticado de dispositivos, opt-in por conta/celular, transporte HTTP v1,
+revogação recuperável e fila durável (V32) para propostas, chat, execução e
+confirmação de pagamento. Default desligado; ativação real pendente de projeto,
+credenciais Firebase e novo build nativo 1.2.0. iOS e web push pendentes.
+Detalhes e testes: `docs/NOTIFICACOES_PUSH.md`.

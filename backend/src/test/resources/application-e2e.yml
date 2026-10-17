@@ -38,6 +38,8 @@ marketplace:
     delay-ms: 500
 
 notification:
+  push:
+    delay-ms: 3600000 # O teste dispara o worker explicitamente.
   admin-email: admin@test.local
   # Sem SMTP aqui (ver abaixo): declara a ausência de canal para o contexto subir.
   allow-missing-alert-channel: true
