@@ -21,9 +21,9 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
      * chave anterior à atual (rotação): o CPF decifrado deixa regravar o hash.
      */
     @Query("""
-           SELECT p.user.id AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p
-            WHERE (p.user.cpfHash IS NULL OR p.user.cpfHashVersao < :versaoAtual)
-              AND p.user.excluidoEm IS NULL AND p.cpfCifrado IS NOT NULL
+           SELECT p.userId AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p JOIN User u ON u.id=p.userId
+            WHERE (u.cpfHash IS NULL OR u.cpfHashVersao < :versaoAtual)
+              AND u.excluidoEm IS NULL AND p.cpfCifrado IS NOT NULL
            """)
     List<ProviderCpfBackfill.PerfilSemHash> semHashDoCpf(@Param("versaoAtual") int versaoAtual);
 
@@ -33,8 +33,8 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
      * na 1ª subida em que ainda não há um verificador gravado para ela (achado da revisão cruzada, 2026-10-05).
      */
     @Query("""
-           SELECT p.user.id AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p
-            WHERE p.user.cpfHash IS NOT NULL AND p.user.cpfHashVersao = :versao AND p.cpfCifrado IS NOT NULL
+           SELECT p.userId AS userId, p.cpfCifrado AS cpfCifrado FROM ProviderProfile p JOIN User u ON u.id=p.userId
+            WHERE u.cpfHash IS NOT NULL AND u.cpfHashVersao = :versao AND p.cpfCifrado IS NOT NULL
            """)
     List<ProviderCpfBackfill.PerfilSemHash> comHashNaVersao(@Param("versao") int versao);
 
@@ -45,18 +45,18 @@ public interface ProviderProfileRepository extends JpaRepository<ProviderProfile
      * {@code agora}: o UPDATE em lote não roda o {@code @PreUpdate}.
      */
     @Modifying
-    @Query("UPDATE ProviderProfile p SET p.notaMedia = :media, p.updatedAt = :agora WHERE p.user.id = :userId")
+    @Query("UPDATE ProviderProfile p SET p.notaMedia = :media, p.updatedAt = :agora WHERE p.userId = :userId")
     int atualizarNotaMedia(@Param("userId") UUID userId, @Param("media") BigDecimal media, @Param("agora") Instant agora);
 
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatusVerificacao(ProviderStatus statusVerificacao);
 
-    // Lista para o painel admin (US25) — fetch join do usuário evita lazy fora da transação
-    @Query("select p from ProviderProfile p join fetch p.user")
-    List<ProviderProfile> findAllWithUser();
+    // Lista para o painel admin (US25): um join explícito retorna somente a projeção.
+    @Query("SELECT new com.onda.marketplace.provider.ProviderSummary(p.userId,u.nome,p.categoria,p.statusVerificacao,p.notaMedia,p.cpfConciliado) FROM ProviderProfile p JOIN User u ON u.id=p.userId")
+    List<ProviderSummary> findSummaries();
 
-    @Query("select p from ProviderProfile p join fetch p.user where p.statusVerificacao = :status")
-    List<ProviderProfile> findByStatusWithUser(@Param("status") ProviderStatus status);
+    @Query("SELECT new com.onda.marketplace.provider.ProviderSummary(p.userId,u.nome,p.categoria,p.statusVerificacao,p.notaMedia,p.cpfConciliado) FROM ProviderProfile p JOIN User u ON u.id=p.userId WHERE p.statusVerificacao=:status")
+    List<ProviderSummary> findSummariesByStatus(@Param("status") ProviderStatus status);
 
     // PostGIS ST_DWithin sobre índice GiST — SLA p95 < 300ms (TS03)
     // "id" aqui é o user_id (não o PK de providers_profile): o mobile navega do card da busca

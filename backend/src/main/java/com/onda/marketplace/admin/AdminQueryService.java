@@ -117,7 +117,7 @@ public class AdminQueryService {
                 sr.getDetalhesDisputa(),
                 resolution != null ? resolution.getDecisao().name() : null,
                 sr.getCreatedAt(),
-                sr.getCliente().getNome(),
+                userRepository.findById(sr.getClienteId()).map(User::getNome).orElse("Cliente"),
                 prestadorNome,
                 midias);
     }

@@ -1,6 +1,5 @@
 package com.onda.marketplace.servicerequest;
 
-import com.onda.marketplace.auth.User;
 import jakarta.persistence.*;
 import org.locationtech.jts.geom.Point;
 
@@ -16,9 +15,8 @@ public class ServiceRequest {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", nullable = false)
-    private User cliente;
+    @Column(name = "cliente_id", nullable = false)
+    private UUID clienteId;
 
     @Column(nullable = false)
     private String categoria;
@@ -73,7 +71,7 @@ public class ServiceRequest {
     void onUpdate() { this.updatedAt = Instant.now(); }
 
     public UUID getId()                         { return id; }
-    public User getCliente()                    { return cliente; }
+    public UUID getClienteId()                    { return clienteId; }
     public String getCategoria()                { return categoria; }
     public String getDescricao()                { return descricao; }
     public ServiceRequestStatus getStatus()     { return status; }
@@ -94,7 +92,7 @@ public class ServiceRequest {
     public void setStatus(ServiceRequestStatus v) { this.status = v; }
     public void setLocalizacao(Point v)         { this.localizacao = v; }
     public void setBairro(String v)             { this.bairro = v; }
-    public void setCliente(User v)              { this.cliente = v; }
+    public void setClienteId(UUID v)            { this.clienteId = v; }
     public void setIdempotencyKey(String v)     { this.idempotencyKey = v; }
     public void setMotivoDisputa(String v)      { this.motivoDisputa = v; }
     public void setDetalhesDisputa(String v)    { this.detalhesDisputa = v; }

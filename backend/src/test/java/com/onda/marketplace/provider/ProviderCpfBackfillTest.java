@@ -139,7 +139,7 @@ class ProviderCpfBackfillTest {
     void cpfJaVinculadoAOutraConta_naoGrava_eAvisaQualConta_consultandoAsDuasChaves() {
         // dois prestadores legados com o mesmo CPF: o segundo não ganha o hash e fica listado para decisão humana
         User u = usuario();
-        var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
+        var perfil = new ProviderProfile(u.getId(), "Elétrica", cifra.encrypt("111.444.777-35"));
         perfil.aprovar();   // VERIFICADO: é exatamente o caso que self-hire não enxergava (achado 2026-10-05)
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
         when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));
@@ -179,7 +179,7 @@ class ProviderCpfBackfillTest {
     @Test
     void corridaNaRestricaoUnica_contaComoDuplicado_enaoDerrubaOBackfill() {
         User u = usuario();
-        var perfil = new ProviderProfile(u, "Elétrica", cifra.encrypt("111.444.777-35"));
+        var perfil = new ProviderProfile(u.getId(), "Elétrica", cifra.encrypt("111.444.777-35"));
         perfil.aprovar();
         when(profileRepository.semHashDoCpf(2)).thenReturn(List.of(sem(u.getId(), cifra.encrypt("111.444.777-35"))));
         when(userRepository.findByIdComTrava(u.getId())).thenReturn(Optional.of(u));

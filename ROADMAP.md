@@ -577,3 +577,13 @@ relida. Gateway fora da transação; webhook e ações admin coordenados por loc
 Sem expiração automática de operações em curso; interrupções exigem reconciliação
 operacional e permanecem visíveis no painel. Testes PostGIS e limites de publicação:
 [OUTBOX_FINANCEIRO.md](docs/OUTBOX_FINANCEIRO.md).
+
+### M00/M03/M15/M18 — Carga sintética e fronteiras ORM
+Suíte opt-in em PostGIS descartável para geobusca (10 mil perfis/20 clientes e
+p95<300 ms), 32 canais SSE com desconexão/recuperação e 400 eventos financeiros
+com oito workers. Métricas/planos SQL publicados como artefatos do workflow
+`Desempenho isolado`; resultados limitados ao cenário isolado medido.
+As referências Proposal→ServiceRequest, Message→ServiceRequest,
+ServiceRequest→User e ProviderProfile→User passam a UUID, preservando FKs e
+contratos; listagens usam projeções e lotes. Sem migração nova. Procedimento,
+limites e evidências: [DESEMPENHO_E_MODULARIDADE.md](docs/DESEMPENHO_E_MODULARIDADE.md).

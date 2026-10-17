@@ -95,7 +95,7 @@ public class ProviderService {
     }
 
     private void criarPerfil(User user, String categoria, String cpf, String bio) {
-        ProviderProfile profile = new ProviderProfile(user, categoria, cpfEncryptor.encrypt(cpf));
+        ProviderProfile profile = new ProviderProfile(user.getId(), categoria, cpfEncryptor.encrypt(cpf));
         if (bio != null && !bio.isBlank()) {
             profile.setBio(bio);
         }

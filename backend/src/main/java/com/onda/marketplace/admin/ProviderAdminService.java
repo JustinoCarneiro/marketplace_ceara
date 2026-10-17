@@ -8,8 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * Consulta de prestadores para o painel admin (US25). Lista perfis (com o
- * usuário em fetch join, evitando lazy fora da transação), opcionalmente
+ * Consulta de prestadores para o painel admin (US25). Lista projeções em um join
+ * explícito, sem carregar entidades de usuário, opcionalmente
  * filtrados por {@code statusVerificacao}.
  */
 @Service
@@ -24,8 +24,8 @@ public class ProviderAdminService {
     @Transactional(readOnly = true)
     public List<ProviderAdminDto> listar(ProviderStatus statusVerificacao) {
         var lista = (statusVerificacao == null)
-                ? providerProfileRepository.findAllWithUser()
-                : providerProfileRepository.findByStatusWithUser(statusVerificacao);
+                ? providerProfileRepository.findSummaries()
+                : providerProfileRepository.findSummariesByStatus(statusVerificacao);
         return lista.stream().map(ProviderAdminDto::from).toList();
     }
 }

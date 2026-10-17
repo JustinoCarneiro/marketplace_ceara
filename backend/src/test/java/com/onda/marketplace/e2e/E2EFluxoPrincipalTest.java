@@ -694,7 +694,7 @@ class E2EFluxoPrincipalTest {
         // ligasse a transação ao pedido errado passaria despercebido.
         User cliente = userRepository.findByEmail("maria.e2e@onda.test").orElseThrow();
         ServiceRequest outro = new ServiceRequest();
-        outro.setCliente(cliente);
+        outro.setClienteId(cliente.getId());
         outro.setCategoria("pintura");
         outro.setStatus(ServiceRequestStatus.PENDENTE);
         outro.setBairro("Meireles");
@@ -1154,7 +1154,7 @@ class E2EFluxoPrincipalTest {
     }
 
     private void proposta(UUID pedido, UUID prestador, ProposalStatus status) {
-        proposalRepository.save(new Proposal(serviceRequestRepository.findById(pedido).orElseThrow(),
+        proposalRepository.save(new Proposal(pedido,
                 prestador, new BigDecimal("200.00"), 1, null, status));
     }
 
@@ -1178,7 +1178,7 @@ class E2EFluxoPrincipalTest {
     }
 
     private void mensagem(UUID pedido, UUID remetente, String texto) {
-        messageRepository.save(new Message(serviceRequestRepository.findById(pedido).orElseThrow(),
+        messageRepository.save(new Message(pedido,
                 remetente, texto, false));
     }
 
@@ -2472,7 +2472,7 @@ class E2EFluxoPrincipalTest {
     private UUID legado(String email, String cpfCifrado) {
         User u = userRepository.save(User.builder().nome("Prestador Legado").email(email)
                 .senhaHash(passwordEncoder.encode(SENHA_PADRAO)).role(UserRole.ROLE_PROVIDER).build());
-        profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(u, "eletrica", cpfCifrado));
+        profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(u.getId(), "eletrica", cpfCifrado));
         return u.getId();
     }
 
@@ -2758,7 +2758,7 @@ class E2EFluxoPrincipalTest {
         // "proposta nova em voo": já com a trava do pedido e a proposta da Bia gravada, sem commitar (é o que create() faz)
         var criacao = pool.submit(() -> transacao.executeWithoutResult(st -> {
             ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
-            proposalRepository.save(new Proposal(sr, bia.id(), new BigDecimal("180.00"), 1, null, ProposalStatus.ATIVA));
+            proposalRepository.save(new Proposal(sr.getId(), bia.id(), new BigDecimal("180.00"), 1, null, ProposalStatus.ATIVA));
             travaObtida.countDown();
             try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }));
@@ -3193,7 +3193,7 @@ class E2EFluxoPrincipalTest {
         // "a proposta nova, em voo": travou o pedido e inseriu a proposta ATIVA do P2, sem commitar (o mesmo que ProposalService.create faz)
         var propostaEmVoo = pool.submit(() -> transacao.executeWithoutResult(st -> {
             ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
-            proposalRepository.save(new Proposal(sr, p2.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
+            proposalRepository.save(new Proposal(sr.getId(), p2.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
             travaObtida.countDown();
             try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }));
@@ -3401,7 +3401,7 @@ class E2EFluxoPrincipalTest {
         // "a proposta nova, em voo": travou o pedido e inseriu a proposta ATIVA, sem commitar (o que ProposalService.create faz num pedido PROPOSTO)
         var propostaEmVoo = pool.submit(() -> transacao.executeWithoutResult(st -> {
             ServiceRequest sr = serviceRequestRepository.findByIdComTrava(pedido).orElseThrow();
-            proposalRepository.save(new Proposal(sr, novo.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
+            proposalRepository.save(new Proposal(sr.getId(), novo.id(), new BigDecimal("150.00"), 1, null, ProposalStatus.ATIVA));
             travaObtida.countDown();
             try { liberar.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }));
@@ -3650,7 +3650,7 @@ class E2EFluxoPrincipalTest {
                     .email("background-" + suffix + "@onda.test").senhaHash("fixture-disabled")
                     .role(UserRole.ROLE_PROVIDER).build());
             var p = profileRepository.save(new com.onda.marketplace.provider.ProviderProfile(
-                    u, "eletrica", new CpfEncryptor("test-cpf-aes256-key-32-chars-here!").encrypt("11144477735")));
+                    u.getId(), "eletrica", new CpfEncryptor("test-cpf-aes256-key-32-chars-here!").encrypt("11144477735")));
             backgroundChecks.scheduleCheck(p);
             return p.getId();
         });

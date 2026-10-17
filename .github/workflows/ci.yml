@@ -98,7 +98,7 @@ jobs:
           cache: maven
 
       - name: Rodar testes E2E (Testcontainers)
-        run: mvn -f backend/pom.xml test -Dtest="E2EFluxoPrincipalTest,E2EOutboxConcurrencyTest" --no-transfer-progress
+        run: mvn -f backend/pom.xml test -Dtest="E2EFluxoPrincipalTest,E2EOutboxConcurrencyTest,E2EDomainProjectionTest" --no-transfer-progress
         env:
           TESTCONTAINERS_REUSE_ENABLE: 'false'
 

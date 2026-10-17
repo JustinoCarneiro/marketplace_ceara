@@ -13,7 +13,7 @@ public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
     List<Proposal> findByServiceRequestId(UUID serviceRequestId);
 
     /** O id do pedido da proposta, sem carregar nenhuma entidade (para travar o pedido como primeira leitura dele). */
-    @Query("SELECT p.serviceRequest.id FROM Proposal p WHERE p.id = :id")
+    @Query("SELECT p.serviceRequestId FROM Proposal p WHERE p.id = :id")
     java.util.Optional<UUID> findServiceRequestIdById(@Param("id") UUID id);
     List<Proposal> findByServiceRequestIdAndStatus(UUID serviceRequestId, ProposalStatus status);
 
@@ -23,6 +23,12 @@ public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
     // Atendimento ativo do prestador (tab "Em Andamento" no app) — 1 prestador, 1 proposta
     // ACEITA por vez no MVP (sem múltiplos atendimentos simultâneos).
     List<Proposal> findByPrestadorIdAndStatus(UUID prestadorId, ProposalStatus status);
+
+    @Query("""
+           SELECT new com.onda.marketplace.proposal.ProposalTiming(p.valor,p.status,p.horarioProposto,p.createdAt,s.createdAt,s.iniciadoEm)
+             FROM Proposal p JOIN ServiceRequest s ON s.id=p.serviceRequestId WHERE p.prestadorId=:prestadorId
+           """)
+    List<ProposalTiming> findTimingsByPrestadorId(@Param("prestadorId") UUID prestadorId);
 
     // Faixa de preço e tempo de resposta do perfil público — todas as propostas já
     // enviadas (não só ACEITA), porque refletem o padrão de cotação/resposta do
@@ -34,7 +40,7 @@ public interface ProposalRepository extends JpaRepository<Proposal, UUID> {
     @Query("""
            UPDATE Proposal p SET p.status = com.onda.marketplace.proposal.ProposalStatus.ENCERRADA
             WHERE p.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA
-              AND p.serviceRequest.id IN :pedidos
+              AND p.serviceRequestId IN :pedidos
            """)
     int encerrarAtivasDosPedidos(@Param("pedidos") Collection<UUID> pedidos);
 }

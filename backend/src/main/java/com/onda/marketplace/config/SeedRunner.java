@@ -97,7 +97,7 @@ public class SeedRunner implements CommandLineRunner {
             log.info("[seed] perfil de prestador de {} já existe — ignorando", provedor.getEmail());
             return;
         }
-        ProviderProfile perfil = new ProviderProfile(provedor, "Elétrica", "seed-cpf-cifrado-placeholder");
+        ProviderProfile perfil = new ProviderProfile(provedor.getId(), "Elétrica", "seed-cpf-cifrado-placeholder");
         providerProfileRepository.save(perfil);
         log.info("[seed] ProviderProfile de {} criado (EM_VERIFICACAO)", provedor.getEmail());
     }
@@ -116,7 +116,7 @@ public class SeedRunner implements CommandLineRunner {
             log.info("[seed] perfil de prestador de {} já existe — ignorando", provedor.getEmail());
             return;
         }
-        ProviderProfile perfil = new ProviderProfile(provedor, "Elétrica", "seed-cpf-cifrado-placeholder");
+        ProviderProfile perfil = new ProviderProfile(provedor.getId(), "Elétrica", "seed-cpf-cifrado-placeholder");
         perfil.aprovar();
         // Aldeota, Fortaleza — mesma referência usada como fallback no app.
         var fabrica = new org.locationtech.jts.geom.GeometryFactory(
@@ -134,13 +134,13 @@ public class SeedRunner implements CommandLineRunner {
      */
     private void seedDisputaAberta(User cliente) {
         if (serviceRequestRepository
-                .findByIdempotencyKeyAndCliente_Id(DISPUTE_SEED_KEY, cliente.getId()).isPresent()) {
+                .findByIdempotencyKeyAndClienteId(DISPUTE_SEED_KEY, cliente.getId()).isPresent()) {
             log.info("[seed] disputa de exemplo já existe — ignorando");
             return;
         }
 
         ServiceRequest sr = new ServiceRequest();
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
         sr.setCategoria("Hidráulica");
         sr.setDescricao("Vazamento no encanamento da cozinha — pedido semente para E2E do painel admin.");
         sr.setStatus(ServiceRequestStatus.EM_DISPUTA);
@@ -163,7 +163,7 @@ public class SeedRunner implements CommandLineRunner {
      */
     private void seedOutboxEmFalha(User cliente) {
         var pedido = serviceRequestRepository
-                .findByIdempotencyKeyAndCliente_Id(DISPUTE_SEED_KEY, cliente.getId());
+                .findByIdempotencyKeyAndClienteId(DISPUTE_SEED_KEY, cliente.getId());
         if (pedido.isEmpty()) return;
 
         UUID srId = pedido.get().getId();

@@ -217,7 +217,7 @@ class ProposalServiceTest {
         UUID prestadorId = UUID.randomUUID();
         var sr = serviceRequest(ServiceRequestStatus.PROPOSTO);
         setClienteId(sr, prestadorId);
-        var prop = new Proposal(sr, prestadorId, BigDecimal.valueOf(200), 2, null, ProposalStatus.ATIVA);
+        var prop = new Proposal(sr.getId(), prestadorId, BigDecimal.valueOf(200), 2, null, ProposalStatus.ATIVA);
         when(proposalRepository.findById(prop.getId())).thenReturn(Optional.of(prop));
         pedidoTravado(sr, prop);
 
@@ -377,7 +377,7 @@ class ProposalServiceTest {
     }
 
     private Proposal proposal(ServiceRequest sr, ProposalStatus status) {
-        return new Proposal(sr, UUID.randomUUID(), BigDecimal.valueOf(200), 2, null, status);
+        return new Proposal(sr.getId(), UUID.randomUUID(), BigDecimal.valueOf(200), 2, null, status);
     }
 
     /** Constrói um cliente com id fixo (User.id é @GeneratedValue) e associa ao pedido. */
@@ -392,6 +392,6 @@ class ProposalServiceTest {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
-        sr.setCliente(cliente);
+        sr.setClienteId(cliente.getId());
     }
 }

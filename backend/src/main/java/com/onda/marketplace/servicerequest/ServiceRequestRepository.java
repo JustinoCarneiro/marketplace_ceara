@@ -18,8 +18,8 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
      * Idempotência escopada ao cliente — a chave é do solicitante, não global. Buscar só
      * por chave devolvia o pedido de OUTRO cliente quando as chaves colidiam (V14).
      */
-    Optional<ServiceRequest> findByIdempotencyKeyAndCliente_Id(String idempotencyKey, UUID clienteId);
-    Optional<ServiceRequest> findByIdAndCliente_Id(UUID id, UUID clienteId);
+    Optional<ServiceRequest> findByIdempotencyKeyAndClienteId(String idempotencyKey, UUID clienteId);
+    Optional<ServiceRequest> findByIdAndClienteId(UUID id, UUID clienteId);
 
     // Métricas/alertas do painel admin (US23/US30)
     long countByStatus(ServiceRequestStatus status);
@@ -33,13 +33,13 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // Fila aberta do prestador no app (mobile)
     java.util.List<ServiceRequest> findByStatusOrderByCreatedAtDesc(ServiceRequestStatus status);
 
-    @Query("SELECT s.cliente.id FROM ServiceRequest s WHERE s.id = :srId")
+    @Query("SELECT s.clienteId FROM ServiceRequest s WHERE s.id = :srId")
     Optional<UUID> findClienteIdBySrId(@Param("srId") UUID srId);
 
     // E-mail do cliente para a cobrança Pix no gateway (payer.email do Mercado Pago).
     // Consulta escalar: o gateway é chamado fora de @Transactional (OutboxProcessor),
     // então nada de navegar lazy pela entidade — TS02.
-    @Query("SELECT s.cliente.email FROM ServiceRequest s WHERE s.id = :srId")
+    @Query("SELECT u.email FROM ServiceRequest s JOIN User u ON u.id=s.clienteId WHERE s.id = :srId")
     Optional<String> findClienteEmailBySrId(@Param("srId") UUID srId);
 
     /**
@@ -98,7 +98,7 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     @Query("""
            SELECT s.id FROM ServiceRequest s
             WHERE s.status IN :statuses AND s.updatedAt < :limite
-              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequestId = s.id AND p.createdAt >= :limite)
             ORDER BY s.id
            """)
     List<UUID> idsSemAndamentoDesde(@Param("statuses") Collection<ServiceRequestStatus> statuses,
@@ -120,7 +120,7 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
               AND s.status IN (com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE,
                                com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO)
               AND s.updatedAt < :limite
-              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.createdAt >= :limite)
+              AND NOT EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequestId = s.id AND p.createdAt >= :limite)
            """)
     int cancelarSemAndamento(@Param("ids") Collection<UUID> ids, @Param("limite") Instant limite, @Param("agora") Instant agora);
 
@@ -188,9 +188,9 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
     // Participação: verifica se o user é cliente OU prestador (via proposta aceita) do pedido
     @Query("""
         SELECT CASE WHEN EXISTS(
-            SELECT 1 FROM ServiceRequest s WHERE s.id = :srId AND s.cliente.id = :userId
+            SELECT 1 FROM ServiceRequest s WHERE s.id = :srId AND s.clienteId = :userId
         ) OR EXISTS(
-            SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = :srId
+            SELECT 1 FROM Proposal p WHERE p.serviceRequestId = :srId
                 AND p.prestadorId = :userId AND p.status = 'ACEITA'
         ) THEN true ELSE false END
         """)

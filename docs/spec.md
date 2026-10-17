@@ -410,3 +410,17 @@ Leilão dinâmico em tempo real · Assinaturas SaaS (Profissional/Elite) · Boos
   o estado financeiro atual e aceita somente o claim vigente, sem merge do snapshot antigo.
 - Gateway continua fora da transação de banco; idempotência externa e procedimento de
   recuperação/publicação descritos em `docs/OUTBOX_FINANCEIRO.md`.
+
+### Complemento técnico — carga e modularidade (TS03/M00)
+
+- **Dada** a base sintética isolada de 10 mil prestadores, **quando** 20 clientes
+  executam mil buscas após o aquecimento, **então** as buscas têm zero erros,
+  resultados válidos e p95 inferior a 300 ms no cenário medido; percentis, vazão,
+  plano SQL e ambiente ficam no relatório, sem inferir capacidade da produção.
+- **Dadas** 32 conexões SSE, **então** mensagens são isoladas por pedido e a
+  reconexão recupera o histórico, sem contabilizar esse GET como entrega ao vivo.
+- **Dados** 400 eventos e oito workers, **então** cada operação tem uma única
+  chamada no cenário concorrente e todas as conclusões são verificadas.
+- **Dadas** as quatro fronteiras ORM descritas em `docs/DESEMPENHO_E_MODULARIDADE.md`,
+  **então** as entidades guardam UUIDs, mantêm as FKs e os contratos públicos,
+  e consultas em lote preservam acesso, estado e ordenação.

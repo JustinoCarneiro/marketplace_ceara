@@ -73,7 +73,7 @@ public class ProposalService {
 
         // Conta única com papéis: o prestador pode ser também o cliente deste pedido. Ninguém contrata a si mesmo (fabricaria
         // reputação); o aceite recusa o mesmo caso, mas aqui a proposta nem chega a existir.
-        if (sr.getCliente().getId().equals(prestadorId)) {
+        if (sr.getClienteId().equals(prestadorId)) {
             throw new BusinessException("SELF_HIRE_FORBIDDEN", "Você não pode enviar proposta ao seu próprio pedido.");
         }
 
@@ -89,7 +89,7 @@ public class ProposalService {
         // transição PENDENTE → PROPOSTO).
         verificationGuard.exigirVerificado(prestadorId);
 
-        var proposal = new Proposal(sr, prestadorId, req.valor(), req.prazoDias(),
+        var proposal = new Proposal(sr.getId(), prestadorId, req.valor(), req.prazoDias(),
                 req.horarioProposto(), ProposalStatus.ATIVA);
         proposalRepository.save(proposal);
 
@@ -113,7 +113,7 @@ public class ProposalService {
 
         // Sem isto, qualquer conta autenticada aceitava proposta de pedido alheio —
         // clienteId nunca era conferido contra o dono real do pedido.
-        if (!clienteId.equals(sr.getCliente().getId())) {
+        if (!clienteId.equals(sr.getClienteId())) {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 
@@ -159,7 +159,7 @@ public class ProposalService {
 
         // Antes, clienteId chegava até aqui e nunca era usado — qualquer conta autenticada
         // recusava proposta de prestador em pedido alheio.
-        if (!clienteId.equals(sr.getCliente().getId())) {
+        if (!clienteId.equals(sr.getClienteId())) {
             throw new BusinessException("FORBIDDEN", "Você não participa deste pedido.");
         }
 

@@ -30,7 +30,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Query("""
            SELECT CASE WHEN EXISTS (
                SELECT 1 FROM ServiceRequest s
-                WHERE s.cliente.id = :userId AND s.status IN :statuses
+                WHERE s.clienteId = :userId AND s.status IN :statuses
            ) THEN true ELSE false END
            """)
     boolean clienteTemPedidoEm(@Param("userId") UUID userId,
@@ -40,7 +40,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Query("""
            SELECT CASE WHEN EXISTS (
                SELECT 1 FROM Transaction t, ServiceRequest s
-                WHERE s.id = t.serviceRequestId AND s.cliente.id = :userId
+                WHERE s.id = t.serviceRequestId AND s.clienteId = :userId
                   AND s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO
                   AND t.statusPagamento = com.onda.marketplace.payment.TransactionStatus.RETIDO
            ) THEN true ELSE false END
@@ -50,10 +50,10 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     /** O prestador tem serviço (proposta aceita) em pedido em algum destes status? */
     @Query("""
            SELECT CASE WHEN EXISTS (
-               SELECT 1 FROM Proposal p
+               SELECT 1 FROM Proposal p JOIN ServiceRequest s ON s.id=p.serviceRequestId
                 WHERE p.prestadorId = :userId
                   AND p.status = com.onda.marketplace.proposal.ProposalStatus.ACEITA
-                  AND p.serviceRequest.status IN :statuses
+                  AND s.status IN :statuses
            ) THEN true ELSE false END
            """)
     boolean prestadorTemServicoEm(@Param("userId") UUID userId,
@@ -65,11 +65,11 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
      */
     @Query("""
            SELECT CASE WHEN EXISTS (
-               SELECT 1 FROM Transaction t, Proposal p
-                WHERE p.serviceRequest.id = t.serviceRequestId
+               SELECT 1 FROM Transaction t, Proposal p, ServiceRequest s
+                WHERE s.id=p.serviceRequestId AND p.serviceRequestId = t.serviceRequestId
                   AND p.prestadorId = :userId
                   AND p.status = com.onda.marketplace.proposal.ProposalStatus.ACEITA
-                  AND p.serviceRequest.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CONCLUIDO
+                  AND s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CONCLUIDO
                   AND t.statusPagamento = com.onda.marketplace.payment.TransactionStatus.RETIDO
            ) THEN true ELSE false END
            """)
@@ -112,9 +112,9 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
            UPDATE ServiceRequest s
               SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE, s.updatedAt = :agora
             WHERE s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO
-              AND EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequest.id = s.id AND p.prestadorId = :userId
+              AND EXISTS (SELECT 1 FROM Proposal p WHERE p.serviceRequestId = s.id AND p.prestadorId = :userId
                              AND p.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA)
-              AND NOT EXISTS (SELECT 1 FROM Proposal q WHERE q.serviceRequest.id = s.id AND q.prestadorId <> :userId
+              AND NOT EXISTS (SELECT 1 FROM Proposal q WHERE q.serviceRequestId = s.id AND q.prestadorId <> :userId
                                  AND q.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA)
            """)
     int reabrirPedidosSoComPropostaDoPrestador(@Param("userId") UUID userId, @Param("agora") Instant agora);
@@ -133,7 +133,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Query("""
            UPDATE Proposal p SET p.status = com.onda.marketplace.proposal.ProposalStatus.ENCERRADA
             WHERE p.status = com.onda.marketplace.proposal.ProposalStatus.ATIVA
-              AND p.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.cliente.id = :userId)
+              AND p.serviceRequestId IN (SELECT s.id FROM ServiceRequest s WHERE s.clienteId = :userId)
            """)
     int encerrarPropostasAtivasDosPedidosDoCliente(@Param("userId") UUID userId);
 
@@ -143,7 +143,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
            UPDATE ServiceRequest s
               SET s.status = com.onda.marketplace.servicerequest.ServiceRequestStatus.CANCELADO,
                   s.updatedAt = :agora
-            WHERE s.cliente.id = :userId
+            WHERE s.clienteId = :userId
               AND s.status IN (com.onda.marketplace.servicerequest.ServiceRequestStatus.PENDENTE,
                                com.onda.marketplace.servicerequest.ServiceRequestStatus.PROPOSTO)
            """)
@@ -162,7 +162,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
            UPDATE ServiceRequest s
               SET s.descricao = NULL, s.aiDescricaoSugerida = NULL,
                   s.motivoDisputa = NULL, s.detalhesDisputa = NULL, s.localizacao = NULL
-            WHERE s.cliente.id = :userId
+            WHERE s.clienteId = :userId
            """)
     int apagarDadosPessoaisDosPedidosDoCliente(@Param("userId") UUID userId);
 
@@ -177,7 +177,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
               SET s.motivoDisputa = NULL, s.detalhesDisputa = NULL
             WHERE EXISTS (
                SELECT 1 FROM Proposal p
-                WHERE p.serviceRequest.id = s.id
+                WHERE p.serviceRequestId = s.id
                   AND p.prestadorId = :userId
                   AND p.status = com.onda.marketplace.proposal.ProposalStatus.ACEITA
             )
@@ -192,14 +192,14 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Modifying
     @Query("""
            UPDATE ServiceRequest s SET s.bairro = NULL
-            WHERE s.cliente.id = :userId AND s.bairro IS NOT NULL AND s.bairro NOT IN :validos
+            WHERE s.clienteId = :userId AND s.bairro IS NOT NULL AND s.bairro NOT IN :validos
            """)
     int sanearBairroForaDaListaDosPedidosDoCliente(@Param("userId") UUID userId,
                                                     @Param("validos") Collection<String> validos);
 
     @Query("""
            SELECT m.url FROM ServiceMedia m
-            WHERE m.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.cliente.id = :userId)
+            WHERE m.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.clienteId = :userId)
            """)
     java.util.List<String> referenciasMidiaDosPedidosDoCliente(@Param("userId") UUID userId);
 
@@ -207,7 +207,7 @@ public interface AccountDeletionRepository extends Repository<User, UUID> {
     @Modifying
     @Query("""
            DELETE FROM ServiceMedia m
-            WHERE m.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.cliente.id = :userId)
+            WHERE m.serviceRequest.id IN (SELECT s.id FROM ServiceRequest s WHERE s.clienteId = :userId)
            """)
     int apagarMidiaDosPedidosDoCliente(@Param("userId") UUID userId);
 

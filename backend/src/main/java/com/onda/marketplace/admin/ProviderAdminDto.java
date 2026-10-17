@@ -1,6 +1,6 @@
 package com.onda.marketplace.admin;
 
-import com.onda.marketplace.provider.ProviderProfile;
+import com.onda.marketplace.provider.ProviderSummary;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -23,13 +23,13 @@ public record ProviderAdminDto(
         BigDecimal notaMedia,
         boolean    cpfConciliado
 ) {
-    public static ProviderAdminDto from(ProviderProfile p) {
+    public static ProviderAdminDto from(ProviderSummary p) {
         return new ProviderAdminDto(
-                p.getUser().getId(),
-                p.getUser().getNome(),
-                p.getCategoria(),
-                p.getStatusVerificacao().name(),
-                p.getNotaMedia(),
-                p.isCpfConciliado());
+                p.userId(),
+                p.nome(),
+                p.categoria(),
+                p.statusVerificacao().name(),
+                p.notaMedia(),
+                p.cpfConciliado());
     }
 }
