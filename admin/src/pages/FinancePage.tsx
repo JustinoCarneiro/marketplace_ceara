@@ -5,7 +5,7 @@ import { api, downloadFile } from '../api/client';
 // `tipo`/`entidade` — os nomes reais são `tipoEvento`/`agregado`, então toda linha da fila de
 // falhas renderizava em branco e o admin reprocessava sem saber o que era.
 interface Transaction { id: string; serviceRequestId: string; valorTotal: number; statusPagamento: string; }
-interface OutboxEvent { id: string; agregado: string; agregadoId: string; tipoEvento: string; tentativas: number; status: string; }
+interface OutboxEvent { id: string; agregado: string; agregadoId: string; tipoEvento: string; tentativas: number; status: string; processamentoEm?: string; }
 // Espelha RepassePendenteDto — fila de repasse manual enquanto o Mercado Pago não tem
 // payout Pix programático pra conta (MKT-49). A chave Pix só é buscada sob demanda,
 // nunca fica em nenhum estado carregado por padrão.
@@ -32,6 +32,7 @@ function statusBadge(s: string) {
 
 export default function FinancePage() {
   const [txs, setTxs] = useState<Transaction[]>([]);
+  const [processing, setProcessing] = useState<OutboxEvent[]>([]);
   const [outbox, setOutbox] = useState<OutboxEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -50,13 +51,15 @@ export default function FinancePage() {
   const carregar = useCallback(async () => {
     try {
       let anyFailed = false;
-      const [statuses, o] = await Promise.all([
+      const [statuses, o, active] = await Promise.all([
         Promise.all(RECONCILE_STATUSES.map(s =>
           api.get<Transaction[]>(`/admin/transactions?status=${s}`).catch(() => { anyFailed = true; return []; }))),
         api.get<OutboxEvent[]>('/admin/outbox?status=FALHA').catch(() => { anyFailed = true; return []; }),
+        api.get<OutboxEvent[]>('/admin/outbox?status=PROCESSANDO').catch(() => { anyFailed = true; return []; }),
       ]);
       setTxs(statuses.flat());
       setOutbox(Array.isArray(o) ? o : []);
+      setProcessing(Array.isArray(active) ? active : []);
       setLoadError(anyFailed);
     } finally { setLoading(false); }
   }, []);
@@ -165,6 +168,17 @@ export default function FinancePage() {
               ))}
             </div>
 
+            {processing.length > 0 && (
+              <div role="status" style={{ background: '#FDF3D6', borderRadius: 12, padding: 18 }}>
+                <strong>Operações em processamento: {processing.length}</strong>
+                <p>Aguarde a conclusão. Se uma operação permanecer nesta lista após uma interrupção, confira o resultado no provedor antes de qualquer nova tentativa.</p>
+                {processing.map(e => <div key={e.id} style={{ marginTop: 8 }}>
+                  {e.tipoEvento} · {e.processamentoEm ? `Início: ${new Date(e.processamentoEm).toLocaleString('pt-BR')}` : 'Início não informado'}
+                  <div style={{ fontFamily: 'monospace', fontSize: 12 }}>Evento: {e.id} · {e.agregado}: {e.agregadoId}</div>
+                </div>)}
+              </div>
+            )}
+
             {/* Outbox failures */}
             {outbox.length > 0 && (
               <div style={{ background: '#FBE6E2', border: '1.5px solid #C0392B', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -181,14 +195,16 @@ export default function FinancePage() {
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#C0392B', background: '#FBE6E2', padding: '4px 10px', borderRadius: 100 }}>FALHA</span>
                     {/* PAYMENT_RELEASED em FALHA quase sempre é payout indisponível no MP (MKT-49),
                         não um erro transitório — "Reprocessar" chamaria o gateway e falharia de novo. */}
-                    {e.tipoEvento === 'PAYMENT_RELEASED' ? (
+                    {processing.some(p => p.agregado === e.agregado && p.agregadoId === e.agregadoId) ? (
+                      <span>Operação em processamento</span>
+                    ) : e.tipoEvento === 'PAYMENT_RELEASED' ? (
                       <button onClick={() => abrirRepassePendente(e.agregadoId)} disabled={repasseLoading} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#DA6A32', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Repasse pendente</button>
                     ) : (
                       <button onClick={() => reprocess(e.id)} disabled={reprocessingId === e.id} style={{ height: 40, padding: '0 16px', border: 'none', borderRadius: 100, background: '#10847D', color: '#fff', fontWeight: 700, fontSize: 13, cursor: reprocessingId === e.id ? 'default' : 'pointer', opacity: reprocessingId === e.id ? 0.6 : 1 }}>{reprocessingId === e.id ? 'Reprocessando…' : 'Reprocessar'}</button>
                     )}
                   </div>
                 ))}
-                <span style={{ fontSize: 12, color: '#9A4A22' }}>Reprocessamento é idempotente — seguro repetir.</span>
+                <span style={{ fontSize: 12, color: '#9A4A22' }}>Confira o resultado no provedor antes de reenviar uma operação financeira.</span>
               </div>
             )}
 

@@ -397,3 +397,16 @@ Leilão dinâmico em tempo real · Assinaturas SaaS (Profissional/Elite) · Boos
 - **Dado** logout, desativação ou troca de conta, **então** a revogação é coordenada com registros pendentes e pode ser concluída com capacidade própria mesmo sem JWT. Sem rede, a intenção é persistida e retomada ao reconectar; cadastros expiram em 24h sem renovação. Uma entrega já em trânsito pode chegar e não contém dados pessoais.
 - **Dado** FCM indisponível, **então** há tentativas limitadas e recuperação por lease; token comprovadamente não registrado é removido. Não há promessa de leitura/entrega ao aparelho nem de aviso exatamente uma vez.
 - **Dado** FCM desativado (padrão), **então** não há busca de credenciais nem envio externo, e a ativação informa indisponibilidade. Integração real exige configuração e build nativo; iOS e web push não fazem parte desta etapa. Contrato completo em `docs/NOTIFICACOES_PUSH.md`.
+
+### Complemento técnico — fila financeira concorrente (M06/M11)
+
+- **Dadas** duas instâncias consumindo a outbox, **quando** uma reserva um evento financeiro,
+  **então** nenhum outro evento do mesmo agregado é enviado simultaneamente ao gateway;
+  transações diferentes continuam elegíveis sem aguardar a trava ocupada.
+- **Dado** um evento `PROCESSANDO`, **então** o painel informa seu início e recusa retry/repasse
+  manual para a mesma transação. Queda ou resultado externo incerto exige reconciliação;
+  a reserva não expira automaticamente.
+- **Dada** uma confirmação por webhook durante o processamento, **então** a conclusão preserva
+  o estado financeiro atual e aceita somente o claim vigente, sem merge do snapshot antigo.
+- Gateway continua fora da transação de banco; idempotência externa e procedimento de
+  recuperação/publicação descritos em `docs/OUTBOX_FINANCEIRO.md`.

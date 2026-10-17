@@ -235,7 +235,7 @@ class AdminControllerTest {
     void outbox_retorna200_comListaFiltrada() throws Exception {
         when(adminQueryService.findOutbox(OutboxStatus.FALHA)).thenReturn(
                 List.of(new OutboxAdminDto(UUID.randomUUID(), "transaction", UUID.randomUUID(),
-                        "PAYMENT_RELEASED", 3, OutboxStatus.FALHA)));
+                        "PAYMENT_RELEASED", 3, OutboxStatus.FALHA, null)));
 
         mvc.perform(get("/api/v1/admin/outbox").param("status", "FALHA"))
                 .andExpect(status().isOk())

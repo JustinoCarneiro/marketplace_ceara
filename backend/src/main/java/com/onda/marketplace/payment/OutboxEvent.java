@@ -39,6 +39,12 @@ public class OutboxEvent {
     @Column(name = "processado_em")
     private Instant processadoEm;
 
+    @Column(name = "claim_token")
+    private UUID claimToken;
+
+    @Column(name = "processamento_em")
+    private Instant processamentoEm;
+
     protected OutboxEvent() {}
 
     public OutboxEvent(String agregado, UUID agregadoId, String tipoEvento, String payload) {
@@ -57,6 +63,20 @@ public class OutboxEvent {
     public int getTentativas()       { return tentativas; }
     public Instant getCriadoEm()     { return criadoEm; }
 
+    public UUID getClaimToken() { return claimToken; }
+    public Instant getProcessamentoEm() { return processamentoEm; }
+
+    public void reservar() {
+        status = OutboxStatus.PROCESSANDO;
+        claimToken = UUID.randomUUID();
+        processamentoEm = Instant.now();
+    }
+
+    public boolean pertenceAoClaim(OutboxEvent snapshot) {
+        return status == OutboxStatus.PROCESSANDO && claimToken != null
+                && claimToken.equals(snapshot.getClaimToken());
+    }
+
     public void marcarProcessado() {
         this.status       = OutboxStatus.PROCESSADO;
         this.processadoEm = Instant.now();
@@ -69,5 +89,7 @@ public class OutboxEvent {
 
     public void resetarParaRetry() {
         this.status = OutboxStatus.PENDENTE;
+        this.claimToken = null;
+        this.processamentoEm = null;
     }
 }

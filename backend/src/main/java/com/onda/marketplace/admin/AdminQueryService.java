@@ -137,7 +137,7 @@ public class AdminQueryService {
                 .stream()
                 .map(e -> new OutboxAdminDto(
                         e.getId(), e.getAgregado(), e.getAgregadoId(), e.getTipoEvento(),
-                        e.getTentativas(), e.getStatus()))
+                        e.getTentativas(), e.getStatus(), e.getProcessamentoEm()))
                 .toList();
     }
 
@@ -149,10 +149,19 @@ public class AdminQueryService {
      */
     @Transactional
     public void reprocessarOutbox(UUID outboxId) {
-        OutboxEvent event = outboxRepository.findById(outboxId)
+        outboxRepository.findTransactionIdByEventId(outboxId).ifPresent(txId -> {
+            transactionRepository.findByIdComTrava(txId);
+            if (outboxRepository.existsByAgregadoAndAgregadoIdAndStatus("transaction", txId, OutboxStatus.PROCESSANDO)) {
+                throw new BusinessException("OUTBOX_IN_PROGRESS", "Há uma operação financeira em processamento para este pagamento.");
+            }
+        });
+        OutboxEvent event = outboxRepository.findByIdComTrava(outboxId)
                 .orElseThrow(() -> new BusinessException("OUTBOX_NOT_FOUND",
                         "Evento outbox não encontrado."));
 
+        if (event.getStatus() == OutboxStatus.PROCESSANDO) {
+            throw new BusinessException("OUTBOX_IN_PROGRESS", "Evento em processamento; confira a reconciliação antes de repetir.");
+        }
         if (event.getStatus() == OutboxStatus.PROCESSADO) {
             throw new BusinessException("OUTBOX_NOT_REPROCESSABLE",
                     "Evento já processado não pode ser reenfileirado.");
@@ -232,6 +241,9 @@ public class AdminQueryService {
             throw new BusinessException("PAYOUT_NOT_DUE", "O repasse só pode ser confirmado em pedido concluído.");
         }
 
+        if (tx.getStatusPagamento() == TransactionStatus.RETIDO && outboxRepository.existsByAgregadoAndAgregadoIdAndStatus("transaction", transactionId, OutboxStatus.PROCESSANDO)) {
+            throw new BusinessException("OUTBOX_IN_PROGRESS", "Há uma operação financeira em processamento para este pagamento.");
+        }
         tx.liberar();
         transactionRepository.save(tx);
 

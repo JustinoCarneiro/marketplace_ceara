@@ -569,3 +569,11 @@ revogação recuperável e fila durável (V32) para propostas, chat, execução 
 confirmação de pagamento. Default desligado; ativação real pendente de projeto,
 credenciais Firebase e novo build nativo 1.2.0. iOS e web push pendentes.
 Detalhes e testes: `docs/NOTIFICACOES_PUSH.md`.
+
+### M06/M11 — Concorrência da outbox financeira
+Reserva durável `PROCESSANDO` por evento e agregado (V33), seleção financeira
+com `SKIP LOCKED`, conclusão protegida por claim e atualização sobre Transaction
+relida. Gateway fora da transação; webhook e ações admin coordenados por locks.
+Sem expiração automática de operações em curso; interrupções exigem reconciliação
+operacional e permanecem visíveis no painel. Testes PostGIS e limites de publicação:
+[OUTBOX_FINANCEIRO.md](docs/OUTBOX_FINANCEIRO.md).

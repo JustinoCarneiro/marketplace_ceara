@@ -34,12 +34,12 @@ class OutboxSosDeliveryTest {
     @Mock NotificationService   notificationService;
 
     OutboxProcessor processor;
+    @Mock OutboxEventWriter eventWriter;
 
     private static final UUID SOS_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        var eventWriter = new OutboxEventWriter(outboxRepository, transactionRepository);
         processor = new OutboxProcessor(outboxRepository, transactionRepository,
                 gatewayService, notificationService, eventWriter);
     }
@@ -51,22 +51,20 @@ class OutboxSosDeliveryTest {
     @Test
     void sosTriggered_entregaOAlertaEMarcaProcessado() {
         OutboxEvent evento = eventoSos();
-        when(outboxRepository.findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus.PENDENTE))
-                .thenReturn(List.of(evento));
-        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(eventWriter.reservarProximo())
+                .thenReturn(evento, (OutboxEvent) null);
 
         processor.processOutbox();
 
         verify(notificationService).entregar("SOS", SOS_ID);
-        assertThat(evento.getStatus()).isEqualTo(OutboxStatus.PROCESSADO);
+        verify(eventWriter).marcarProcessado(evento);
     }
 
     @Test
     void sosNaoEntregue_viraFALHA_paraAparecerNaReconciliacao() {
         OutboxEvent evento = eventoSos();
-        when(outboxRepository.findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus.PENDENTE))
-                .thenReturn(List.of(evento));
-        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(eventWriter.reservarProximo())
+                .thenReturn(evento, (OutboxEvent) null);
         doThrow(new NotificationDeliveryException("SMTP fora do ar", new RuntimeException()))
                 .when(notificationService).entregar(eq("SOS"), any());
 
@@ -74,27 +72,23 @@ class OutboxSosDeliveryTest {
 
         // Não pode virar PROCESSADO: o admin não foi avisado. FALHA deixa a pendência
         // visível no painel (US27) e reprocessável.
-        assertThat(evento.getStatus()).isEqualTo(OutboxStatus.FALHA);
-        assertThat(evento.getTentativas()).isEqualTo(1);
+        verify(eventWriter).salvarFalha(evento);
 
-        ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
-        verify(outboxRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(OutboxStatus.FALHA);
+
     }
 
     @Test
     void sosNaoEntregue_naoDerrubaOProcessamentoDosDemaisEventos() {
         OutboxEvent sos   = eventoSos();
         OutboxEvent outro = new OutboxEvent("qualquer", UUID.randomUUID(), "DESCONHECIDO", "{}");
-        when(outboxRepository.findTop20ByStatusOrderByCriadoEmAsc(OutboxStatus.PENDENTE))
-                .thenReturn(List.of(sos, outro));
-        when(outboxRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(eventWriter.reservarProximo())
+                .thenReturn(sos, outro, null);
         doThrow(new NotificationDeliveryException("SMTP fora do ar", new RuntimeException()))
                 .when(notificationService).entregar(eq("SOS"), any());
 
         processor.processOutbox();
 
-        assertThat(sos.getStatus()).isEqualTo(OutboxStatus.FALHA);
-        assertThat(outro.getStatus()).isEqualTo(OutboxStatus.PROCESSADO);
+        verify(eventWriter).salvarFalha(sos);
+        verify(eventWriter).marcarProcessado(outro);
     }
 }

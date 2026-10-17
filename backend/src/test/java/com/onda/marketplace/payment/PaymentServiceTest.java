@@ -297,7 +297,7 @@ class PaymentServiceTest {
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-4");
         pedidoTravado("gw-123", srId, ServiceRequestStatus.ACEITO);
-        when(transactionRepository.findByGatewayTransactionId("gw-123")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-123")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.confirmPayment("gw-123", "PAGO");
@@ -317,7 +317,7 @@ class PaymentServiceTest {
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-cancelado");
         pedidoTravado("gw-cancelado", srId, ServiceRequestStatus.CANCELADO);
-        when(transactionRepository.findByGatewayTransactionId("gw-cancelado")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-cancelado")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.confirmPayment("gw-cancelado", "PAGO");
@@ -338,7 +338,7 @@ class PaymentServiceTest {
         tx.reter();
         tx.reembolsar();
         pedidoTravado("gw-reentrega", srId, ServiceRequestStatus.CANCELADO);
-        when(transactionRepository.findByGatewayTransactionId("gw-reentrega")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-reentrega")).thenReturn(Optional.of(tx));
 
         assertThatCode(() -> service.confirmPayment("gw-reentrega", "PAGO")).doesNotThrowAnyException();
 
@@ -355,7 +355,7 @@ class PaymentServiceTest {
         var tx = transacao(srId, "idem-ja-retida");
         tx.reter();
         pedidoTravado("gw-ja-retida", srId, ServiceRequestStatus.CANCELADO);
-        when(transactionRepository.findByGatewayTransactionId("gw-ja-retida")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-ja-retida")).thenReturn(Optional.of(tx));
 
         service.confirmPayment("gw-ja-retida", "PAGO");
 
@@ -370,7 +370,7 @@ class PaymentServiceTest {
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-ordem");
         pedidoTravado("gw-ordem", srId, ServiceRequestStatus.ACEITO);
-        when(transactionRepository.findByGatewayTransactionId("gw-ordem")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-ordem")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.confirmPayment("gw-ordem", "PAGO");
@@ -378,7 +378,7 @@ class PaymentServiceTest {
         var ordem = inOrder(transactionRepository, requestRepository);
         ordem.verify(transactionRepository).findServiceRequestIdByGatewayTransactionId("gw-ordem");
         ordem.verify(requestRepository).findByIdComTrava(srId);
-        ordem.verify(transactionRepository).findByGatewayTransactionId("gw-ordem");
+        ordem.verify(transactionRepository).findByGatewayTransactionIdComTrava("gw-ordem");
         verify(requestRepository, never()).findById(any());
     }
 
@@ -396,7 +396,7 @@ class PaymentServiceTest {
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-ativo");
         pedidoTravado("gw-ativo", srId, ServiceRequestStatus.ACEITO);
-        when(transactionRepository.findByGatewayTransactionId("gw-ativo")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-ativo")).thenReturn(Optional.of(tx));
         when(transactionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
         service.confirmPayment("gw-ativo", "PAGO");
@@ -410,7 +410,7 @@ class PaymentServiceTest {
         var srId = UUID.randomUUID();
         var tx = transacao(srId, "idem-5");
         pedidoTravado("gw-456", srId, ServiceRequestStatus.ACEITO);
-        when(transactionRepository.findByGatewayTransactionId("gw-456")).thenReturn(Optional.of(tx));
+        when(transactionRepository.findByGatewayTransactionIdComTrava("gw-456")).thenReturn(Optional.of(tx));
 
         service.confirmPayment("gw-456", "REJEITADO");
 

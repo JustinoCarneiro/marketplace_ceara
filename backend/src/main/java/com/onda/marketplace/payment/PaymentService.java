@@ -127,7 +127,7 @@ public class PaymentService {
             return;
         }
         ServiceRequest sr = requestRepository.findByIdComTrava(srId.get()).orElse(null);
-        transactionRepository.findByGatewayTransactionId(gatewayTransactionId).ifPresent(tx -> {
+        transactionRepository.findByGatewayTransactionIdComTrava(gatewayTransactionId).ifPresent(tx -> {
             // REJEITADO: mantém PENDENTE para retry idempotente pelo OutboxProcessor
             if (!"PAGO".equalsIgnoreCase(status) || tx.getStatusPagamento() != TransactionStatus.PENDENTE) {
                 return;
